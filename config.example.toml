@@ -29,10 +29,15 @@ max_papers = 8
 max_output_tokens = 600
 # Number of top-of-digest highlight lines to render.
 top_highlights = 3
+# Number of feed-level "key points" lines to render before the paper list.
+feed_key_points = 3
 # Output language for LLM-written fields.
 language = "English"
 # Use "none" to skip reasoning settings entirely.
 reasoning_effort = "minimal"
+# Rendering style for Markdown, email, and Feishu output.
+# Use "zh_daily_brief" with language = "Chinese" for a Chinese daily report.
+template = "default"
 
 [[feeds]]
 # Free-form label used in the generated digest.

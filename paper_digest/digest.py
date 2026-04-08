@@ -9,13 +9,14 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .arxiv_client import Paper
-from .config import AppConfig, FeedConfig
+from .config import AnalysisTemplate, AppConfig, FeedConfig
 
 
 @dataclass(slots=True)
 class FeedDigest:
     name: str
     papers: list[Paper]
+    key_points: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -25,6 +26,7 @@ class DigestRun:
     lookback_hours: int
     feeds: list[FeedDigest]
     highlights: list[str] = field(default_factory=list)
+    template: AnalysisTemplate = "default"
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -32,9 +34,11 @@ class DigestRun:
             "timezone": self.timezone,
             "lookback_hours": self.lookback_hours,
             "highlights": list(self.highlights),
+            "template": self.template,
             "feeds": [
                 {
                     "name": feed.name,
+                    "key_points": list(feed.key_points),
                     "papers": [paper.to_dict() for paper in feed.papers],
                 }
                 for feed in self.feeds
@@ -66,6 +70,12 @@ def filter_papers(
 
 
 def render_markdown(digest: DigestRun) -> str:
+    if digest.template == "zh_daily_brief":
+        return _render_zh_daily_brief(digest)
+    return _render_default_markdown(digest)
+
+
+def _render_default_markdown(digest: DigestRun) -> str:
     local_tz = ZoneInfo(digest.timezone)
     generated_at = digest.generated_at.astimezone(local_tz).strftime(
         "%Y-%m-%d %H:%M:%S"
@@ -124,6 +134,77 @@ def render_markdown(digest: DigestRun) -> str:
                     )
             else:
                 lines.append(f"   - Summary: {paper.summary}")
+            lines.append("")
+
+    return "\n".join(lines).strip() + "\n"
+
+
+def _render_zh_daily_brief(digest: DigestRun) -> str:
+    local_tz = ZoneInfo(digest.timezone)
+    generated_at = digest.generated_at.astimezone(local_tz).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+
+    lines = [
+        "# 每日论文简报",
+        "",
+        f"- 生成时间：{generated_at} ({digest.timezone})",
+        f"- 检索窗口：最近 {digest.lookback_hours} 小时",
+        f"- 命中概览：{summarize_digest(digest)}",
+        "",
+    ]
+
+    if digest.highlights:
+        lines.append("## 今日重点")
+        lines.append("")
+        lines.extend(f"- {highlight}" for highlight in digest.highlights)
+        lines.append("")
+
+    for feed in digest.feeds:
+        lines.append(f"## {feed.name} 观察")
+        lines.append("")
+        if not feed.papers:
+            lines.append("今日没有新的命中文献。")
+            lines.append("")
+            continue
+
+        if feed.key_points:
+            lines.append("### 今日重点")
+            lines.append("")
+            lines.extend(f"- {point}" for point in feed.key_points)
+            lines.append("")
+
+        lines.append("### 论文速览")
+        lines.append("")
+        for index, paper in enumerate(feed.papers, start=1):
+            published = paper.published_at.astimezone(local_tz).strftime(
+                "%Y-%m-%d %H:%M"
+            )
+            authors = "，".join(paper.authors[:6]) if paper.authors else "作者信息缺失"
+            if len(paper.authors) > 6:
+                authors += " 等"
+
+            lines.append(f"{index}. [{paper.title}]({paper.abstract_url})")
+            lines.append(f"   - {paper.date_label}：{published}")
+            lines.append(f"   - 作者：{authors}")
+            lines.append(f"   - 来源：{paper.source}")
+            lines.append(f"   - 分类：{', '.join(paper.categories)}")
+            if paper.pdf_url:
+                lines.append(f"   - PDF：{paper.pdf_url}")
+            if paper.analysis is not None:
+                lines.append(f"   - 一句话结论：{paper.analysis.conclusion}")
+                if paper.analysis.contributions:
+                    lines.append(
+                        "   - 主要贡献：" + "；".join(paper.analysis.contributions)
+                    )
+                if paper.analysis.audience:
+                    lines.append(f"   - 适合谁看：{paper.analysis.audience}")
+                if paper.analysis.limitations:
+                    lines.append(
+                        "   - 潜在局限：" + "；".join(paper.analysis.limitations)
+                    )
+            else:
+                lines.append(f"   - 摘要：{paper.summary}")
             lines.append("")
 
     return "\n".join(lines).strip() + "\n"

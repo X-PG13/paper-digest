@@ -18,6 +18,7 @@ DeliveryTarget = Literal["digest", "per_feed"]
 DeliveryType = Literal["email", "feishu_webhook"]
 AnalysisProvider = Literal["openai"]
 AnalysisReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
+AnalysisTemplate = Literal["default", "zh_daily_brief"]
 
 
 @dataclass(slots=True, frozen=True)
@@ -73,8 +74,10 @@ class AnalysisConfig:
     max_papers: int
     max_output_tokens: int
     top_highlights: int
+    feed_key_points: int
     language: str
     reasoning_effort: AnalysisReasoningEffort
+    template: AnalysisTemplate
 
 
 @dataclass(slots=True, frozen=True)
@@ -257,12 +260,20 @@ def _load_analysis(value: Any) -> AnalysisConfig | None:
             analysis.get("top_highlights", 3),
             "analysis.top_highlights",
         ),
+        feed_key_points=_positive_int(
+            analysis.get("feed_key_points", 3),
+            "analysis.feed_key_points",
+        ),
         language=_required_string(
             analysis.get("language", "English"), "analysis.language"
         ),
         reasoning_effort=_analysis_reasoning_effort(
             analysis.get("reasoning_effort", "minimal"),
             "analysis.reasoning_effort",
+        ),
+        template=_analysis_template(
+            analysis.get("template", "default"),
+            "analysis.template",
         ),
     )
 
@@ -481,6 +492,18 @@ def _analysis_reasoning_effort(
     if normalized == "high":
         return "high"
     return "xhigh"
+
+
+def _analysis_template(value: Any, field_name: str) -> AnalysisTemplate:
+    if not isinstance(value, str):
+        raise ConfigError(f"{field_name} must be 'default' or 'zh_daily_brief'")
+
+    normalized = value.strip().lower()
+    if normalized not in {"default", "zh_daily_brief"}:
+        raise ConfigError(f"{field_name} must be 'default' or 'zh_daily_brief'")
+    if normalized == "default":
+        return "default"
+    return "zh_daily_brief"
 
 
 def _positive_int(value: Any, field_name: str) -> int:

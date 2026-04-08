@@ -229,12 +229,15 @@ class GenerateDigestTests(unittest.TestCase):
                     max_papers=10,
                     max_output_tokens=600,
                     top_highlights=3,
+                    feed_key_points=3,
                     language="English",
                     reasoning_effort="minimal",
+                    template="zh_daily_brief",
                 ),
             )
 
             digest = generate_digest(config, now=now)
 
         self.assertEqual(len(digest.feeds[0].papers), 1)
+        self.assertEqual(digest.template, "zh_daily_brief")
         mock_enrich_digest_with_analysis.assert_called_once()

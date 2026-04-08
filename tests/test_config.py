@@ -173,8 +173,10 @@ class LoadConfigTests(unittest.TestCase):
                     max_papers = 8
                     max_output_tokens = 500
                     top_highlights = 4
+                    feed_key_points = 2
                     language = "Chinese"
                     reasoning_effort = "low"
+                    template = "zh_daily_brief"
                     """
                 ).strip(),
                 encoding="utf-8",
@@ -186,8 +188,10 @@ class LoadConfigTests(unittest.TestCase):
         self.assertEqual(config.analysis.model, "gpt-5-mini")
         self.assertEqual(config.analysis.max_papers, 8)
         self.assertEqual(config.analysis.top_highlights, 4)
+        self.assertEqual(config.analysis.feed_key_points, 2)
         self.assertEqual(config.analysis.language, "Chinese")
         self.assertEqual(config.analysis.reasoning_effort, "low")
+        self.assertEqual(config.analysis.template, "zh_daily_brief")
 
     def test_analysis_reasoning_effort_must_be_valid(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -205,6 +209,30 @@ class LoadConfigTests(unittest.TestCase):
                     [analysis]
                     enabled = true
                     reasoning_effort = "extreme"
+                    """
+                ).strip(),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(ConfigError):
+                load_config(config_path)
+
+    def test_analysis_template_must_be_valid(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text(
+                textwrap.dedent(
+                    """
+                    [app]
+                    timezone = "UTC"
+
+                    [[feeds]]
+                    name = "LLM"
+                    categories = ["cs.AI"]
+
+                    [analysis]
+                    enabled = true
+                    template = "newsletter"
                     """
                 ).strip(),
                 encoding="utf-8",

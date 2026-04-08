@@ -112,8 +112,10 @@ timeout_seconds = 60
 max_papers = 8
 max_output_tokens = 600
 top_highlights = 3
+feed_key_points = 3
 language = "English"
 reasoning_effort = "minimal"
+template = "default"
 ```
 
 Analysis notes:
@@ -124,9 +126,15 @@ Analysis notes:
   papers that actually make it into the digest.
 - `max_papers` caps analysis cost for a single run. Papers beyond that limit
   still appear in the digest with their raw abstract summaries.
+- `feed_key_points` controls how many feed-level "today's key points" lines
+  appear before the detailed paper list.
 - When analysis is enabled, the Markdown, email, and Feishu outputs add:
   top-of-digest highlights, a one-sentence conclusion per paper, contribution
   bullets, best-fit audience, and likely limitations.
+- `template = "zh_daily_brief"` switches the output into a Chinese briefing
+  layout with "今日重点" sections at both the whole-digest and per-feed level.
+- A practical Chinese setup is `language = "Chinese"` plus
+  `template = "zh_daily_brief"`.
 
 Preferred notification setup:
 

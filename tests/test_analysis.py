@@ -35,8 +35,10 @@ def build_config() -> AnalysisConfig:
         max_papers=2,
         max_output_tokens=600,
         top_highlights=2,
+        feed_key_points=2,
         language="English",
         reasoning_effort="minimal",
+        template="default",
     )
 
 
@@ -67,6 +69,11 @@ class AnalysisTests(unittest.TestCase):
         self.assertEqual(digest.feeds[1].papers[0].analysis.conclusion, "Analysis C")
         self.assertIsNone(digest.feeds[0].papers[1].analysis)
         self.assertEqual(len(digest.highlights), 2)
+        self.assertEqual(
+            digest.feeds[0].key_points,
+            ["A: Analysis A", "B: B summary"],
+        )
+        self.assertEqual(digest.feeds[1].key_points, ["C: Analysis C"])
 
     def test_build_digest_highlights_falls_back_to_raw_summary(self) -> None:
         paper = build_paper("A")
@@ -80,3 +87,32 @@ class AnalysisTests(unittest.TestCase):
         highlights = build_digest_highlights(digest, 1)
 
         self.assertEqual(highlights, ["LLM: A - A summary"])
+
+    def test_enrich_digest_with_analysis_sets_template_without_papers(self) -> None:
+        config = build_config()
+        config = AnalysisConfig(
+            provider=config.provider,
+            model=config.model,
+            api_key_env=config.api_key_env,
+            base_url=config.base_url,
+            timeout_seconds=config.timeout_seconds,
+            max_papers=config.max_papers,
+            max_output_tokens=config.max_output_tokens,
+            top_highlights=config.top_highlights,
+            feed_key_points=config.feed_key_points,
+            language="Chinese",
+            reasoning_effort=config.reasoning_effort,
+            template="zh_daily_brief",
+        )
+        digest = DigestRun(
+            generated_at=datetime(2026, 4, 8, 10, 0, tzinfo=UTC),
+            timezone="UTC",
+            lookback_hours=24,
+            feeds=[FeedDigest(name="LLM", papers=[])],
+        )
+
+        enrich_digest_with_analysis(config, digest)
+
+        self.assertEqual(digest.template, "zh_daily_brief")
+        self.assertEqual(digest.highlights, [])
+        self.assertEqual(digest.feeds[0].key_points, [])

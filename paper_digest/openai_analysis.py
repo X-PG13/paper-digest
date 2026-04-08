@@ -72,6 +72,12 @@ def analyze_paper_with_openai(config: AnalysisConfig, paper: Paper) -> PaperAnal
 
 
 def _build_instructions(config: AnalysisConfig) -> str:
+    template_hint = ""
+    if config.template == "zh_daily_brief":
+        template_hint = (
+            " Prefer newsroom-style phrasing that reads naturally in a Chinese daily"
+            " research briefing."
+        )
     return (
         "You are writing concise research-digest notes. "
         "Use only the provided title, metadata, and abstract. "
@@ -79,6 +85,7 @@ def _build_instructions(config: AnalysisConfig) -> str:
         "If the abstract does not support a point, say so cautiously. "
         f"Write every field in {config.language}. "
         "Keep each field compact and useful for a daily paper digest."
+        f"{template_hint}"
     )
 
 

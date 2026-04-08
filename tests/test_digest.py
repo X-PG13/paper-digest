@@ -133,6 +133,46 @@ class DigestTests(unittest.TestCase):
             "Limitations: Abstract-only analysis may miss setup details.", markdown
         )
 
+    def test_render_markdown_supports_zh_daily_brief_template(self) -> None:
+        analyzed_paper = build_paper(
+            title="多模态推理论文",
+            summary="原始摘要。",
+            hours_ago=1,
+            authors=["Alice", "Bob"],
+        )
+        analyzed_paper.analysis = PaperAnalysis(
+            conclusion="提出了一个适合日报消费的简明结论。",
+            contributions=["统一了评测设置", "给出了更稳定的对比结果"],
+            audience="关注多模态评测和应用落地的研究者。",
+            limitations=["仅基于摘要，实验细节仍需阅读全文确认。"],
+        )
+        digest = DigestRun(
+            generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
+            timezone="Asia/Shanghai",
+            lookback_hours=24,
+            highlights=["LLM：多模态推理论文 - 更适合日报阅读的研究结论。"],
+            feeds=[
+                FeedDigest(
+                    name="LLM",
+                    papers=[analyzed_paper],
+                    key_points=["多模态推理论文：这篇工作更像一次高质量的评测整合。"],
+                )
+            ],
+            template="zh_daily_brief",
+        )
+
+        markdown = render_markdown(digest)
+
+        self.assertIn("# 每日论文简报", markdown)
+        self.assertIn("## 今日重点", markdown)
+        self.assertIn("## LLM 观察", markdown)
+        self.assertIn("### 今日重点", markdown)
+        self.assertIn("### 论文速览", markdown)
+        self.assertIn("一句话结论：提出了一个适合日报消费的简明结论。", markdown)
+        self.assertIn("主要贡献：统一了评测设置；给出了更稳定的对比结果", markdown)
+        self.assertIn("适合谁看：关注多模态评测和应用落地的研究者。", markdown)
+        self.assertIn("潜在局限：仅基于摘要，实验细节仍需阅读全文确认。", markdown)
+
     def test_filter_papers_without_keywords_sorts_and_limits(self) -> None:
         feed = FeedConfig(
             name="General",
@@ -188,8 +228,10 @@ class DigestTests(unittest.TestCase):
                     max_papers=10,
                     max_output_tokens=600,
                     top_highlights=3,
+                    feed_key_points=3,
                     language="English",
                     reasoning_effort="minimal",
+                    template="default",
                 ),
             )
             digest = DigestRun(

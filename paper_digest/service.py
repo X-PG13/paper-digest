@@ -63,6 +63,9 @@ def generate_digest(
         timezone=config.timezone,
         lookback_hours=config.lookback_hours,
         feeds=feeds,
+        template=(
+            config.analysis.template if config.analysis is not None else "default"
+        ),
     )
     if config.analysis is not None:
         enrich_digest_with_analysis(config.analysis, digest)
