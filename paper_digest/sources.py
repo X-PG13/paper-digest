@@ -15,6 +15,9 @@ def fetch_feed_papers(
     now: datetime,
     lookback_hours: int,
     request_delay_seconds: float,
+    request_timeout_seconds: int,
+    retry_attempts: int,
+    retry_backoff_seconds: float,
     contact_email: str | None,
 ) -> list[Paper]:
     """Fetch papers for a feed from its configured source."""
@@ -23,6 +26,9 @@ def fetch_feed_papers(
         return fetch_latest_papers(
             feed,
             request_delay_seconds=request_delay_seconds,
+            request_timeout_seconds=request_timeout_seconds,
+            retry_attempts=retry_attempts,
+            retry_backoff_seconds=retry_backoff_seconds,
         )
     if feed.source == "crossref":
         return fetch_latest_crossref_papers(
@@ -30,6 +36,9 @@ def fetch_feed_papers(
             now=now,
             lookback_hours=lookback_hours,
             request_delay_seconds=request_delay_seconds,
+            request_timeout_seconds=request_timeout_seconds,
+            retry_attempts=retry_attempts,
+            retry_backoff_seconds=retry_backoff_seconds,
             contact_email=contact_email,
         )
     raise ValueError(f"unsupported feed source: {feed.source}")

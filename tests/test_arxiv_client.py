@@ -85,8 +85,8 @@ class ParseFeedTests(unittest.TestCase):
         self.assertEqual(papers[0].abstract_url, "http://arxiv.org/abs/2604.00004v1")
         self.assertIsNone(papers[0].pdf_url)
 
-    @patch("paper_digest.arxiv_client.sleep")
-    @patch("paper_digest.arxiv_client.urlopen")
+    @patch("paper_digest.network.sleep")
+    @patch("paper_digest.network.urlopen")
     def test_fetch_latest_papers_queries_api_and_sleeps(
         self,
         mock_urlopen,
@@ -113,7 +113,7 @@ class ParseFeedTests(unittest.TestCase):
         self.assertEqual(query["sortOrder"], ["descending"])
         mock_sleep.assert_called_once_with(1.5)
 
-    @patch("paper_digest.arxiv_client.urlopen", side_effect=OSError("network down"))
+    @patch("paper_digest.network.urlopen", side_effect=OSError("network down"))
     def test_fetch_latest_papers_wraps_oserror(self, _mock_urlopen) -> None:
         feed = FeedConfig(
             name="LLM",
@@ -127,8 +127,8 @@ class ParseFeedTests(unittest.TestCase):
         with self.assertRaises(ArxivClientError):
             fetch_latest_papers(feed, request_delay_seconds=0)
 
-    @patch("paper_digest.arxiv_client.sleep")
-    @patch("paper_digest.arxiv_client.urlopen")
+    @patch("paper_digest.network.sleep")
+    @patch("paper_digest.network.urlopen")
     def test_fetch_latest_papers_retries_retryable_http_errors(
         self,
         mock_urlopen,
@@ -158,5 +158,38 @@ class ParseFeedTests(unittest.TestCase):
 
         self.assertEqual(len(papers), 2)
         self.assertEqual(mock_urlopen.call_count, 2)
-        self.assertEqual(mock_sleep.call_args_list[0].args, (7.0,))
+        self.assertEqual(mock_sleep.call_args_list[0].args, (10.0,))
         self.assertEqual(mock_sleep.call_args_list[1].args, (3,))
+
+    @patch("paper_digest.network.sleep")
+    @patch("paper_digest.network.urlopen")
+    def test_fetch_latest_papers_retries_timeout_errors(
+        self,
+        mock_urlopen,
+        mock_sleep,
+    ) -> None:
+        mock_urlopen.side_effect = [
+            TimeoutError("The read operation timed out"),
+            DummyHTTPResponse(FIXTURE_PATH.read_bytes()),
+        ]
+        feed = FeedConfig(
+            name="LLM",
+            categories=["cs.AI"],
+            keywords=[],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+        )
+
+        papers = fetch_latest_papers(
+            feed,
+            request_delay_seconds=2,
+            request_timeout_seconds=45,
+            retry_attempts=3,
+            retry_backoff_seconds=6,
+        )
+
+        self.assertEqual(len(papers), 2)
+        self.assertEqual(mock_urlopen.call_count, 2)
+        self.assertEqual(mock_sleep.call_args_list[0].args, (6.0,))
+        self.assertEqual(mock_sleep.call_args_list[1].args, (2,))

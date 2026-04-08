@@ -6,17 +6,14 @@ import xml.etree.ElementTree as ET
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
-from time import sleep
-from urllib.error import HTTPError
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 from .config import FeedConfig
+from .network import fetch_bytes_with_retry
 
 ARXIV_API_URL = "https://export.arxiv.org/api/query"
 ATOM_NS = {"atom": "http://www.w3.org/2005/Atom"}
-RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
-MAX_FETCH_ATTEMPTS = 3
 
 
 class ArxivClientError(RuntimeError):
@@ -62,6 +59,9 @@ def fetch_latest_papers(
     feed: FeedConfig,
     *,
     request_delay_seconds: float,
+    request_timeout_seconds: int = 60,
+    retry_attempts: int = 4,
+    retry_backoff_seconds: float = 10.0,
 ) -> list[Paper]:
     params = {
         "search_query": build_search_query(feed.categories),
@@ -79,31 +79,16 @@ def fetch_latest_papers(
         },
     )
 
-    payload: bytes | None = None
-    for attempt in range(1, MAX_FETCH_ATTEMPTS + 1):
-        try:
-            with urlopen(request, timeout=30) as response:
-                payload = response.read()
-        except HTTPError as exc:
-            if exc.code in RETRYABLE_STATUS_CODES and attempt < MAX_FETCH_ATTEMPTS:
-                sleep(_retry_delay_seconds(exc, request_delay_seconds, attempt))
-                continue
-            raise ArxivClientError(
-                f"failed to fetch papers for feed {feed.name!r}: {exc}"
-            ) from exc
-        except OSError as exc:
-            raise ArxivClientError(
-                f"failed to fetch papers for feed {feed.name!r}: {exc}"
-            ) from exc
-        else:
-            break
-
-    if payload is None:
-        raise ArxivClientError(f"failed to fetch papers for feed {feed.name!r}")
-
+    payload = fetch_bytes_with_retry(
+        request,
+        timeout_seconds=request_timeout_seconds,
+        request_delay_seconds=request_delay_seconds,
+        retry_attempts=retry_attempts,
+        retry_backoff_seconds=retry_backoff_seconds,
+        error_factory=ArxivClientError,
+        operation_description=f"failed to fetch papers for feed {feed.name!r}",
+    )
     papers = parse_feed(payload)
-    if request_delay_seconds > 0:
-        sleep(request_delay_seconds)
     return papers
 
 
@@ -174,17 +159,3 @@ def _parse_atom_datetime(value: str) -> datetime:
 
 def _clean_text(value: str) -> str:
     return " ".join(value.split())
-
-
-def _retry_delay_seconds(
-    error: HTTPError,
-    request_delay_seconds: float,
-    attempt: int,
-) -> float:
-    retry_after = error.headers.get("Retry-After")
-    if retry_after is not None:
-        try:
-            return max(float(retry_after), request_delay_seconds, 1.0)
-        except ValueError:
-            pass
-    return max(request_delay_seconds, float(attempt * 5), 1.0)

@@ -7,6 +7,12 @@ lookback_hours = 24
 output_dir = "output"
 # arXiv recommends spacing requests instead of polling aggressively.
 request_delay_seconds = 3
+# Per-request network timeout for source fetches.
+request_timeout_seconds = 60
+# Number of fetch attempts for transient upstream failures and timeouts.
+fetch_retry_attempts = 4
+# Base backoff in seconds between retry attempts.
+fetch_retry_backoff_seconds = 10
 
 [state]
 # Keep track of papers that were already included in previous digests.

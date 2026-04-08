@@ -51,6 +51,12 @@ scale as new paper sources and output channels are added.
   filtering for feed, title keyword, and recent date windows.
 - Copies dated Markdown and JSON files into a Pages-friendly output tree.
 
+### `paper_digest.network`
+
+- Centralizes bounded retry, timeout, and backoff behavior for upstream source
+  fetches.
+- Keeps transient network handling consistent across arXiv and Crossref.
+
 ### `paper_digest.delivery`
 
 - Builds channel-agnostic notification messages from a digest.

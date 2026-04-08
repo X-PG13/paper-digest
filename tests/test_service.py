@@ -85,6 +85,9 @@ class GenerateDigestTests(unittest.TestCase):
             now=now.astimezone(ZoneInfo("UTC")),
             lookback_hours=24,
             request_delay_seconds=0.0,
+            request_timeout_seconds=60,
+            retry_attempts=4,
+            retry_backoff_seconds=10.0,
             contact_email=None,
         )
 

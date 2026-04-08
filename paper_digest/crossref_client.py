@@ -6,12 +6,12 @@ import html
 import json
 import re
 from datetime import UTC, datetime, timedelta
-from time import sleep
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 from .arxiv_client import Paper
 from .config import FeedConfig
+from .network import fetch_bytes_with_retry
 
 CROSSREF_API_URL = "https://api.crossref.org/works"
 
@@ -26,6 +26,9 @@ def fetch_latest_crossref_papers(
     now: datetime,
     lookback_hours: int,
     request_delay_seconds: float,
+    request_timeout_seconds: int = 60,
+    retry_attempts: int = 4,
+    retry_backoff_seconds: float = 10.0,
     contact_email: str | None = None,
 ) -> list[Paper]:
     """Fetch recent Crossref works for a configured feed."""
@@ -53,17 +56,16 @@ def fetch_latest_crossref_papers(
         },
     )
 
-    try:
-        with urlopen(request, timeout=30) as response:
-            payload = response.read()
-    except OSError as exc:
-        raise CrossrefClientError(
-            f"failed to fetch works for feed {feed.name!r}: {exc}"
-        ) from exc
-
+    payload = fetch_bytes_with_retry(
+        request,
+        timeout_seconds=request_timeout_seconds,
+        request_delay_seconds=request_delay_seconds,
+        retry_attempts=retry_attempts,
+        retry_backoff_seconds=retry_backoff_seconds,
+        error_factory=CrossrefClientError,
+        operation_description=f"failed to fetch works for feed {feed.name!r}",
+    )
     papers = parse_crossref_response(payload)
-    if request_delay_seconds > 0:
-        sleep(request_delay_seconds)
     return papers
 
 

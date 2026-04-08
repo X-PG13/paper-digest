@@ -92,6 +92,9 @@ class AppConfig:
     request_delay_seconds: float
     feeds: list[FeedConfig]
     state: StateConfig
+    request_timeout_seconds: int = 60
+    fetch_retry_attempts: int = 4
+    fetch_retry_backoff_seconds: float = 10.0
     digest: DigestConfig = field(default_factory=DigestConfig)
     analysis: AnalysisConfig | None = None
     deliveries: list[EmailConfig | FeishuWebhookConfig] = field(default_factory=list)
@@ -131,6 +134,18 @@ def load_config(path: str | Path) -> AppConfig:
         app_section.get("request_delay_seconds", 3),
         "app.request_delay_seconds",
     )
+    request_timeout_seconds = _positive_int(
+        app_section.get("request_timeout_seconds", 60),
+        "app.request_timeout_seconds",
+    )
+    fetch_retry_attempts = _positive_int(
+        app_section.get("fetch_retry_attempts", 4),
+        "app.fetch_retry_attempts",
+    )
+    fetch_retry_backoff_seconds = _non_negative_float(
+        app_section.get("fetch_retry_backoff_seconds", 10),
+        "app.fetch_retry_backoff_seconds",
+    )
 
     feeds = [
         _load_feed(raw_feed, index)
@@ -149,6 +164,9 @@ def load_config(path: str | Path) -> AppConfig:
         request_delay_seconds=request_delay_seconds,
         feeds=feeds,
         state=state,
+        request_timeout_seconds=request_timeout_seconds,
+        fetch_retry_attempts=fetch_retry_attempts,
+        fetch_retry_backoff_seconds=fetch_retry_backoff_seconds,
         digest=digest,
         analysis=analysis,
         deliveries=deliveries,

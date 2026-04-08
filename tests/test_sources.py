@@ -39,6 +39,9 @@ class SourceDispatchTests(unittest.TestCase):
             now=datetime(2026, 4, 8, 0, 30, tzinfo=ZoneInfo("UTC")),
             lookback_hours=24,
             request_delay_seconds=0.0,
+            request_timeout_seconds=45,
+            retry_attempts=3,
+            retry_backoff_seconds=5.0,
             contact_email=None,
         )
 
@@ -46,6 +49,9 @@ class SourceDispatchTests(unittest.TestCase):
         mock_fetch_latest_papers.assert_called_once_with(
             feed,
             request_delay_seconds=0.0,
+            request_timeout_seconds=45,
+            retry_attempts=3,
+            retry_backoff_seconds=5.0,
         )
 
     @patch("paper_digest.sources.fetch_latest_crossref_papers")
@@ -80,6 +86,9 @@ class SourceDispatchTests(unittest.TestCase):
             now=now,
             lookback_hours=24,
             request_delay_seconds=0.5,
+            request_timeout_seconds=60,
+            retry_attempts=4,
+            retry_backoff_seconds=6.0,
             contact_email="bot@example.com",
         )
 
@@ -89,5 +98,8 @@ class SourceDispatchTests(unittest.TestCase):
             now=now,
             lookback_hours=24,
             request_delay_seconds=0.5,
+            request_timeout_seconds=60,
+            retry_attempts=4,
+            retry_backoff_seconds=6.0,
             contact_email="bot@example.com",
         )

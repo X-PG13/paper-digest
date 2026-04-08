@@ -73,6 +73,9 @@ timezone = "Asia/Shanghai"
 lookback_hours = 24
 output_dir = "output"
 request_delay_seconds = 3
+request_timeout_seconds = 60
+fetch_retry_attempts = 4
+fetch_retry_backoff_seconds = 10
 
 [[feeds]]
 name = "LLM"
@@ -89,6 +92,9 @@ Field reference:
 - `lookback_hours`: Papers older than this time window are ignored.
 - `output_dir`: Directory where dated and latest digests are written.
 - `request_delay_seconds`: Delay between arXiv API requests.
+- `request_timeout_seconds`: Per-request timeout for arXiv and Crossref fetches.
+- `fetch_retry_attempts`: Maximum number of fetch attempts for transient failures.
+- `fetch_retry_backoff_seconds`: Base backoff used between retry attempts.
 - `state`: Persistent history used for deduplication across runs.
 - `source`: `arxiv` or `crossref`.
 - `categories`: arXiv categories such as `cs.AI`, `cs.CL`, or `cs.CV`.
@@ -237,6 +243,11 @@ To use it, create these GitHub repository secrets:
 
 The workflow restores and saves `.paper-digest-state/` through the GitHub
 Actions cache so deduplication survives across runs.
+
+For scheduled stability, source fetches use bounded retry and backoff for
+transient `429`, `5xx`, and timeout-style failures. You can tune that behavior
+through `request_timeout_seconds`, `fetch_retry_attempts`, and
+`fetch_retry_backoff_seconds` in `[app]`.
 
 The CLI also rebuilds `output/site/index.html` on every run. That static site:
 

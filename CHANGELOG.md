@@ -7,6 +7,11 @@ Versioning.
 
 ## [Unreleased]
 
+- Configurable request timeout, retry attempts, and retry backoff for upstream
+  source fetches.
+- Shared network retry handling for transient timeout, `429`, and `5xx` source
+  failures.
+
 ## [0.4.0] - 2026-04-09
 
 - Static archive-site generation from historical digest outputs, including

@@ -41,6 +41,9 @@ def generate_digest(
             now=now_utc,
             lookback_hours=config.lookback_hours,
             request_delay_seconds=config.request_delay_seconds,
+            request_timeout_seconds=config.request_timeout_seconds,
+            retry_attempts=config.fetch_retry_attempts,
+            retry_backoff_seconds=config.fetch_retry_backoff_seconds,
             contact_email=contact_email,
         )
         filtered = filter_papers(

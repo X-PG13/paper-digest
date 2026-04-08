@@ -4,6 +4,7 @@ import json
 import unittest
 from datetime import UTC, datetime
 from unittest.mock import patch
+from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlsplit
 
 from paper_digest.config import FeedConfig
@@ -67,8 +68,8 @@ class CrossrefClientTests(unittest.TestCase):
         with self.assertRaises(CrossrefClientError):
             parse_crossref_response(b"not json")
 
-    @patch("paper_digest.crossref_client.sleep")
-    @patch("paper_digest.crossref_client.urlopen")
+    @patch("paper_digest.network.sleep")
+    @patch("paper_digest.network.urlopen")
     def test_fetch_latest_crossref_papers_queries_api(
         self,
         mock_urlopen,
@@ -105,3 +106,81 @@ class CrossrefClientTests(unittest.TestCase):
         self.assertIn("from-index-date:2026-04-07", query["filter"][0])
         self.assertIn("type:journal-article", query["filter"][0])
         mock_sleep.assert_called_once_with(1.0)
+
+    @patch("paper_digest.network.sleep")
+    @patch("paper_digest.network.urlopen")
+    def test_fetch_latest_crossref_papers_retries_timeout_errors(
+        self,
+        mock_urlopen,
+        mock_sleep,
+    ) -> None:
+        mock_urlopen.side_effect = [
+            TimeoutError("The read operation timed out"),
+            DummyHTTPResponse(build_payload()),
+        ]
+        feed = FeedConfig(
+            name="Crossref",
+            source="crossref",
+            queries=["agent", "reasoning"],
+            keywords=["agent"],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+        )
+
+        papers = fetch_latest_crossref_papers(
+            feed,
+            now=datetime(2026, 4, 8, 12, 0, tzinfo=UTC),
+            lookback_hours=24,
+            request_delay_seconds=1.0,
+            request_timeout_seconds=45,
+            retry_attempts=3,
+            retry_backoff_seconds=4.0,
+            contact_email="bot@example.com",
+        )
+
+        self.assertEqual(len(papers), 1)
+        self.assertEqual(mock_urlopen.call_count, 2)
+        self.assertEqual(mock_sleep.call_args_list[0].args, (4.0,))
+        self.assertEqual(mock_sleep.call_args_list[1].args, (1.0,))
+
+    @patch("paper_digest.network.sleep")
+    @patch("paper_digest.network.urlopen")
+    def test_fetch_latest_crossref_papers_retries_retry_after_header(
+        self,
+        mock_urlopen,
+        mock_sleep,
+    ) -> None:
+        retryable = HTTPError(
+            url="https://api.crossref.org/works",
+            code=503,
+            msg="Service Unavailable",
+            hdrs={"Retry-After": "9"},
+            fp=None,
+        )
+        mock_urlopen.side_effect = [
+            retryable,
+            DummyHTTPResponse(build_payload()),
+        ]
+        feed = FeedConfig(
+            name="Crossref",
+            source="crossref",
+            queries=["agent", "reasoning"],
+            keywords=["agent"],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+        )
+
+        papers = fetch_latest_crossref_papers(
+            feed,
+            now=datetime(2026, 4, 8, 12, 0, tzinfo=UTC),
+            lookback_hours=24,
+            request_delay_seconds=1.0,
+            contact_email="bot@example.com",
+        )
+
+        self.assertEqual(len(papers), 1)
+        self.assertEqual(mock_urlopen.call_count, 2)
+        self.assertEqual(mock_sleep.call_args_list[0].args, (10.0,))
+        self.assertEqual(mock_sleep.call_args_list[1].args, (1.0,))

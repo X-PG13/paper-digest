@@ -22,6 +22,9 @@ class LoadConfigTests(unittest.TestCase):
                     lookback_hours = 48
                     output_dir = "../artifacts"
                     request_delay_seconds = 1.5
+                    request_timeout_seconds = 60
+                    fetch_retry_attempts = 4
+                    fetch_retry_backoff_seconds = 6.5
 
                     [[feeds]]
                     name = "LLM"
@@ -44,6 +47,9 @@ class LoadConfigTests(unittest.TestCase):
             (config_path.parent / "../artifacts").resolve(),
         )
         self.assertEqual(config.request_delay_seconds, 1.5)
+        self.assertEqual(config.request_timeout_seconds, 60)
+        self.assertEqual(config.fetch_retry_attempts, 4)
+        self.assertEqual(config.fetch_retry_backoff_seconds, 6.5)
         self.assertEqual(config.feeds[0].name, "LLM")
         self.assertTrue(config.state.enabled)
 
@@ -55,6 +61,27 @@ class LoadConfigTests(unittest.TestCase):
                     """
                     [app]
                     timezone = "Mars/Olympus_Mons"
+
+                    [[feeds]]
+                    name = "LLM"
+                    categories = ["cs.AI"]
+                    """
+                ).strip(),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(ConfigError):
+                load_config(config_path)
+
+    def test_invalid_fetch_retry_attempts_raises_config_error(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text(
+                textwrap.dedent(
+                    """
+                    [app]
+                    timezone = "UTC"
+                    fetch_retry_attempts = 0
 
                     [[feeds]]
                     name = "LLM"
