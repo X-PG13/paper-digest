@@ -150,6 +150,69 @@ class LoadConfigTests(unittest.TestCase):
         self.assertEqual(config.deliveries[0].target, "per_feed")
         self.assertEqual(config.deliveries[1].target, "digest")
 
+    def test_load_config_reads_analysis_settings(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text(
+                textwrap.dedent(
+                    """
+                    [app]
+                    timezone = "UTC"
+
+                    [[feeds]]
+                    name = "LLM"
+                    categories = ["cs.AI"]
+
+                    [analysis]
+                    enabled = true
+                    provider = "openai"
+                    model = "gpt-5-mini"
+                    api_key_env = "OPENAI_API_KEY"
+                    base_url = "https://api.openai.com/v1/responses"
+                    timeout_seconds = 45
+                    max_papers = 8
+                    max_output_tokens = 500
+                    top_highlights = 4
+                    language = "Chinese"
+                    reasoning_effort = "low"
+                    """
+                ).strip(),
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        assert config.analysis is not None
+        self.assertEqual(config.analysis.model, "gpt-5-mini")
+        self.assertEqual(config.analysis.max_papers, 8)
+        self.assertEqual(config.analysis.top_highlights, 4)
+        self.assertEqual(config.analysis.language, "Chinese")
+        self.assertEqual(config.analysis.reasoning_effort, "low")
+
+    def test_analysis_reasoning_effort_must_be_valid(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text(
+                textwrap.dedent(
+                    """
+                    [app]
+                    timezone = "UTC"
+
+                    [[feeds]]
+                    name = "LLM"
+                    categories = ["cs.AI"]
+
+                    [analysis]
+                    enabled = true
+                    reasoning_effort = "extreme"
+                    """
+                ).strip(),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(ConfigError):
+                load_config(config_path)
+
     def test_delivery_target_must_be_valid(self) -> None:
         with TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "config.toml"

@@ -5,8 +5,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from paper_digest.arxiv_client import Paper
-from paper_digest.config import AppConfig, FeedConfig, StateConfig
+from paper_digest.arxiv_client import Paper, PaperAnalysis
+from paper_digest.config import AnalysisConfig, AppConfig, FeedConfig, StateConfig
 from paper_digest.digest import (
     DigestRun,
     FeedDigest,
@@ -102,6 +102,37 @@ class DigestTests(unittest.TestCase):
         self.assertIn("Reasoning paper", markdown)
         self.assertIn("Published", markdown)
 
+    def test_render_markdown_includes_highlights_and_structured_analysis(self) -> None:
+        analyzed_paper = build_paper(
+            title="Reasoning paper",
+            summary="Reasoning summary.",
+            hours_ago=1,
+            authors=["Alice"],
+        )
+        analyzed_paper.analysis = PaperAnalysis(
+            conclusion="A concise verdict about the paper.",
+            contributions=["Introduces a new benchmark", "Evaluates agent behavior"],
+            audience="Researchers working on agent evaluation.",
+            limitations=["Abstract-only analysis may miss setup details."],
+        )
+        digest = DigestRun(
+            generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
+            timezone="UTC",
+            lookback_hours=24,
+            highlights=["LLM: Reasoning paper - A concise verdict about the paper."],
+            feeds=[FeedDigest(name="LLM", papers=[analyzed_paper])],
+        )
+
+        markdown = render_markdown(digest)
+
+        self.assertIn("## Today's Highlights", markdown)
+        self.assertIn("Conclusion: A concise verdict about the paper.", markdown)
+        self.assertIn("Contributions: Introduces a new benchmark", markdown)
+        self.assertIn("Best For: Researchers working on agent evaluation.", markdown)
+        self.assertIn(
+            "Limitations: Abstract-only analysis may miss setup details.", markdown
+        )
+
     def test_filter_papers_without_keywords_sorts_and_limits(self) -> None:
         feed = FeedConfig(
             name="General",
@@ -147,6 +178,18 @@ class DigestTests(unittest.TestCase):
                     enabled=True,
                     path=Path(temp_dir) / "state.json",
                     retention_days=90,
+                ),
+                analysis=AnalysisConfig(
+                    provider="openai",
+                    model="gpt-5-mini",
+                    api_key_env="OPENAI_API_KEY",
+                    base_url="https://api.openai.com/v1/responses",
+                    timeout_seconds=60,
+                    max_papers=10,
+                    max_output_tokens=600,
+                    top_highlights=3,
+                    language="English",
+                    reasoning_effort="minimal",
                 ),
             )
             digest = DigestRun(

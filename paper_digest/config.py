@@ -16,6 +16,8 @@ class ConfigError(ValueError):
 FeedSource = Literal["arxiv", "crossref"]
 DeliveryTarget = Literal["digest", "per_feed"]
 DeliveryType = Literal["email", "feishu_webhook"]
+AnalysisProvider = Literal["openai"]
+AnalysisReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
 
 
 @dataclass(slots=True, frozen=True)
@@ -62,6 +64,20 @@ class StateConfig:
 
 
 @dataclass(slots=True, frozen=True)
+class AnalysisConfig:
+    provider: AnalysisProvider
+    model: str
+    api_key_env: str
+    base_url: str
+    timeout_seconds: int
+    max_papers: int
+    max_output_tokens: int
+    top_highlights: int
+    language: str
+    reasoning_effort: AnalysisReasoningEffort
+
+
+@dataclass(slots=True, frozen=True)
 class AppConfig:
     timezone: str
     lookback_hours: int
@@ -69,6 +85,7 @@ class AppConfig:
     request_delay_seconds: float
     feeds: list[FeedConfig]
     state: StateConfig
+    analysis: AnalysisConfig | None = None
     deliveries: list[EmailConfig | FeishuWebhookConfig] = field(default_factory=list)
     email: EmailConfig | None = None
 
@@ -112,6 +129,7 @@ def load_config(path: str | Path) -> AppConfig:
         for index, raw_feed in enumerate(feeds_section, start=1)
     ]
     state = _load_state(raw.get("state"), config_path)
+    analysis = _load_analysis(raw.get("analysis"))
     deliveries = _load_deliveries(raw.get("deliveries"))
     email = _load_email(raw.get("email"))
 
@@ -122,6 +140,7 @@ def load_config(path: str | Path) -> AppConfig:
         request_delay_seconds=request_delay_seconds,
         feeds=feeds,
         state=state,
+        analysis=analysis,
         deliveries=deliveries,
         email=email,
     )
@@ -198,6 +217,54 @@ def _load_email(value: Any) -> EmailConfig | None:
         return None
 
     return _build_email_config(email, "email")
+
+
+def _load_analysis(value: Any) -> AnalysisConfig | None:
+    if value is None:
+        return None
+
+    analysis = _as_table(value, "analysis")
+    if not _bool(analysis.get("enabled", True), "analysis.enabled"):
+        return None
+
+    return AnalysisConfig(
+        provider=_analysis_provider(
+            analysis.get("provider", "openai"),
+            "analysis.provider",
+        ),
+        model=_required_string(analysis.get("model", "gpt-5-mini"), "analysis.model"),
+        api_key_env=_required_string(
+            analysis.get("api_key_env", "OPENAI_API_KEY"),
+            "analysis.api_key_env",
+        ),
+        base_url=_required_string(
+            analysis.get("base_url", "https://api.openai.com/v1/responses"),
+            "analysis.base_url",
+        ),
+        timeout_seconds=_positive_int(
+            analysis.get("timeout_seconds", 60),
+            "analysis.timeout_seconds",
+        ),
+        max_papers=_positive_int(
+            analysis.get("max_papers", 10),
+            "analysis.max_papers",
+        ),
+        max_output_tokens=_positive_int(
+            analysis.get("max_output_tokens", 600),
+            "analysis.max_output_tokens",
+        ),
+        top_highlights=_positive_int(
+            analysis.get("top_highlights", 3),
+            "analysis.top_highlights",
+        ),
+        language=_required_string(
+            analysis.get("language", "English"), "analysis.language"
+        ),
+        reasoning_effort=_analysis_reasoning_effort(
+            analysis.get("reasoning_effort", "minimal"),
+            "analysis.reasoning_effort",
+        ),
+    )
 
 
 def _load_deliveries(value: Any) -> list[EmailConfig | FeishuWebhookConfig]:
@@ -377,6 +444,43 @@ def _delivery_target(value: Any, field_name: str) -> DeliveryTarget:
     if normalized == "digest":
         return "digest"
     return "per_feed"
+
+
+def _analysis_provider(value: Any, field_name: str) -> AnalysisProvider:
+    if not isinstance(value, str):
+        raise ConfigError(f"{field_name} must be 'openai'")
+
+    normalized = value.strip().lower()
+    if normalized != "openai":
+        raise ConfigError(f"{field_name} must be 'openai'")
+    return "openai"
+
+
+def _analysis_reasoning_effort(
+    value: Any,
+    field_name: str,
+) -> AnalysisReasoningEffort:
+    if not isinstance(value, str):
+        raise ConfigError(
+            f"{field_name} must be one of none, minimal, low, medium, high, xhigh"
+        )
+
+    normalized = value.strip().lower()
+    if normalized not in {"none", "minimal", "low", "medium", "high", "xhigh"}:
+        raise ConfigError(
+            f"{field_name} must be one of none, minimal, low, medium, high, xhigh"
+        )
+    if normalized == "none":
+        return "none"
+    if normalized == "minimal":
+        return "minimal"
+    if normalized == "low":
+        return "low"
+    if normalized == "medium":
+        return "medium"
+    if normalized == "high":
+        return "high"
+    return "xhigh"
 
 
 def _positive_int(value: Any, field_name: str) -> int:

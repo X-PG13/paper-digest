@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from . import __version__
+from .analysis import AnalysisError
 from .arxiv_client import ArxivClientError
 from .config import ConfigError, load_config
 from .crossref_client import CrossrefClientError
@@ -59,6 +60,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         return 1
     except (
+        AnalysisError,
         ConfigError,
         ArxivClientError,
         CrossrefClientError,

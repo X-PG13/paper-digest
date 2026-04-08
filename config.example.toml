@@ -16,6 +16,24 @@ path = ".paper-digest-state/state.json"
 # Drop old state entries after this many days.
 retention_days = 90
 
+[analysis]
+# Optional LLM-powered digest enhancement. Leave disabled until you have an API key.
+enabled = false
+provider = "openai"
+model = "gpt-5-mini"
+api_key_env = "OPENAI_API_KEY"
+base_url = "https://api.openai.com/v1/responses"
+timeout_seconds = 60
+# Analyze at most this many newly selected papers per run.
+max_papers = 8
+max_output_tokens = 600
+# Number of top-of-digest highlight lines to render.
+top_highlights = 3
+# Output language for LLM-written fields.
+language = "English"
+# Use "none" to skip reasoning settings entirely.
+reasoning_effort = "minimal"
+
 [[feeds]]
 # Free-form label used in the generated digest.
 name = "LLM"

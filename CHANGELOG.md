@@ -7,6 +7,10 @@ Versioning.
 
 ## [Unreleased]
 
+- Optional OpenAI-backed structured paper analysis with configurable cost caps.
+- Top-of-digest highlights plus richer per-paper conclusions, contributions,
+  audience guidance, and limitations in Markdown, email, and Feishu output.
+
 ## [0.2.0] - 2026-04-08
 
 - Optional SMTP email delivery for generated digests.

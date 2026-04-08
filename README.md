@@ -12,6 +12,7 @@ The current scope is intentionally narrow:
 
 - Fetch the newest papers from arXiv and Crossref.
 - Apply include and exclude keyword filters on title and abstract.
+- Optionally enrich selected papers with structured LLM analysis.
 - Generate machine-readable `JSON` and human-readable `Markdown`.
 - Persist state to avoid repeating already-sent papers.
 - Optionally deliver the digest through SMTP email or Feishu webhooks.
@@ -95,7 +96,37 @@ Field reference:
 - `exclude_keywords`: Drop a paper when any excluded keyword matches.
 - `max_results`: Number of newest candidates fetched before local filtering.
 - `max_items`: Maximum number of papers emitted for that feed.
+- `analysis`: Optional structured paper analysis, currently backed by OpenAI.
 - `deliveries`: Optional notification outputs such as email or Feishu webhook.
+
+Optional LLM analysis:
+
+```toml
+[analysis]
+enabled = true
+provider = "openai"
+model = "gpt-5-mini"
+api_key_env = "OPENAI_API_KEY"
+base_url = "https://api.openai.com/v1/responses"
+timeout_seconds = 60
+max_papers = 8
+max_output_tokens = 600
+top_highlights = 3
+language = "English"
+reasoning_effort = "minimal"
+```
+
+Analysis notes:
+
+- Analysis is disabled by default. If the section is omitted or `enabled = false`,
+  the digest keeps using the original abstract summary only.
+- Analysis runs after filtering and deduplication, so you only spend tokens on
+  papers that actually make it into the digest.
+- `max_papers` caps analysis cost for a single run. Papers beyond that limit
+  still appear in the digest with their raw abstract summaries.
+- When analysis is enabled, the Markdown, email, and Feishu outputs add:
+  top-of-digest highlights, a one-sentence conclusion per paper, contribution
+  bullets, best-fit audience, and likely limitations.
 
 Preferred notification setup:
 
@@ -189,7 +220,7 @@ On macOS or Linux you can run the digest every morning with `cron`:
 
 - Add more literature sources such as PubMed and Semantic Scholar.
 - Support more output adapters such as Slack and WeCom.
-- Support feed-level templates or LLM-generated summaries.
+- Support additional LLM providers and richer feed-level briefings.
 
 ## Status
 

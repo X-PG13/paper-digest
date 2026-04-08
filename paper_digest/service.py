@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
+from .analysis import enrich_digest_with_analysis
 from .config import AppConfig
 from .digest import DigestRun, FeedDigest, filter_papers
 from .sources import fetch_feed_papers
@@ -63,6 +64,8 @@ def generate_digest(
         lookback_hours=config.lookback_hours,
         feeds=feeds,
     )
+    if config.analysis is not None:
+        enrich_digest_with_analysis(config.analysis, digest)
     if state is None:
         save_state(config.state, managed_state)
     return digest

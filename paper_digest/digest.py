@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -24,12 +24,14 @@ class DigestRun:
     timezone: str
     lookback_hours: int
     feeds: list[FeedDigest]
+    highlights: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         return {
             "generated_at": self.generated_at.isoformat(),
             "timezone": self.timezone,
             "lookback_hours": self.lookback_hours,
+            "highlights": list(self.highlights),
             "feeds": [
                 {
                     "name": feed.name,
@@ -77,6 +79,12 @@ def render_markdown(digest: DigestRun) -> str:
         "",
     ]
 
+    if digest.highlights:
+        lines.append("## Today's Highlights")
+        lines.append("")
+        lines.extend(f"- {highlight}" for highlight in digest.highlights)
+        lines.append("")
+
     for feed in digest.feeds:
         lines.append(f"## {feed.name}")
         lines.append("")
@@ -102,7 +110,20 @@ def render_markdown(digest: DigestRun) -> str:
             lines.append(f"   - Categories: {', '.join(paper.categories)}")
             if paper.pdf_url:
                 lines.append(f"   - PDF: {paper.pdf_url}")
-            lines.append(f"   - Summary: {paper.summary}")
+            if paper.analysis is not None:
+                lines.append(f"   - Conclusion: {paper.analysis.conclusion}")
+                if paper.analysis.contributions:
+                    lines.append(
+                        "   - Contributions: " + "; ".join(paper.analysis.contributions)
+                    )
+                if paper.analysis.audience:
+                    lines.append(f"   - Best For: {paper.analysis.audience}")
+                if paper.analysis.limitations:
+                    lines.append(
+                        "   - Limitations: " + "; ".join(paper.analysis.limitations)
+                    )
+            else:
+                lines.append(f"   - Summary: {paper.summary}")
             lines.append("")
 
     return "\n".join(lines).strip() + "\n"

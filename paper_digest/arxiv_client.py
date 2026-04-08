@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from time import sleep
 from urllib.parse import urlencode
@@ -21,6 +21,14 @@ class ArxivClientError(RuntimeError):
 
 
 @dataclass(slots=True)
+class PaperAnalysis:
+    conclusion: str
+    contributions: list[str] = field(default_factory=list)
+    audience: str = ""
+    limitations: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class Paper:
     title: str
     summary: str
@@ -33,6 +41,7 @@ class Paper:
     updated_at: datetime
     source: str = "arxiv"
     date_label: str = "Published"
+    analysis: PaperAnalysis | None = None
 
     def to_dict(self) -> dict[str, object]:
         data = asdict(self)

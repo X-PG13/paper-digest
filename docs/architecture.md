@@ -22,10 +22,22 @@ scale as new paper sources and output channels are added.
 - Fetches newly indexed works from Crossref.
 - Normalizes Crossref JSON into the shared `Paper` model.
 
+### `paper_digest.analysis`
+
+- Selects which papers should be enriched in a given run.
+- Applies structured paper analysis and builds top-of-digest highlights.
+- Keeps analysis policy out of the fetch and delivery layers.
+
+### `paper_digest.openai_analysis`
+
+- Calls the OpenAI Responses API for structured per-paper analysis.
+- Converts raw responses into the shared `PaperAnalysis` model.
+
 ### `paper_digest.digest`
 
 - Applies filtering rules such as lookback windows and keyword matching.
-- Renders digest output for JSON and Markdown.
+- Renders digest output for JSON and Markdown, including optional highlights
+  and structured per-paper analysis.
 - Contains formatting-specific helpers rather than network logic.
 
 ### `paper_digest.delivery`
@@ -70,6 +82,8 @@ The next clean extension points are:
    source-agnostic protocol if the model starts diverging.
 3. Add output adapters for Slack, WeCom, or other destinations without putting
    transport code into the CLI.
+4. Add more analysis providers behind the existing analysis interface rather
+   than coupling the service layer to a single LLM vendor.
 
 ## Design Constraints
 
