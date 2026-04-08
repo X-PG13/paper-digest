@@ -23,10 +23,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -35,7 +35,7 @@ jobs:
 
       - name: Restore digest state cache
         id: state-restore
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: .paper-digest-state
           key: paper-digest-state-${{ github.run_id }}
@@ -60,7 +60,7 @@ jobs:
 
       - name: Upload digest artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: digest-output
           path: output/
@@ -72,13 +72,13 @@ jobs:
 
       - name: Upload Pages artifact
         if: success() && hashFiles('output/site/**') != ''
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: output/site
 
       - name: Save digest state cache
         if: always() && hashFiles('.paper-digest-state/**') != ''
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: .paper-digest-state
           key: paper-digest-state-${{ github.run_id }}
