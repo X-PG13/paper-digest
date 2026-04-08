@@ -1,7 +1,9 @@
 # Paper Digest
 
+[![CI](https://img.shields.io/github/actions/workflow/status/X-PG13/paper-digest/ci.yml?branch=main&label=CI)](https://github.com/X-PG13/paper-digest/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/X-PG13/paper-digest?display_name=tag)](https://github.com/X-PG13/paper-digest/releases)
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)
-![License: MIT](https://img.shields.io/badge/license-MIT-green)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
 Paper Digest is a small but production-minded Python project for pulling the
 latest arXiv papers every day and turning them into a readable research digest.
