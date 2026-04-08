@@ -7,9 +7,13 @@ Versioning.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-04-09
+
 - Static archive-site generation from historical digest outputs, including
   daily hit counts, per-feed summaries, and lightweight client-side search.
 - GitHub Pages deployment from the scheduled `Daily Digest` workflow.
+- Bounded retry and backoff handling for transient arXiv `429` and `5xx`
+  responses during scheduled fetches.
 
 ## [0.3.0] - 2026-04-08
 
