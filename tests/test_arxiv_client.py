@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlsplit
 
 from paper_digest.arxiv_client import (
@@ -125,3 +126,37 @@ class ParseFeedTests(unittest.TestCase):
 
         with self.assertRaises(ArxivClientError):
             fetch_latest_papers(feed, request_delay_seconds=0)
+
+    @patch("paper_digest.arxiv_client.sleep")
+    @patch("paper_digest.arxiv_client.urlopen")
+    def test_fetch_latest_papers_retries_retryable_http_errors(
+        self,
+        mock_urlopen,
+        mock_sleep,
+    ) -> None:
+        retryable = HTTPError(
+            url="https://export.arxiv.org/api/query",
+            code=429,
+            msg="Too Many Requests",
+            hdrs={"Retry-After": "7"},
+            fp=None,
+        )
+        mock_urlopen.side_effect = [
+            retryable,
+            DummyHTTPResponse(FIXTURE_PATH.read_bytes()),
+        ]
+        feed = FeedConfig(
+            name="LLM",
+            categories=["cs.AI"],
+            keywords=[],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+        )
+
+        papers = fetch_latest_papers(feed, request_delay_seconds=3)
+
+        self.assertEqual(len(papers), 2)
+        self.assertEqual(mock_urlopen.call_count, 2)
+        self.assertEqual(mock_sleep.call_args_list[0].args, (7.0,))
+        self.assertEqual(mock_sleep.call_args_list[1].args, (3,))

@@ -66,8 +66,7 @@ def _load_archives(output_dir: Path, digests_root: Path) -> list[DayArchive]:
         reverse=True,
     )
     raw_days = [
-        _load_day_archive(digest_file, digests_root)
-        for digest_file in digest_files
+        _load_day_archive(digest_file, digests_root) for digest_file in digest_files
     ]
     if not raw_days:
         return []
@@ -95,9 +94,7 @@ def _load_day_archive(digest_json_path: Path, digests_root: Path) -> DayArchive:
     try:
         payload = json.loads(digest_json_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        raise ArchiveSiteError(
-            f"invalid digest JSON: {digest_json_path}"
-        ) from exc
+        raise ArchiveSiteError(f"invalid digest JSON: {digest_json_path}") from exc
 
     if not isinstance(payload, dict):
         raise ArchiveSiteError(f"invalid digest payload: {digest_json_path}")
@@ -170,9 +167,11 @@ def _parse_feed(raw_feed: object, digest_json_path: Path) -> FeedArchive:
             titles.append({"title": title, "href": abstract_url})
 
     raw_key_points = raw_feed.get("key_points")
-    key_points = [
-        item for item in raw_key_points if isinstance(item, str) and item.strip()
-    ] if isinstance(raw_key_points, list) else []
+    key_points = (
+        [item for item in raw_key_points if isinstance(item, str) and item.strip()]
+        if isinstance(raw_key_points, list)
+        else []
+    )
 
     summary = _build_feed_summary(name, len(raw_papers), key_points, titles)
     return FeedArchive(
@@ -227,8 +226,7 @@ def _render_index(archives: list[DayArchive]) -> str:
         _build_stats("全部归档", archives, None),
     ]
     cards_html = (
-        "\n".join(_render_day_card(day) for day in archives)
-        or _render_empty_state()
+        "\n".join(_render_day_card(day) for day in archives) or _render_empty_state()
     )
     feed_options = "\n".join(
         f'<option value="{escape(name)}">{escape(name)}</option>' for name in feed_names
