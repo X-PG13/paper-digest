@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <id>http://arxiv.org/abs/2604.00001v1</id>
+    <updated>2026-04-08T00:30:00Z</updated>
+    <published>2026-04-08T00:30:00Z</published>
+    <title> Agentic Evaluation for Vision Models </title>
+    <summary> We study multimodal reasoning benchmarks. </summary>
+    <author>
+      <name>Alice Example</name>
+    </author>
+    <author>
+      <name>Bob Example</name>
+    </author>
+    <link href="https://arxiv.org/abs/2604.00001v1" rel="alternate" type="text/html" />
+    <link title="pdf" href="https://arxiv.org/pdf/2604.00001v1" rel="related" type="application/pdf" />
+    <category term="cs.AI" />
+    <category term="cs.CV" />
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2604.00002v1</id>
+    <updated>2026-04-07T18:00:00Z</updated>
+    <published>2026-04-07T18:00:00Z</published>
+    <title> Retrieval for Scientific Discovery </title>
+    <summary> Retrieval with agents. </summary>
+    <author>
+      <name>Carol Example</name>
+    </author>
+    <link href="https://arxiv.org/abs/2604.00002v1" rel="alternate" type="text/html" />
+    <link title="pdf" href="https://arxiv.org/pdf/2604.00002v1" rel="related" type="application/pdf" />
+    <category term="cs.IR" />
+  </entry>
+</feed>

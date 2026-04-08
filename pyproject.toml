@@ -1,0 +1,85 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "paper-digest"
+dynamic = ["version"]
+description = "Fetch daily latest papers from arXiv and generate a digest."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12"
+keywords = ["arxiv", "research", "papers", "digest", "automation"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+  "Topic :: Utilities",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/X-PG13/paper-digest"
+Repository = "https://github.com/X-PG13/paper-digest"
+Issues = "https://github.com/X-PG13/paper-digest/issues"
+Changelog = "https://github.com/X-PG13/paper-digest/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = [
+  "build>=1.2.2",
+  "coverage[toml]>=7.6.0",
+  "mypy>=1.11.0",
+  "pre-commit>=4.0.0",
+  "ruff>=0.11.0",
+  "twine>=5.1.1",
+]
+
+[project.scripts]
+paper-digest = "paper_digest.cli:main"
+
+[tool.hatch.version]
+path = "paper_digest/__about__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["paper_digest"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/paper_digest",
+  "/tests",
+  "/docs",
+  "/README.md",
+  "/LICENSE",
+  "/CHANGELOG.md",
+  "/CONTRIBUTING.md",
+  "/CODE_OF_CONDUCT.md",
+  "/SECURITY.md",
+  "/RELEASING.md",
+  "/.pre-commit-config.yaml",
+  "/config.example.toml",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+pretty = true
+files = ["paper_digest"]
+
+[tool.coverage.run]
+source = ["paper_digest"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false

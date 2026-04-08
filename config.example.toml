@@ -1,0 +1,31 @@
+[app]
+# Timezone used for display and output folder naming.
+timezone = "Asia/Shanghai"
+# Papers older than this window will be ignored.
+lookback_hours = 24
+# Relative paths are resolved from the config file location.
+output_dir = "output"
+# arXiv recommends spacing requests instead of polling aggressively.
+request_delay_seconds = 3
+
+[[feeds]]
+# Free-form label used in the generated digest.
+name = "LLM"
+# arXiv categories: https://arxiv.org/category_taxonomy
+categories = ["cs.AI", "cs.CL", "cs.LG"]
+# Keep a paper if any keyword matches its title or abstract.
+keywords = ["agent", "reasoning", "alignment", "benchmark", "evaluation"]
+# Drop a paper if any excluded keyword matches.
+exclude_keywords = ["survey", "tutorial"]
+# Number of newest candidates to fetch before local filtering.
+max_results = 100
+# Number of items to keep in the final digest.
+max_items = 15
+
+[[feeds]]
+name = "Vision"
+categories = ["cs.CV"]
+keywords = ["diffusion", "video generation", "multimodal", "segmentation"]
+exclude_keywords = []
+max_results = 100
+max_items = 10
