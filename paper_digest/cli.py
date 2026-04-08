@@ -11,6 +11,7 @@ from . import __version__
 from .arxiv_client import ArxivClientError
 from .config import ConfigError, load_config
 from .digest import summarize_digest, write_outputs
+from .email_delivery import EmailDeliveryError, send_digest_email
 from .service import generate_digest
 
 
@@ -41,7 +42,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         config = load_config(args.config)
         digest = generate_digest(config)
         json_path, markdown_path = write_outputs(config, digest)
-    except (ConfigError, ArxivClientError) as exc:
+        if config.email is not None:
+            send_digest_email(config.email, digest)
+    except (ConfigError, ArxivClientError, EmailDeliveryError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
@@ -49,6 +52,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"JSON written to {Path(json_path).resolve()}")
         print(f"Markdown written to {Path(markdown_path).resolve()}")
         print(f"Matched papers: {summarize_digest(digest)}")
+        if config.email is not None:
+            print(f"Email sent to {', '.join(config.email.to_addresses)}")
     return 0
 
 

@@ -65,3 +65,71 @@ class LoadConfigTests(unittest.TestCase):
 
             with self.assertRaises(ConfigError):
                 load_config(config_path)
+
+    def test_load_config_reads_email_settings(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text(
+                textwrap.dedent(
+                    """
+                    [app]
+                    timezone = "UTC"
+
+                    [[feeds]]
+                    name = "LLM"
+                    categories = ["cs.AI"]
+
+                    [email]
+                    enabled = true
+                    smtp_host = "smtp.example.com"
+                    smtp_port = 587
+                    username = "bot@example.com"
+                    password_env = "SMTP_PASSWORD"
+                    from_address = "bot@example.com"
+                    to_addresses = ["reader@example.com"]
+                    use_tls = false
+                    use_starttls = true
+                    subject_prefix = "[Digest]"
+                    """
+                ).strip(),
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        self.assertIsNotNone(config.email)
+        assert config.email is not None
+        self.assertEqual(config.email.smtp_host, "smtp.example.com")
+        self.assertEqual(config.email.smtp_port, 587)
+        self.assertEqual(config.email.username, "bot@example.com")
+        self.assertEqual(config.email.password_env, "SMTP_PASSWORD")
+        self.assertEqual(config.email.to_addresses, ["reader@example.com"])
+        self.assertFalse(config.email.use_tls)
+        self.assertTrue(config.email.use_starttls)
+
+    def test_email_auth_requires_username_and_password_env_together(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text(
+                textwrap.dedent(
+                    """
+                    [app]
+                    timezone = "UTC"
+
+                    [[feeds]]
+                    name = "LLM"
+                    categories = ["cs.AI"]
+
+                    [email]
+                    enabled = true
+                    smtp_host = "smtp.example.com"
+                    from_address = "bot@example.com"
+                    to_addresses = ["reader@example.com"]
+                    username = "bot@example.com"
+                    """
+                ).strip(),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(ConfigError):
+                load_config(config_path)

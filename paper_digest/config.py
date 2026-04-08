@@ -30,6 +30,20 @@ class AppConfig:
     output_dir: Path
     request_delay_seconds: float
     feeds: list[FeedConfig]
+    email: EmailConfig | None = None
+
+
+@dataclass(slots=True, frozen=True)
+class EmailConfig:
+    smtp_host: str
+    smtp_port: int
+    username: str | None
+    password_env: str | None
+    from_address: str
+    to_addresses: list[str]
+    use_tls: bool
+    use_starttls: bool
+    subject_prefix: str
 
 
 def load_config(path: str | Path) -> AppConfig:
@@ -70,6 +84,7 @@ def load_config(path: str | Path) -> AppConfig:
         _load_feed(raw_feed, index)
         for index, raw_feed in enumerate(feeds_section, start=1)
     ]
+    email = _load_email(raw.get("email"))
 
     return AppConfig(
         timezone=timezone_name,
@@ -77,6 +92,7 @@ def load_config(path: str | Path) -> AppConfig:
         output_dir=output_dir,
         request_delay_seconds=request_delay_seconds,
         feeds=feeds,
+        email=email,
     )
 
 
@@ -115,6 +131,44 @@ def _as_table(value: Any, field_name: str) -> dict[str, Any]:
     raise ConfigError(f"{field_name} must be a TOML table")
 
 
+def _load_email(value: Any) -> EmailConfig | None:
+    if value is None:
+        return None
+
+    email = _as_table(value, "email")
+    if not _bool(email.get("enabled", True), "email.enabled"):
+        return None
+
+    username = _optional_string(email.get("username"), "email.username")
+    password_env = _optional_string(email.get("password_env"), "email.password_env")
+    if (username is None) != (password_env is None):
+        raise ConfigError(
+            "email.username and email.password_env must either both be set "
+            "or both be omitted"
+        )
+
+    use_tls = _bool(email.get("use_tls", True), "email.use_tls")
+    use_starttls = _bool(email.get("use_starttls", False), "email.use_starttls")
+    if use_tls and use_starttls:
+        raise ConfigError("email.use_tls and email.use_starttls cannot both be true")
+
+    to_addresses = _string_list(email.get("to_addresses", []), "email.to_addresses")
+    if not to_addresses:
+        raise ConfigError("email.to_addresses must not be empty when email is enabled")
+
+    return EmailConfig(
+        smtp_host=_required_string(email.get("smtp_host"), "email.smtp_host"),
+        smtp_port=_positive_int(email.get("smtp_port", 465), "email.smtp_port"),
+        username=username,
+        password_env=password_env,
+        from_address=_required_string(email.get("from_address"), "email.from_address"),
+        to_addresses=to_addresses,
+        use_tls=use_tls,
+        use_starttls=use_starttls,
+        subject_prefix=str(email.get("subject_prefix", "[Paper Digest]")).strip(),
+    )
+
+
 def _string_list(value: Any, field_name: str) -> list[str]:
     if not isinstance(value, list):
         raise ConfigError(f"{field_name} must be an array of strings")
@@ -128,6 +182,27 @@ def _string_list(value: Any, field_name: str) -> list[str]:
             raise ConfigError(f"{field_name} must not contain empty strings")
         result.append(normalized)
     return result
+
+
+def _required_string(value: Any, field_name: str) -> str:
+    if not isinstance(value, str):
+        raise ConfigError(f"{field_name} must be a non-empty string")
+    normalized = value.strip()
+    if not normalized:
+        raise ConfigError(f"{field_name} must be a non-empty string")
+    return normalized
+
+
+def _optional_string(value: Any, field_name: str) -> str | None:
+    if value is None:
+        return None
+    return _required_string(value, field_name)
+
+
+def _bool(value: Any, field_name: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    raise ConfigError(f"{field_name} must be true or false")
 
 
 def _positive_int(value: Any, field_name: str) -> int:

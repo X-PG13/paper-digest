@@ -23,6 +23,11 @@ scale as new paper sources and output channels are added.
 - Renders digest output for JSON and Markdown.
 - Contains formatting-specific helpers rather than network logic.
 
+### `paper_digest.email_delivery`
+
+- Sends the generated digest through SMTP.
+- Keeps email-specific transport logic out of the CLI and service layer.
+
 ### `paper_digest.service`
 
 - Orchestrates the end-to-end digest generation flow.
@@ -41,7 +46,7 @@ The next clean extension points are:
 1. Add a new source client module such as `pubmed_client.py`.
 2. Normalize foreign payloads into the existing `Paper` model, or extract a
    source-agnostic protocol if the model starts diverging.
-3. Add output adapters for Slack, email, or other destinations without putting
+3. Add output adapters for Slack or other destinations without putting
    transport code into the CLI.
 
 ## Design Constraints

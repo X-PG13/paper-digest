@@ -29,3 +29,16 @@ keywords = ["diffusion", "video generation", "multimodal", "segmentation"]
 exclude_keywords = []
 max_results = 100
 max_items = 10
+
+[email]
+# Optional email delivery. Keep disabled until SMTP details are ready.
+enabled = false
+# smtp_host = "smtp.example.com"
+# smtp_port = 465
+# username = "bot@example.com"
+# password_env = "PAPER_DIGEST_SMTP_PASSWORD"
+# from_address = "bot@example.com"
+# to_addresses = ["you@example.com"]
+# use_tls = true
+# use_starttls = false
+# subject_prefix = "[Paper Digest]"

@@ -13,6 +13,7 @@ The current scope is intentionally narrow:
 - Fetch the newest arXiv submissions by category.
 - Apply include and exclude keyword filters on title and abstract.
 - Generate machine-readable `JSON` and human-readable `Markdown`.
+- Optionally deliver the digest by email through SMTP.
 - Stay easy to automate from `cron`, GitHub Actions, or a notification bot.
 
 ## Project Goals
@@ -90,6 +91,29 @@ Field reference:
 - `max_results`: Number of newest candidates fetched before local filtering.
 - `max_items`: Maximum number of papers emitted for that feed.
 
+Optional email delivery:
+
+```toml
+[email]
+enabled = true
+smtp_host = "smtp.example.com"
+smtp_port = 465
+username = "bot@example.com"
+password_env = "PAPER_DIGEST_SMTP_PASSWORD"
+from_address = "bot@example.com"
+to_addresses = ["you@example.com"]
+use_tls = true
+use_starttls = false
+subject_prefix = "[Paper Digest]"
+```
+
+Notes:
+
+- Keep the SMTP password in an environment variable instead of the config file.
+- Use either `use_tls = true` for implicit TLS, usually port `465`, or
+  `use_starttls = true` for STARTTLS, usually port `587`.
+- If the `email` section is omitted or `enabled = false`, no email is sent.
+
 ## Development
 
 Common commands:
@@ -124,7 +148,7 @@ On macOS or Linux you can run the digest every morning with `cron`:
 ## Roadmap
 
 - Add more literature sources such as PubMed, Crossref, and Semantic Scholar.
-- Support output adapters for email, Slack, Feishu, and WeCom.
+- Support more output adapters such as Slack, Feishu, and WeCom.
 - Add deduplication and persistent history across days.
 - Support feed-level templates or LLM-generated summaries.
 

@@ -7,7 +7,10 @@ Versioning.
 
 ## [Unreleased]
 
-No notable changes yet.
+### Added
+
+- Optional SMTP email delivery for generated digests.
+- Expanded unit coverage for arXiv parsing, digest rendering, and output writing.
 
 ## [0.1.0] - 2026-04-08
 
