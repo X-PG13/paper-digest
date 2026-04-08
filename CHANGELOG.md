@@ -7,6 +7,8 @@ Versioning.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-08
+
 - Optional OpenAI-backed structured paper analysis with configurable cost caps.
 - Top-of-digest highlights plus richer per-paper conclusions, contributions,
   audience guidance, and limitations in Markdown, email, and Feishu output.
