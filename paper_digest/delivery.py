@@ -109,8 +109,21 @@ def _single_feed_digest(digest: DigestRun, feed: FeedDigest) -> DigestRun:
         generated_at=digest.generated_at,
         timezone=digest.timezone,
         lookback_hours=digest.lookback_hours,
-        feeds=[FeedDigest(name=feed.name, papers=list(feed.papers))],
+        feeds=[
+            FeedDigest(
+                name=feed.name,
+                papers=list(feed.papers),
+                key_points=list(feed.key_points),
+            )
+        ],
+        highlights=_filter_highlights_for_feed(digest.highlights, feed.name),
+        template=digest.template,
     )
+
+
+def _filter_highlights_for_feed(highlights: list[str], feed_name: str) -> list[str]:
+    prefixes = (f"{feed_name}: ", f"{feed_name}：")
+    return [highlight for highlight in highlights if highlight.startswith(prefixes)]
 
 
 def _send_messages(

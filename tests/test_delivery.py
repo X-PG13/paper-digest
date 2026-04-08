@@ -19,6 +19,10 @@ def build_digest() -> DigestRun:
         generated_at=datetime(2026, 4, 8, 10, 0, tzinfo=UTC),
         timezone="UTC",
         lookback_hours=24,
+        highlights=[
+            "LLM：Agent systems：适合直接放进中文日报头部的结论。",
+            "Vision：Vision paper：这一条不该出现在 LLM 单独通知里。",
+        ],
         feeds=[
             FeedDigest(
                 name="LLM",
@@ -35,9 +39,11 @@ def build_digest() -> DigestRun:
                         updated_at=datetime(2026, 4, 8, 9, 0, tzinfo=UTC),
                     )
                 ],
+                key_points=["Agent systems：更适合作为今日重点的摘要。"],
             ),
             FeedDigest(name="Vision", papers=[]),
         ],
+        template="zh_daily_brief",
     )
 
 
@@ -62,6 +68,13 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(len(messages), 1)
         self.assertEqual(messages[0].feed_name, "LLM")
         self.assertIn("[Digest] 2026-04-08 | LLM=1", messages[0].title)
+        self.assertIn("# 每日论文简报", messages[0].body)
+        self.assertIn("### 今日重点", messages[0].body)
+        self.assertIn("Agent systems：更适合作为今日重点的摘要。", messages[0].body)
+        self.assertIn(
+            "LLM：Agent systems：适合直接放进中文日报头部的结论。", messages[0].body
+        )
+        self.assertNotIn("Vision paper", messages[0].body)
 
     def test_build_notification_messages_skips_empty_digest(self) -> None:
         delivery = FeishuWebhookConfig(

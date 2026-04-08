@@ -213,6 +213,7 @@ The default schedule is `5 0 * * *`, which means:
 To use it, create these GitHub repository secrets:
 
 - `PAPER_DIGEST_CONFIG_TOML`: your full `config.toml` content
+- `OPENAI_API_KEY`: needed when `[analysis] enabled = true`
 - `PAPER_DIGEST_SMTP_PASSWORD`: only needed when email delivery is enabled
 
 The workflow restores and saves `.paper-digest-state/` through the GitHub

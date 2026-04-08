@@ -45,6 +45,7 @@ jobs:
 
       - name: Run digest
         env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           PAPER_DIGEST_SMTP_PASSWORD: ${{ secrets.PAPER_DIGEST_SMTP_PASSWORD }}
         run: python -m paper_digest --config config.toml
 
