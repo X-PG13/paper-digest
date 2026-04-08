@@ -96,8 +96,18 @@ Field reference:
 - `exclude_keywords`: Drop a paper when any excluded keyword matches.
 - `max_results`: Number of newest candidates fetched before local filtering.
 - `max_items`: Maximum number of papers emitted for that feed.
+- `digest`: Rendering options for template selection and feed-level briefings.
 - `analysis`: Optional structured paper analysis, currently backed by OpenAI.
 - `deliveries`: Optional notification outputs such as email or Feishu webhook.
+
+Digest rendering:
+
+```toml
+[digest]
+template = "default"
+top_highlights = 3
+feed_key_points = 3
+```
 
 Optional LLM analysis:
 
@@ -111,12 +121,19 @@ base_url = "https://api.openai.com/v1/responses"
 timeout_seconds = 60
 max_papers = 8
 max_output_tokens = 600
-top_highlights = 3
-feed_key_points = 3
 language = "English"
 reasoning_effort = "minimal"
-template = "default"
 ```
+
+Digest notes:
+
+- `feed_key_points` controls how many feed-level "today's key points" lines
+  appear before the detailed paper list.
+- `template = "zh_daily_brief"` switches the output into a Chinese briefing
+  layout with "今日重点" sections at both the whole-digest and per-feed level.
+- `zh_daily_brief` works even when analysis is disabled. In that mode, the
+  project generates rule-based Chinese briefing scaffolding around the raw
+  paper title and abstract summary.
 
 Analysis notes:
 
@@ -126,15 +143,14 @@ Analysis notes:
   papers that actually make it into the digest.
 - `max_papers` caps analysis cost for a single run. Papers beyond that limit
   still appear in the digest with their raw abstract summaries.
-- `feed_key_points` controls how many feed-level "today's key points" lines
-  appear before the detailed paper list.
 - When analysis is enabled, the Markdown, email, and Feishu outputs add:
   top-of-digest highlights, a one-sentence conclusion per paper, contribution
   bullets, best-fit audience, and likely limitations.
-- `template = "zh_daily_brief"` switches the output into a Chinese briefing
-  layout with "今日重点" sections at both the whole-digest and per-feed level.
 - A practical Chinese setup is `language = "Chinese"` plus
-  `template = "zh_daily_brief"`.
+  `[digest] template = "zh_daily_brief"`.
+- For backward compatibility, legacy `template`, `top_highlights`, and
+  `feed_key_points` values under `[analysis]` are still accepted when `[digest]`
+  is omitted.
 
 Preferred notification setup:
 

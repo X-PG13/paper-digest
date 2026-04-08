@@ -18,7 +18,7 @@ DeliveryTarget = Literal["digest", "per_feed"]
 DeliveryType = Literal["email", "feishu_webhook"]
 AnalysisProvider = Literal["openai"]
 AnalysisReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
-AnalysisTemplate = Literal["default", "zh_daily_brief"]
+DigestTemplate = Literal["default", "zh_daily_brief"]
 
 
 @dataclass(slots=True, frozen=True)
@@ -65,6 +65,13 @@ class StateConfig:
 
 
 @dataclass(slots=True, frozen=True)
+class DigestConfig:
+    template: DigestTemplate = "default"
+    top_highlights: int = 3
+    feed_key_points: int = 3
+
+
+@dataclass(slots=True, frozen=True)
 class AnalysisConfig:
     provider: AnalysisProvider
     model: str
@@ -73,11 +80,8 @@ class AnalysisConfig:
     timeout_seconds: int
     max_papers: int
     max_output_tokens: int
-    top_highlights: int
-    feed_key_points: int
     language: str
     reasoning_effort: AnalysisReasoningEffort
-    template: AnalysisTemplate
 
 
 @dataclass(slots=True, frozen=True)
@@ -88,6 +92,7 @@ class AppConfig:
     request_delay_seconds: float
     feeds: list[FeedConfig]
     state: StateConfig
+    digest: DigestConfig = field(default_factory=DigestConfig)
     analysis: AnalysisConfig | None = None
     deliveries: list[EmailConfig | FeishuWebhookConfig] = field(default_factory=list)
     email: EmailConfig | None = None
@@ -132,6 +137,7 @@ def load_config(path: str | Path) -> AppConfig:
         for index, raw_feed in enumerate(feeds_section, start=1)
     ]
     state = _load_state(raw.get("state"), config_path)
+    digest = _load_digest(raw.get("digest"), raw.get("analysis"))
     analysis = _load_analysis(raw.get("analysis"))
     deliveries = _load_deliveries(raw.get("deliveries"))
     email = _load_email(raw.get("email"))
@@ -143,6 +149,7 @@ def load_config(path: str | Path) -> AppConfig:
         request_delay_seconds=request_delay_seconds,
         feeds=feeds,
         state=state,
+        digest=digest,
         analysis=analysis,
         deliveries=deliveries,
         email=email,
@@ -222,6 +229,33 @@ def _load_email(value: Any) -> EmailConfig | None:
     return _build_email_config(email, "email")
 
 
+def _load_digest(value: Any, legacy_analysis_value: Any) -> DigestConfig:
+    if value is None:
+        if isinstance(legacy_analysis_value, dict):
+            return _build_digest_config(legacy_analysis_value, "analysis")
+        return DigestConfig()
+
+    digest = _as_table(value, "digest")
+    return _build_digest_config(digest, "digest")
+
+
+def _build_digest_config(value: dict[str, Any], field_name: str) -> DigestConfig:
+    return DigestConfig(
+        template=_digest_template(
+            value.get("template", "default"),
+            f"{field_name}.template",
+        ),
+        top_highlights=_positive_int(
+            value.get("top_highlights", 3),
+            f"{field_name}.top_highlights",
+        ),
+        feed_key_points=_positive_int(
+            value.get("feed_key_points", 3),
+            f"{field_name}.feed_key_points",
+        ),
+    )
+
+
 def _load_analysis(value: Any) -> AnalysisConfig | None:
     if value is None:
         return None
@@ -256,24 +290,12 @@ def _load_analysis(value: Any) -> AnalysisConfig | None:
             analysis.get("max_output_tokens", 600),
             "analysis.max_output_tokens",
         ),
-        top_highlights=_positive_int(
-            analysis.get("top_highlights", 3),
-            "analysis.top_highlights",
-        ),
-        feed_key_points=_positive_int(
-            analysis.get("feed_key_points", 3),
-            "analysis.feed_key_points",
-        ),
         language=_required_string(
             analysis.get("language", "English"), "analysis.language"
         ),
         reasoning_effort=_analysis_reasoning_effort(
             analysis.get("reasoning_effort", "minimal"),
             "analysis.reasoning_effort",
-        ),
-        template=_analysis_template(
-            analysis.get("template", "default"),
-            "analysis.template",
         ),
     )
 
@@ -494,7 +516,7 @@ def _analysis_reasoning_effort(
     return "xhigh"
 
 
-def _analysis_template(value: Any, field_name: str) -> AnalysisTemplate:
+def _digest_template(value: Any, field_name: str) -> DigestTemplate:
     if not isinstance(value, str):
         raise ConfigError(f"{field_name} must be 'default' or 'zh_daily_brief'")
 

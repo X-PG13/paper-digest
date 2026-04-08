@@ -163,6 +163,11 @@ class LoadConfigTests(unittest.TestCase):
                     name = "LLM"
                     categories = ["cs.AI"]
 
+                    [digest]
+                    template = "zh_daily_brief"
+                    top_highlights = 4
+                    feed_key_points = 2
+
                     [analysis]
                     enabled = true
                     provider = "openai"
@@ -172,11 +177,8 @@ class LoadConfigTests(unittest.TestCase):
                     timeout_seconds = 45
                     max_papers = 8
                     max_output_tokens = 500
-                    top_highlights = 4
-                    feed_key_points = 2
                     language = "Chinese"
                     reasoning_effort = "low"
-                    template = "zh_daily_brief"
                     """
                 ).strip(),
                 encoding="utf-8",
@@ -185,13 +187,45 @@ class LoadConfigTests(unittest.TestCase):
             config = load_config(config_path)
 
         assert config.analysis is not None
+        self.assertEqual(config.digest.template, "zh_daily_brief")
+        self.assertEqual(config.digest.top_highlights, 4)
+        self.assertEqual(config.digest.feed_key_points, 2)
         self.assertEqual(config.analysis.model, "gpt-5-mini")
         self.assertEqual(config.analysis.max_papers, 8)
-        self.assertEqual(config.analysis.top_highlights, 4)
-        self.assertEqual(config.analysis.feed_key_points, 2)
         self.assertEqual(config.analysis.language, "Chinese")
         self.assertEqual(config.analysis.reasoning_effort, "low")
-        self.assertEqual(config.analysis.template, "zh_daily_brief")
+
+    def test_load_config_reads_digest_settings_from_legacy_analysis_section(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text(
+                textwrap.dedent(
+                    """
+                    [app]
+                    timezone = "UTC"
+
+                    [[feeds]]
+                    name = "LLM"
+                    categories = ["cs.AI"]
+
+                    [analysis]
+                    enabled = false
+                    top_highlights = 5
+                    feed_key_points = 2
+                    template = "zh_daily_brief"
+                    """
+                ).strip(),
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        self.assertIsNone(config.analysis)
+        self.assertEqual(config.digest.template, "zh_daily_brief")
+        self.assertEqual(config.digest.top_highlights, 5)
+        self.assertEqual(config.digest.feed_key_points, 2)
 
     def test_analysis_reasoning_effort_must_be_valid(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -217,7 +251,7 @@ class LoadConfigTests(unittest.TestCase):
             with self.assertRaises(ConfigError):
                 load_config(config_path)
 
-    def test_analysis_template_must_be_valid(self) -> None:
+    def test_digest_template_must_be_valid(self) -> None:
         with TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "config.toml"
             config_path.write_text(
@@ -230,8 +264,7 @@ class LoadConfigTests(unittest.TestCase):
                     name = "LLM"
                     categories = ["cs.AI"]
 
-                    [analysis]
-                    enabled = true
+                    [digest]
                     template = "newsletter"
                     """
                 ).strip(),

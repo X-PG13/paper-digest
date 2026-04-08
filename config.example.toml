@@ -16,6 +16,14 @@ path = ".paper-digest-state/state.json"
 # Drop old state entries after this many days.
 retention_days = 90
 
+[digest]
+# Rendering style for Markdown, email, and Feishu output.
+template = "default"
+# Number of top-of-digest highlight lines to render.
+top_highlights = 3
+# Number of feed-level "key points" lines to render before the paper list.
+feed_key_points = 3
+
 [analysis]
 # Optional LLM-powered digest enhancement. Leave disabled until you have an API key.
 enabled = false
@@ -27,17 +35,16 @@ timeout_seconds = 60
 # Analyze at most this many newly selected papers per run.
 max_papers = 8
 max_output_tokens = 600
-# Number of top-of-digest highlight lines to render.
-top_highlights = 3
-# Number of feed-level "key points" lines to render before the paper list.
-feed_key_points = 3
 # Output language for LLM-written fields.
 language = "English"
 # Use "none" to skip reasoning settings entirely.
 reasoning_effort = "minimal"
-# Rendering style for Markdown, email, and Feishu output.
-# Use "zh_daily_brief" with language = "Chinese" for a Chinese daily report.
-template = "default"
+
+# To get a Chinese daily brief without any model calls, use:
+# [digest]
+# template = "zh_daily_brief"
+# top_highlights = 3
+# feed_key_points = 3
 
 [[feeds]]
 # Free-form label used in the generated digest.

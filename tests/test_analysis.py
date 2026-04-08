@@ -4,7 +4,11 @@ import unittest
 from datetime import UTC, datetime
 from unittest.mock import patch
 
-from paper_digest.analysis import build_digest_highlights, enrich_digest_with_analysis
+from paper_digest.analysis import (
+    apply_digest_briefing,
+    build_digest_highlights,
+    enrich_digest_with_analysis,
+)
 from paper_digest.arxiv_client import Paper, PaperAnalysis
 from paper_digest.config import AnalysisConfig
 from paper_digest.digest import DigestRun, FeedDigest
@@ -34,11 +38,8 @@ def build_config() -> AnalysisConfig:
         timeout_seconds=60,
         max_papers=2,
         max_output_tokens=600,
-        top_highlights=2,
-        feed_key_points=2,
         language="English",
         reasoning_effort="minimal",
-        template="default",
     )
 
 
@@ -62,7 +63,13 @@ class AnalysisTests(unittest.TestCase):
             PaperAnalysis(conclusion="Analysis C"),
         ]
 
-        enrich_digest_with_analysis(build_config(), digest)
+        enrich_digest_with_analysis(
+            build_config(),
+            digest,
+            template="default",
+            top_highlights=2,
+            feed_key_points=2,
+        )
 
         self.assertEqual(mock_analyze_paper_with_openai.call_count, 2)
         self.assertEqual(digest.feeds[0].papers[0].analysis.conclusion, "Analysis A")
@@ -88,22 +95,7 @@ class AnalysisTests(unittest.TestCase):
 
         self.assertEqual(highlights, ["LLM: A - A summary"])
 
-    def test_enrich_digest_with_analysis_sets_template_without_papers(self) -> None:
-        config = build_config()
-        config = AnalysisConfig(
-            provider=config.provider,
-            model=config.model,
-            api_key_env=config.api_key_env,
-            base_url=config.base_url,
-            timeout_seconds=config.timeout_seconds,
-            max_papers=config.max_papers,
-            max_output_tokens=config.max_output_tokens,
-            top_highlights=config.top_highlights,
-            feed_key_points=config.feed_key_points,
-            language="Chinese",
-            reasoning_effort=config.reasoning_effort,
-            template="zh_daily_brief",
-        )
+    def test_apply_digest_briefing_sets_template_without_papers(self) -> None:
         digest = DigestRun(
             generated_at=datetime(2026, 4, 8, 10, 0, tzinfo=UTC),
             timezone="UTC",
@@ -111,7 +103,12 @@ class AnalysisTests(unittest.TestCase):
             feeds=[FeedDigest(name="LLM", papers=[])],
         )
 
-        enrich_digest_with_analysis(config, digest)
+        apply_digest_briefing(
+            digest,
+            template="zh_daily_brief",
+            top_highlights=2,
+            feed_key_points=2,
+        )
 
         self.assertEqual(digest.template, "zh_daily_brief")
         self.assertEqual(digest.highlights, [])

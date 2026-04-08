@@ -9,7 +9,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .arxiv_client import Paper
-from .config import AnalysisTemplate, AppConfig, FeedConfig
+from .config import AppConfig, DigestTemplate, FeedConfig
 
 
 @dataclass(slots=True)
@@ -26,7 +26,7 @@ class DigestRun:
     lookback_hours: int
     feeds: list[FeedDigest]
     highlights: list[str] = field(default_factory=list)
-    template: AnalysisTemplate = "default"
+    template: DigestTemplate = "default"
 
     def to_dict(self) -> dict[str, object]:
         return {

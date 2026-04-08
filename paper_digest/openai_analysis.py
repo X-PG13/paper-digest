@@ -7,14 +7,19 @@ import os
 from urllib.request import Request, urlopen
 
 from .arxiv_client import Paper, PaperAnalysis
-from .config import AnalysisConfig
+from .config import AnalysisConfig, DigestTemplate
 
 
 class OpenAIAnalysisError(RuntimeError):
     """Raised when OpenAI analysis fails."""
 
 
-def analyze_paper_with_openai(config: AnalysisConfig, paper: Paper) -> PaperAnalysis:
+def analyze_paper_with_openai(
+    config: AnalysisConfig,
+    paper: Paper,
+    *,
+    template: DigestTemplate = "default",
+) -> PaperAnalysis:
     """Analyze a single paper with the OpenAI Responses API."""
 
     api_key = os.getenv(config.api_key_env)
@@ -25,7 +30,7 @@ def analyze_paper_with_openai(config: AnalysisConfig, paper: Paper) -> PaperAnal
 
     payload = {
         "model": config.model,
-        "instructions": _build_instructions(config),
+        "instructions": _build_instructions(config, template=template),
         "input": _build_input(paper),
         "max_output_tokens": config.max_output_tokens,
         "text": {
@@ -71,9 +76,13 @@ def analyze_paper_with_openai(config: AnalysisConfig, paper: Paper) -> PaperAnal
     return _parse_paper_analysis(raw_analysis)
 
 
-def _build_instructions(config: AnalysisConfig) -> str:
+def _build_instructions(
+    config: AnalysisConfig,
+    *,
+    template: DigestTemplate,
+) -> str:
     template_hint = ""
-    if config.template == "zh_daily_brief":
+    if template == "zh_daily_brief":
         template_hint = (
             " Prefer newsroom-style phrasing that reads naturally in a Chinese daily"
             " research briefing."

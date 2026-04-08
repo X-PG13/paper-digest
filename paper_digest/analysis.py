@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .arxiv_client import Paper, PaperAnalysis
-from .config import AnalysisConfig, AnalysisTemplate
+from .config import AnalysisConfig, DigestTemplate
 from .digest import DigestRun
 from .openai_analysis import OpenAIAnalysisError, analyze_paper_with_openai
 
@@ -12,28 +12,52 @@ class AnalysisError(RuntimeError):
     """Raised when configured analysis fails."""
 
 
-def enrich_digest_with_analysis(config: AnalysisConfig, digest: DigestRun) -> None:
+def enrich_digest_with_analysis(
+    config: AnalysisConfig,
+    digest: DigestRun,
+    *,
+    template: DigestTemplate,
+    top_highlights: int,
+    feed_key_points: int,
+) -> None:
     """Mutate a digest in place with optional structured paper analysis."""
 
-    digest.template = config.template
     papers_to_analyze = _select_papers_for_analysis(digest, config.max_papers)
     if papers_to_analyze:
         try:
             for paper in papers_to_analyze:
-                paper.analysis = _analyze_paper(config, paper)
+                paper.analysis = _analyze_paper(config, paper, template=template)
         except OpenAIAnalysisError as exc:
             raise AnalysisError(str(exc)) from exc
 
+    apply_digest_briefing(
+        digest,
+        top_highlights=top_highlights,
+        feed_key_points=feed_key_points,
+        template=template,
+    )
+
+
+def apply_digest_briefing(
+    digest: DigestRun,
+    *,
+    top_highlights: int,
+    feed_key_points: int,
+    template: DigestTemplate,
+) -> None:
+    """Populate render-ready highlights and key points without mutating papers."""
+
+    digest.template = template
     digest.highlights = build_digest_highlights(
         digest,
-        config.top_highlights,
-        template=config.template,
+        top_highlights,
+        template=template,
     )
     for feed in digest.feeds:
         feed.key_points = build_feed_key_points(
             feed.papers,
-            config.feed_key_points,
-            template=config.template,
+            feed_key_points,
+            template=template,
         )
 
 
@@ -41,7 +65,7 @@ def build_digest_highlights(
     digest: DigestRun,
     max_items: int,
     *,
-    template: AnalysisTemplate = "default",
+    template: DigestTemplate = "default",
 ) -> list[str]:
     """Build compact highlight lines from analyzed papers."""
 
@@ -68,7 +92,7 @@ def build_feed_key_points(
     papers: list[Paper],
     max_items: int,
     *,
-    template: AnalysisTemplate = "default",
+    template: DigestTemplate = "default",
 ) -> list[str]:
     """Build compact feed-level key points from analyzed or raw papers."""
 
@@ -101,9 +125,14 @@ def _select_papers_for_analysis(digest: DigestRun, max_papers: int) -> list[Pape
     return selected
 
 
-def _analyze_paper(config: AnalysisConfig, paper: Paper) -> PaperAnalysis:
+def _analyze_paper(
+    config: AnalysisConfig,
+    paper: Paper,
+    *,
+    template: DigestTemplate,
+) -> PaperAnalysis:
     if config.provider == "openai":
-        return analyze_paper_with_openai(config, paper)
+        return analyze_paper_with_openai(config, paper, template=template)
     raise AnalysisError(f"unsupported analysis provider: {config.provider}")
 
 
@@ -117,20 +146,20 @@ def _format_digest_highlight(
     feed_name: str,
     paper_title: str,
     summary_line: str,
-    template: AnalysisTemplate,
+    template: DigestTemplate,
 ) -> str:
     if template == "zh_daily_brief":
-        return f"{feed_name}：{paper_title}：{summary_line}"
+        return f"{feed_name}：关注《{paper_title}》，今日要点：{summary_line}"
     return f"{feed_name}: {paper_title} - {summary_line}"
 
 
 def _format_feed_key_point(
     paper_title: str,
     summary_line: str,
-    template: AnalysisTemplate,
+    template: DigestTemplate,
 ) -> str:
     if template == "zh_daily_brief":
-        return f"{paper_title}：{summary_line}"
+        return f"《{paper_title}》：{summary_line}"
     return f"{paper_title}: {summary_line}"
 
 

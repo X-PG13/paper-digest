@@ -12,6 +12,8 @@ Versioning.
   audience guidance, and limitations in Markdown, email, and Feishu output.
 - A stronger digest templating path with feed-level key points and a Chinese
   `zh_daily_brief` layout for "今日重点"-style reports.
+- Digest template selection is now independent from LLM analysis, so the
+  Chinese daily brief can run in rule-based mode without any API key.
 
 ## [0.2.0] - 2026-04-08
 

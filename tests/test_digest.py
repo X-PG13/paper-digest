@@ -227,11 +227,8 @@ class DigestTests(unittest.TestCase):
                     timeout_seconds=60,
                     max_papers=10,
                     max_output_tokens=600,
-                    top_highlights=3,
-                    feed_key_points=3,
                     language="English",
                     reasoning_effort="minimal",
-                    template="default",
                 ),
             )
             digest = DigestRun(
