@@ -127,9 +127,7 @@ def _send_messages(
 
     for message in messages:
         send_feishu_message(delivery, title=message.title, body=message.body)
-        receipts.append(
-            _build_receipt("Feishu webhook", delivery.webhook_url, message)
-        )
+        receipts.append(_build_receipt("Feishu webhook", delivery.webhook_url, message))
     return receipts
 
 

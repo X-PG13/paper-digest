@@ -7,7 +7,7 @@ Versioning.
 
 ## [Unreleased]
 
-### Added
+## [0.2.0] - 2026-04-08
 
 - Optional SMTP email delivery for generated digests.
 - Persistent state-based deduplication across runs.
