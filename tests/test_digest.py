@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from paper_digest.arxiv_client import Paper
-from paper_digest.config import AppConfig, FeedConfig
+from paper_digest.config import AppConfig, FeedConfig, StateConfig
 from paper_digest.digest import (
     DigestRun,
     FeedDigest,
@@ -100,6 +100,7 @@ class DigestTests(unittest.TestCase):
         self.assertIn("# Daily Paper Digest", markdown)
         self.assertIn("Unknown authors", markdown)
         self.assertIn("Reasoning paper", markdown)
+        self.assertIn("Published", markdown)
 
     def test_filter_papers_without_keywords_sorts_and_limits(self) -> None:
         feed = FeedConfig(
@@ -142,6 +143,11 @@ class DigestTests(unittest.TestCase):
                 output_dir=Path(temp_dir) / "output",
                 request_delay_seconds=0.0,
                 feeds=[],
+                state=StateConfig(
+                    enabled=True,
+                    path=Path(temp_dir) / "state.json",
+                    retention_days=90,
+                ),
             )
             digest = DigestRun(
                 generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
@@ -194,4 +200,33 @@ class DigestTests(unittest.TestCase):
                 )
             ),
             "no feeds",
+        )
+
+    def test_digest_has_papers_reports_presence(self) -> None:
+        from paper_digest.digest import digest_has_papers
+
+        self.assertTrue(
+            digest_has_papers(
+                DigestRun(
+                    generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
+                    timezone="UTC",
+                    lookback_hours=24,
+                    feeds=[
+                        FeedDigest(
+                            name="LLM",
+                            papers=[build_paper(title="A", summary="x", hours_ago=1)],
+                        )
+                    ],
+                )
+            )
+        )
+        self.assertFalse(
+            digest_has_papers(
+                DigestRun(
+                    generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
+                    timezone="UTC",
+                    lookback_hours=24,
+                    feeds=[FeedDigest(name="LLM", papers=[])],
+                )
+            )
         )

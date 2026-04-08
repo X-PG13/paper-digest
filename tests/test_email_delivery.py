@@ -64,6 +64,7 @@ class EmailDeliveryTests(unittest.TestCase):
             use_tls=False,
             use_starttls=True,
             subject_prefix="[Digest]",
+            skip_if_empty=True,
         )
 
         with patch("paper_digest.email_delivery.smtplib.SMTP", FakeSMTP):
@@ -93,6 +94,7 @@ class EmailDeliveryTests(unittest.TestCase):
             use_tls=True,
             use_starttls=False,
             subject_prefix="[Digest]",
+            skip_if_empty=True,
         )
 
         with patch.dict(os.environ, {}, clear=True):
@@ -120,6 +122,7 @@ class EmailDeliveryTests(unittest.TestCase):
             use_tls=True,
             use_starttls=False,
             subject_prefix="[Digest]",
+            skip_if_empty=True,
         )
 
         with self.assertRaises(EmailDeliveryError):

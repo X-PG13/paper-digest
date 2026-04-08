@@ -45,6 +45,7 @@ class LoadConfigTests(unittest.TestCase):
         )
         self.assertEqual(config.request_delay_seconds, 1.5)
         self.assertEqual(config.feeds[0].name, "LLM")
+        self.assertTrue(config.state.enabled)
 
     def test_invalid_timezone_raises_config_error(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -107,6 +108,37 @@ class LoadConfigTests(unittest.TestCase):
         self.assertFalse(config.email.use_tls)
         self.assertTrue(config.email.use_starttls)
 
+    def test_load_config_reads_state_settings(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text(
+                textwrap.dedent(
+                    """
+                    [app]
+                    timezone = "UTC"
+
+                    [[feeds]]
+                    name = "LLM"
+                    categories = ["cs.AI"]
+
+                    [state]
+                    enabled = true
+                    path = ".cache/custom-state.json"
+                    retention_days = 30
+                    """
+                ).strip(),
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        self.assertTrue(config.state.enabled)
+        self.assertEqual(config.state.retention_days, 30)
+        self.assertEqual(
+            config.state.path,
+            (config_path.parent / ".cache/custom-state.json").resolve(),
+        )
+
     def test_email_auth_requires_username_and_password_env_together(self) -> None:
         with TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "config.toml"
@@ -126,6 +158,26 @@ class LoadConfigTests(unittest.TestCase):
                     from_address = "bot@example.com"
                     to_addresses = ["reader@example.com"]
                     username = "bot@example.com"
+                    """
+                ).strip(),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(ConfigError):
+                load_config(config_path)
+
+    def test_crossref_feed_requires_queries(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text(
+                textwrap.dedent(
+                    """
+                    [app]
+                    timezone = "UTC"
+
+                    [[feeds]]
+                    name = "Crossref"
+                    source = "crossref"
                     """
                 ).strip(),
                 encoding="utf-8",

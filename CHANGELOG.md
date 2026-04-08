@@ -10,7 +10,11 @@ Versioning.
 ### Added
 
 - Optional SMTP email delivery for generated digests.
-- Expanded unit coverage for arXiv parsing, digest rendering, and output writing.
+- Persistent state-based deduplication across runs.
+- Crossref support as a second paper source.
+- A scheduled GitHub Actions workflow for daily digest generation.
+- Expanded unit coverage for arXiv parsing, Crossref parsing, digest rendering,
+  output writing, and state management.
 
 ## [0.1.0] - 2026-04-08
 

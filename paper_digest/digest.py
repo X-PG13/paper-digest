@@ -96,8 +96,9 @@ def render_markdown(digest: DigestRun) -> str:
                 authors += ", et al."
 
             lines.append(f"{index}. [{paper.title}]({paper.abstract_url})")
-            lines.append(f"   - Published: {published}")
+            lines.append(f"   - {paper.date_label}: {published}")
             lines.append(f"   - Authors: {authors}")
+            lines.append(f"   - Source: {paper.source}")
             lines.append(f"   - Categories: {', '.join(paper.categories)}")
             if paper.pdf_url:
                 lines.append(f"   - PDF: {paper.pdf_url}")
@@ -141,3 +142,9 @@ def summarize_digest(digest: DigestRun) -> str:
     if not digest.feeds:
         return "no feeds"
     return ", ".join(f"{feed.name}={len(feed.papers)}" for feed in digest.feeds)
+
+
+def digest_has_papers(digest: DigestRun) -> bool:
+    """Return True when the digest contains at least one paper."""
+
+    return any(feed.papers for feed in digest.feeds)

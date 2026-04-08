@@ -13,3 +13,4 @@ htmlcov/
 build/
 dist/
 config.toml
+.paper-digest-state/

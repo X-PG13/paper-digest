@@ -5,9 +5,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
-from .arxiv_client import fetch_latest_papers
 from .config import AppConfig
 from .digest import DigestRun, FeedDigest, filter_papers
+from .sources import fetch_feed_papers
+from .state import dedupe_papers, load_state, save_state
 
 
 def generate_digest(
@@ -27,11 +28,16 @@ def generate_digest(
 
     now_utc = local_now.astimezone(UTC)
     feeds: list[FeedDigest] = []
+    state = load_state(config.state)
+    contact_email = config.email.from_address if config.email is not None else None
 
     for feed in config.feeds:
-        papers = fetch_latest_papers(
+        papers = fetch_feed_papers(
             feed,
+            now=now_utc,
+            lookback_hours=config.lookback_hours,
             request_delay_seconds=config.request_delay_seconds,
+            contact_email=contact_email,
         )
         filtered = filter_papers(
             papers,
@@ -39,11 +45,20 @@ def generate_digest(
             now=now_utc,
             lookback_hours=config.lookback_hours,
         )
+        filtered = dedupe_papers(
+            state,
+            feed_name=feed.name,
+            papers=filtered,
+            now=local_now,
+            retention_days=config.state.retention_days,
+        )
         feeds.append(FeedDigest(name=feed.name, papers=filtered))
 
-    return DigestRun(
+    digest = DigestRun(
         generated_at=local_now,
         timezone=config.timezone,
         lookback_hours=config.lookback_hours,
         feeds=feeds,
     )
+    save_state(config.state, state)
+    return digest

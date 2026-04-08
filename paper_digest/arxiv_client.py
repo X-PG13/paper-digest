@@ -31,6 +31,8 @@ class Paper:
     pdf_url: str | None
     published_at: datetime
     updated_at: datetime
+    source: str = "arxiv"
+    date_label: str = "Published"
 
     def to_dict(self) -> dict[str, object]:
         data = asdict(self)
@@ -132,6 +134,8 @@ def parse_entry(entry: ET.Element) -> Paper:
         pdf_url=pdf_url,
         published_at=published_at,
         updated_at=updated_at,
+        source="arxiv",
+        date_label="Published",
     )
 
 

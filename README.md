@@ -10,9 +10,10 @@ latest arXiv papers every day and turning them into a readable research digest.
 
 The current scope is intentionally narrow:
 
-- Fetch the newest arXiv submissions by category.
+- Fetch the newest papers from arXiv and Crossref.
 - Apply include and exclude keyword filters on title and abstract.
 - Generate machine-readable `JSON` and human-readable `Markdown`.
+- Persist state to avoid repeating already-sent papers.
 - Optionally deliver the digest by email through SMTP.
 - Stay easy to automate from `cron`, GitHub Actions, or a notification bot.
 
@@ -85,7 +86,11 @@ Field reference:
 - `lookback_hours`: Papers older than this time window are ignored.
 - `output_dir`: Directory where dated and latest digests are written.
 - `request_delay_seconds`: Delay between arXiv API requests.
+- `state`: Persistent history used for deduplication across runs.
+- `source`: `arxiv` or `crossref`.
 - `categories`: arXiv categories such as `cs.AI`, `cs.CL`, or `cs.CV`.
+- `queries`: Required for `crossref` feeds.
+- `types`: Optional Crossref work types such as `journal-article`.
 - `keywords`: Keep a paper when any keyword matches title or abstract.
 - `exclude_keywords`: Drop a paper when any excluded keyword matches.
 - `max_results`: Number of newest candidates fetched before local filtering.
@@ -105,6 +110,7 @@ to_addresses = ["you@example.com"]
 use_tls = true
 use_starttls = false
 subject_prefix = "[Paper Digest]"
+skip_if_empty = true
 ```
 
 Notes:
@@ -113,6 +119,7 @@ Notes:
 - Use either `use_tls = true` for implicit TLS, usually port `465`, or
   `use_starttls = true` for STARTTLS, usually port `587`.
 - If the `email` section is omitted or `enabled = false`, no email is sent.
+- When `skip_if_empty = true`, no email is sent if a run finds no new papers.
 
 ## Development
 
@@ -139,6 +146,22 @@ Additional maintainer docs:
 
 ## Scheduling
 
+The repository includes a scheduled workflow at
+[`daily-digest.yml`](./.github/workflows/daily-digest.yml).
+
+The default schedule is `5 0 * * *`, which means:
+
+- `00:05 UTC` every day
+- `08:05` every day in `Asia/Shanghai`
+
+To use it, create these GitHub repository secrets:
+
+- `PAPER_DIGEST_CONFIG_TOML`: your full `config.toml` content
+- `PAPER_DIGEST_SMTP_PASSWORD`: only needed when email delivery is enabled
+
+The workflow restores and saves `.paper-digest-state/` through the GitHub
+Actions cache so deduplication survives across runs.
+
 On macOS or Linux you can run the digest every morning with `cron`:
 
 ```cron
@@ -147,9 +170,8 @@ On macOS or Linux you can run the digest every morning with `cron`:
 
 ## Roadmap
 
-- Add more literature sources such as PubMed, Crossref, and Semantic Scholar.
+- Add more literature sources such as PubMed and Semantic Scholar.
 - Support more output adapters such as Slack, Feishu, and WeCom.
-- Add deduplication and persistent history across days.
 - Support feed-level templates or LLM-generated summaries.
 
 ## Status

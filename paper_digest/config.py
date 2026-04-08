@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
@@ -13,24 +13,20 @@ class ConfigError(ValueError):
     """Raised when the project configuration is invalid."""
 
 
+FeedSource = Literal["arxiv", "crossref"]
+
+
 @dataclass(slots=True, frozen=True)
 class FeedConfig:
     name: str
-    categories: list[str]
-    keywords: list[str]
-    exclude_keywords: list[str]
-    max_results: int
-    max_items: int
-
-
-@dataclass(slots=True, frozen=True)
-class AppConfig:
-    timezone: str
-    lookback_hours: int
-    output_dir: Path
-    request_delay_seconds: float
-    feeds: list[FeedConfig]
-    email: EmailConfig | None = None
+    source: FeedSource = "arxiv"
+    categories: list[str] = field(default_factory=list)
+    queries: list[str] = field(default_factory=list)
+    types: list[str] = field(default_factory=list)
+    keywords: list[str] = field(default_factory=list)
+    exclude_keywords: list[str] = field(default_factory=list)
+    max_results: int = 100
+    max_items: int = 20
 
 
 @dataclass(slots=True, frozen=True)
@@ -44,6 +40,25 @@ class EmailConfig:
     use_tls: bool
     use_starttls: bool
     subject_prefix: str
+    skip_if_empty: bool
+
+
+@dataclass(slots=True, frozen=True)
+class StateConfig:
+    enabled: bool
+    path: Path
+    retention_days: int
+
+
+@dataclass(slots=True, frozen=True)
+class AppConfig:
+    timezone: str
+    lookback_hours: int
+    output_dir: Path
+    request_delay_seconds: float
+    feeds: list[FeedConfig]
+    state: StateConfig
+    email: EmailConfig | None = None
 
 
 def load_config(path: str | Path) -> AppConfig:
@@ -84,6 +99,7 @@ def load_config(path: str | Path) -> AppConfig:
         _load_feed(raw_feed, index)
         for index, raw_feed in enumerate(feeds_section, start=1)
     ]
+    state = _load_state(raw.get("state"), config_path)
     email = _load_email(raw.get("email"))
 
     return AppConfig(
@@ -92,6 +108,7 @@ def load_config(path: str | Path) -> AppConfig:
         output_dir=output_dir,
         request_delay_seconds=request_delay_seconds,
         feeds=feeds,
+        state=state,
         email=email,
     )
 
@@ -102,13 +119,22 @@ def _load_feed(raw_feed: Any, index: int) -> FeedConfig:
     if not name:
         raise ConfigError(f"feeds[{index}].name must be a non-empty string")
 
+    source = _feed_source(feed.get("source", "arxiv"), f"feeds[{index}].source")
     categories = _string_list(feed.get("categories", []), f"feeds[{index}].categories")
-    if not categories:
-        raise ConfigError(f"feeds[{index}].categories must not be empty")
+    queries = _string_list(feed.get("queries", []), f"feeds[{index}].queries")
+    types = _string_list(feed.get("types", []), f"feeds[{index}].types")
+
+    if source == "arxiv" and not categories:
+        raise ConfigError(f"feeds[{index}].categories must not be empty for arxiv")
+    if source == "crossref" and not queries:
+        raise ConfigError(f"feeds[{index}].queries must not be empty for crossref")
 
     return FeedConfig(
         name=name,
+        source=source,
         categories=categories,
+        queries=queries,
+        types=types,
         keywords=_string_list(feed.get("keywords", []), f"feeds[{index}].keywords"),
         exclude_keywords=_string_list(
             feed.get("exclude_keywords", []),
@@ -129,6 +155,24 @@ def _as_table(value: Any, field_name: str) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
     raise ConfigError(f"{field_name} must be a TOML table")
+
+
+def _load_state(value: Any, config_path: Path) -> StateConfig:
+    if value is None:
+        value = {}
+
+    state = _as_table(value, "state")
+    return StateConfig(
+        enabled=_bool(state.get("enabled", True), "state.enabled"),
+        path=_resolve_output_dir(
+            config_path,
+            state.get("path", ".paper-digest-state/state.json"),
+        ),
+        retention_days=_positive_int(
+            state.get("retention_days", 90),
+            "state.retention_days",
+        ),
+    )
 
 
 def _load_email(value: Any) -> EmailConfig | None:
@@ -166,6 +210,7 @@ def _load_email(value: Any) -> EmailConfig | None:
         use_tls=use_tls,
         use_starttls=use_starttls,
         subject_prefix=str(email.get("subject_prefix", "[Paper Digest]")).strip(),
+        skip_if_empty=_bool(email.get("skip_if_empty", True), "email.skip_if_empty"),
     )
 
 
@@ -203,6 +248,18 @@ def _bool(value: Any, field_name: str) -> bool:
     if isinstance(value, bool):
         return value
     raise ConfigError(f"{field_name} must be true or false")
+
+
+def _feed_source(value: Any, field_name: str) -> FeedSource:
+    if not isinstance(value, str):
+        raise ConfigError(f"{field_name} must be 'arxiv' or 'crossref'")
+
+    normalized = value.strip().lower()
+    if normalized not in {"arxiv", "crossref"}:
+        raise ConfigError(f"{field_name} must be 'arxiv' or 'crossref'")
+    if normalized == "arxiv":
+        return "arxiv"
+    return "crossref"
 
 
 def _positive_int(value: Any, field_name: str) -> int:

@@ -17,6 +17,11 @@ scale as new paper sources and output channels are added.
 - Fetches Atom feeds.
 - Parses raw XML into typed `Paper` objects.
 
+### `paper_digest.crossref_client`
+
+- Fetches newly indexed works from Crossref.
+- Normalizes Crossref JSON into the shared `Paper` model.
+
 ### `paper_digest.digest`
 
 - Applies filtering rules such as lookback windows and keyword matching.
@@ -27,6 +32,11 @@ scale as new paper sources and output channels are added.
 
 - Sends the generated digest through SMTP.
 - Keeps email-specific transport logic out of the CLI and service layer.
+
+### `paper_digest.state`
+
+- Persists the set of already-seen papers.
+- Prunes old state entries and removes duplicates across runs.
 
 ### `paper_digest.service`
 

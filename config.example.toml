@@ -8,9 +8,19 @@ output_dir = "output"
 # arXiv recommends spacing requests instead of polling aggressively.
 request_delay_seconds = 3
 
+[state]
+# Keep track of papers that were already included in previous digests.
+enabled = true
+# This default path works well with the scheduled GitHub Actions workflow.
+path = ".paper-digest-state/state.json"
+# Drop old state entries after this many days.
+retention_days = 90
+
 [[feeds]]
 # Free-form label used in the generated digest.
 name = "LLM"
+# Supported sources: arxiv, crossref
+source = "arxiv"
 # arXiv categories: https://arxiv.org/category_taxonomy
 categories = ["cs.AI", "cs.CL", "cs.LG"]
 # Keep a paper if any keyword matches its title or abstract.
@@ -24,11 +34,23 @@ max_items = 15
 
 [[feeds]]
 name = "Vision"
+source = "arxiv"
 categories = ["cs.CV"]
 keywords = ["diffusion", "video generation", "multimodal", "segmentation"]
 exclude_keywords = []
 max_results = 100
 max_items = 10
+
+# Example Crossref feed:
+# [[feeds]]
+# name = "Crossref AI"
+# source = "crossref"
+# queries = ["agent reasoning benchmark"]
+# types = ["journal-article", "proceedings-article"]
+# keywords = ["agent", "reasoning"]
+# exclude_keywords = []
+# max_results = 50
+# max_items = 10
 
 [email]
 # Optional email delivery. Keep disabled until SMTP details are ready.
@@ -42,3 +64,4 @@ enabled = false
 # use_tls = true
 # use_starttls = false
 # subject_prefix = "[Paper Digest]"
+# skip_if_empty = true
