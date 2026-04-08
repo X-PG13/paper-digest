@@ -9,6 +9,7 @@ from pathlib import Path
 
 from . import __version__
 from .analysis import AnalysisError
+from .archive_site import ArchiveSiteError, build_archive_site
 from .arxiv_client import ArxivClientError
 from .config import ConfigError, load_config
 from .crossref_client import CrossrefClientError
@@ -42,12 +43,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     json_path: Path | None = None
     markdown_path: Path | None = None
+    site_path: Path | None = None
 
     try:
         config = load_config(args.config)
         state = load_state(config.state)
         digest = generate_digest(config, state=state)
         json_path, markdown_path = write_outputs(config, digest)
+        site_path = build_archive_site(config.output_dir)
         delivery_receipts = send_configured_deliveries(config, digest)
         save_state(config.state, state)
     except DeliveryError as exc:
@@ -61,6 +64,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     except (
         AnalysisError,
+        ArchiveSiteError,
         ConfigError,
         ArxivClientError,
         CrossrefClientError,
@@ -71,6 +75,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not args.quiet:
         print(f"JSON written to {Path(json_path).resolve()}")
         print(f"Markdown written to {Path(markdown_path).resolve()}")
+        print(f"Archive site written to {Path(site_path).resolve()}")
         print(f"Matched papers: {summarize_digest(digest)}")
         for receipt in delivery_receipts:
             print(receipt)

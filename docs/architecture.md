@@ -44,6 +44,13 @@ scale as new paper sources and output channels are added.
   daily-brief layout.
 - Contains formatting-specific helpers rather than network logic.
 
+### `paper_digest.archive_site`
+
+- Scans historical `output/YYYY-MM-DD/digest.json` files.
+- Builds a static archive site with daily cards, feed summaries, and client-side
+  filtering for feed, title keyword, and recent date windows.
+- Copies dated Markdown and JSON files into a Pages-friendly output tree.
+
 ### `paper_digest.delivery`
 
 - Builds channel-agnostic notification messages from a digest.

@@ -7,6 +7,10 @@ Versioning.
 
 ## [Unreleased]
 
+- Static archive-site generation from historical digest outputs, including
+  daily hit counts, per-feed summaries, and lightweight client-side search.
+- GitHub Pages deployment from the scheduled `Daily Digest` workflow.
+
 ## [0.3.0] - 2026-04-08
 
 - Optional OpenAI-backed structured paper analysis with configurable cost caps.

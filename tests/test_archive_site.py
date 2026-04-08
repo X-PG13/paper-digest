@@ -1,0 +1,162 @@
+from __future__ import annotations
+
+import json
+import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from paper_digest.archive_site import build_archive_site
+
+
+class ArchiveSiteTests(unittest.TestCase):
+    def test_build_archive_site_renders_history_and_copies_digest_files(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "output"
+            self._write_digest(
+                output_dir,
+                "2026-04-08",
+                generated_at="2026-04-08T23:59:44+08:00",
+                feeds=[
+                    {
+                        "name": "LLM",
+                        "key_points": ["《Paper Circle》：适合做研究发现入口。"],
+                        "papers": [
+                            {
+                                "title": "Paper Circle",
+                                "abstract_url": "https://arxiv.org/abs/2604.06170v1",
+                            }
+                        ],
+                    },
+                    {
+                        "name": "Vision",
+                        "key_points": [],
+                        "papers": [],
+                    },
+                ],
+                template="zh_daily_brief",
+            )
+            self._write_digest(
+                output_dir,
+                "2026-04-07",
+                generated_at="2026-04-07T23:58:10+08:00",
+                feeds=[
+                    {
+                        "name": "LLM",
+                        "key_points": [],
+                        "papers": [
+                            {
+                                "title": "Agent Systems",
+                                "abstract_url": "https://arxiv.org/abs/2604.00001v1",
+                            },
+                            {
+                                "title": "Benchmark Design",
+                                "abstract_url": "https://arxiv.org/abs/2604.00002v1",
+                            },
+                        ],
+                    }
+                ],
+                template="default",
+            )
+            (output_dir / "latest.md").write_text("# latest\n", encoding="utf-8")
+            (output_dir / "latest.json").write_text("{}", encoding="utf-8")
+
+            site_path = build_archive_site(output_dir)
+
+            index_html = (site_path / "index.html").read_text(encoding="utf-8")
+            self.assertIn("研究日报归档页", index_html)
+            self.assertIn("最近 7 天", index_html)
+            self.assertIn("Paper Circle", index_html)
+            self.assertIn("digests/2026-04-08/digest.md", index_html)
+            self.assertIn("2026-04-08 23:59:44 (Asia/Shanghai)", index_html)
+            self.assertIn('data-feed-names="|llm|vision|"', index_html)
+            self.assertTrue((site_path / "latest.md").exists())
+            self.assertTrue((site_path / "latest.json").exists())
+            self.assertTrue((site_path / "digests/2026-04-08/digest.json").exists())
+            self.assertTrue((site_path / "digests/2026-04-08/digest.md").exists())
+
+    def test_build_archive_site_uses_title_based_summary_without_key_points(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "output"
+            self._write_digest(
+                output_dir,
+                "2026-04-08",
+                generated_at="2026-04-08T10:00:00+00:00",
+                feeds=[
+                    {
+                        "name": "LLM",
+                        "key_points": [],
+                        "papers": [
+                            {
+                                "title": "Agent Systems",
+                                "abstract_url": "https://arxiv.org/abs/1",
+                            },
+                            {
+                                "title": "Benchmark Design",
+                                "abstract_url": "https://arxiv.org/abs/2",
+                            },
+                        ],
+                    }
+                ],
+                template="default",
+            )
+
+            site_path = build_archive_site(output_dir)
+
+            index_html = (site_path / "index.html").read_text(encoding="utf-8")
+            self.assertIn(
+                "收录 2 篇，重点包括《Agent Systems》、《Benchmark Design》。",
+                index_html,
+            )
+
+    def _write_digest(
+        self,
+        output_dir: Path,
+        date_str: str,
+        *,
+        generated_at: str,
+        feeds: list[dict[str, object]],
+        template: str,
+    ) -> None:
+        day_dir = output_dir / date_str
+        day_dir.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "generated_at": generated_at,
+            "timezone": "Asia/Shanghai",
+            "lookback_hours": 24,
+            "highlights": [],
+            "template": template,
+            "feeds": [
+                {
+                    "name": feed["name"],
+                    "key_points": feed["key_points"],
+                    "papers": [
+                        {
+                            "title": paper["title"],
+                            "summary": "",
+                            "authors": [],
+                            "categories": [],
+                            "paper_id": paper["abstract_url"],
+                            "abstract_url": paper["abstract_url"],
+                            "pdf_url": None,
+                            "published_at": generated_at,
+                            "updated_at": generated_at,
+                            "source": "arxiv",
+                            "date_label": "Published",
+                            "analysis": None,
+                        }
+                        for paper in feed["papers"]
+                    ],
+                }
+                for feed in feeds
+            ],
+        }
+        (day_dir / "digest.json").write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        (day_dir / "digest.md").write_text(
+            f"# Digest {date_str}\n",
+            encoding="utf-8",
+        )

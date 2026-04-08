@@ -24,6 +24,7 @@ class CliTests(unittest.TestCase):
 
     @patch("paper_digest.cli.save_state")
     @patch("paper_digest.cli.send_configured_deliveries")
+    @patch("paper_digest.cli.build_archive_site")
     @patch("paper_digest.cli.write_outputs")
     @patch("paper_digest.cli.generate_digest")
     @patch("paper_digest.cli.load_state")
@@ -34,6 +35,7 @@ class CliTests(unittest.TestCase):
         mock_load_state,
         mock_generate_digest,
         mock_write_outputs,
+        mock_build_archive_site,
         mock_send_configured_deliveries,
         mock_save_state,
     ) -> None:
@@ -61,12 +63,14 @@ class CliTests(unittest.TestCase):
                 output_dir / "digest.json",
                 output_dir / "digest.md",
             )
+            mock_build_archive_site.return_value = output_dir / "site"
             mock_send_configured_deliveries.return_value = []
 
             exit_code = main(["--config", "config.toml", "--quiet"])
 
         self.assertEqual(exit_code, 0)
         mock_generate_digest.assert_called_once_with(config, state=state)
+        mock_build_archive_site.assert_called_once_with(config.output_dir)
         mock_send_configured_deliveries.assert_called_once_with(config, digest)
         mock_save_state.assert_called_once_with(config.state, state)
 
@@ -79,6 +83,7 @@ class CliTests(unittest.TestCase):
         "paper_digest.cli.send_configured_deliveries",
         side_effect=DeliveryError("delivery failed"),
     )
+    @patch("paper_digest.cli.build_archive_site")
     @patch("paper_digest.cli.write_outputs")
     @patch("paper_digest.cli.generate_digest")
     @patch("paper_digest.cli.load_state")
@@ -89,6 +94,7 @@ class CliTests(unittest.TestCase):
         mock_load_state,
         mock_generate_digest,
         mock_write_outputs,
+        mock_build_archive_site,
         _mock_send_configured_deliveries,
         mock_save_state,
     ) -> None:
@@ -115,6 +121,7 @@ class CliTests(unittest.TestCase):
             mock_load_state.return_value = state
             mock_generate_digest.return_value = digest
             mock_write_outputs.return_value = (json_path, markdown_path)
+            mock_build_archive_site.return_value = output_dir / "site"
 
             stderr = io.StringIO()
             with patch("sys.stderr", stderr):

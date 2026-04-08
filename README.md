@@ -14,6 +14,7 @@ The current scope is intentionally narrow:
 - Apply include and exclude keyword filters on title and abstract.
 - Optionally enrich selected papers with structured LLM analysis.
 - Generate machine-readable `JSON` and human-readable `Markdown`.
+- Build a static archive site with search and feed/date filters.
 - Persist state to avoid repeating already-sent papers.
 - Optionally deliver the digest through SMTP email or Feishu webhooks.
 - Stay easy to automate from `cron`, GitHub Actions, or a notification bot.
@@ -58,6 +59,7 @@ python -m paper_digest --config config.toml
 
 - `output/latest.json`
 - `output/latest.md`
+- `output/site/index.html`
 - `output/YYYY-MM-DD/digest.json`
 - `output/YYYY-MM-DD/digest.md`
 
@@ -99,6 +101,7 @@ Field reference:
 - `digest`: Rendering options for template selection and feed-level briefings.
 - `analysis`: Optional structured paper analysis, currently backed by OpenAI.
 - `deliveries`: Optional notification outputs such as email or Feishu webhook.
+- `output/site`: Generated static archive site for historical browsing.
 
 Digest rendering:
 
@@ -234,6 +237,15 @@ To use it, create these GitHub repository secrets:
 
 The workflow restores and saves `.paper-digest-state/` through the GitHub
 Actions cache so deduplication survives across runs.
+
+The CLI also rebuilds `output/site/index.html` on every run. That static site:
+
+- shows daily hit counts and per-feed summaries
+- links to each day's Markdown and JSON
+- supports feed filtering, title keyword search, and recent `7d` / `30d` windows
+
+When GitHub Pages is enabled for the repository, the scheduled workflow uploads
+`output/site` and deploys it automatically after each successful digest run.
 
 On macOS or Linux you can run the digest every morning with `cron`:
 
