@@ -14,6 +14,8 @@ class ConfigError(ValueError):
 
 
 FeedSource = Literal["arxiv", "crossref"]
+DeliveryTarget = Literal["digest", "per_feed"]
+DeliveryType = Literal["email", "feishu_webhook"]
 
 
 @dataclass(slots=True, frozen=True)
@@ -41,6 +43,15 @@ class EmailConfig:
     use_starttls: bool
     subject_prefix: str
     skip_if_empty: bool
+    target: DeliveryTarget = "digest"
+
+
+@dataclass(slots=True, frozen=True)
+class FeishuWebhookConfig:
+    webhook_url: str
+    title_prefix: str
+    skip_if_empty: bool
+    target: DeliveryTarget = "digest"
 
 
 @dataclass(slots=True, frozen=True)
@@ -58,6 +69,7 @@ class AppConfig:
     request_delay_seconds: float
     feeds: list[FeedConfig]
     state: StateConfig
+    deliveries: list[EmailConfig | FeishuWebhookConfig] = field(default_factory=list)
     email: EmailConfig | None = None
 
 
@@ -100,6 +112,7 @@ def load_config(path: str | Path) -> AppConfig:
         for index, raw_feed in enumerate(feeds_section, start=1)
     ]
     state = _load_state(raw.get("state"), config_path)
+    deliveries = _load_deliveries(raw.get("deliveries"))
     email = _load_email(raw.get("email"))
 
     return AppConfig(
@@ -109,6 +122,7 @@ def load_config(path: str | Path) -> AppConfig:
         request_delay_seconds=request_delay_seconds,
         feeds=feeds,
         state=state,
+        deliveries=deliveries,
         email=email,
     )
 
@@ -183,34 +197,107 @@ def _load_email(value: Any) -> EmailConfig | None:
     if not _bool(email.get("enabled", True), "email.enabled"):
         return None
 
-    username = _optional_string(email.get("username"), "email.username")
-    password_env = _optional_string(email.get("password_env"), "email.password_env")
+    return _build_email_config(email, "email")
+
+
+def _load_deliveries(value: Any) -> list[EmailConfig | FeishuWebhookConfig]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ConfigError("deliveries must be an array of tables")
+
+    deliveries: list[EmailConfig | FeishuWebhookConfig] = []
+    for index, raw_delivery in enumerate(value, start=1):
+        field_name = f"deliveries[{index}]"
+        delivery = _as_table(raw_delivery, field_name)
+        delivery_type = _delivery_type(delivery.get("type"), f"{field_name}.type")
+        if delivery_type == "email":
+            deliveries.append(_build_email_config(delivery, field_name))
+            continue
+        deliveries.append(_build_feishu_webhook_config(delivery, field_name))
+    return deliveries
+
+
+def _build_email_config(value: dict[str, Any], field_name: str) -> EmailConfig:
+    username = _optional_string(value.get("username"), f"{field_name}.username")
+    password_env = _optional_string(
+        value.get("password_env"),
+        f"{field_name}.password_env",
+    )
     if (username is None) != (password_env is None):
         raise ConfigError(
-            "email.username and email.password_env must either both be set "
+            f"{field_name}.username and {field_name}.password_env "
+            "must either both be set "
             "or both be omitted"
         )
 
-    use_tls = _bool(email.get("use_tls", True), "email.use_tls")
-    use_starttls = _bool(email.get("use_starttls", False), "email.use_starttls")
+    use_tls = _bool(value.get("use_tls", True), f"{field_name}.use_tls")
+    use_starttls = _bool(
+        value.get("use_starttls", False),
+        f"{field_name}.use_starttls",
+    )
     if use_tls and use_starttls:
-        raise ConfigError("email.use_tls and email.use_starttls cannot both be true")
+        raise ConfigError(
+            f"{field_name}.use_tls and {field_name}.use_starttls cannot both be true"
+        )
 
-    to_addresses = _string_list(email.get("to_addresses", []), "email.to_addresses")
+    to_addresses = _string_list(
+        value.get("to_addresses", []), f"{field_name}.to_addresses"
+    )
     if not to_addresses:
-        raise ConfigError("email.to_addresses must not be empty when email is enabled")
+        raise ConfigError(
+            f"{field_name}.to_addresses must not be empty when email is enabled"
+        )
 
     return EmailConfig(
-        smtp_host=_required_string(email.get("smtp_host"), "email.smtp_host"),
-        smtp_port=_positive_int(email.get("smtp_port", 465), "email.smtp_port"),
+        smtp_host=_required_string(value.get("smtp_host"), f"{field_name}.smtp_host"),
+        smtp_port=_positive_int(value.get("smtp_port", 465), f"{field_name}.smtp_port"),
         username=username,
         password_env=password_env,
-        from_address=_required_string(email.get("from_address"), "email.from_address"),
+        from_address=_required_string(
+            value.get("from_address"),
+            f"{field_name}.from_address",
+        ),
         to_addresses=to_addresses,
         use_tls=use_tls,
         use_starttls=use_starttls,
-        subject_prefix=str(email.get("subject_prefix", "[Paper Digest]")).strip(),
-        skip_if_empty=_bool(email.get("skip_if_empty", True), "email.skip_if_empty"),
+        subject_prefix=_default_prefixed_string(
+            value.get("subject_prefix", value.get("title_prefix", "[Paper Digest]")),
+            f"{field_name}.subject_prefix",
+            "[Paper Digest]",
+        ),
+        skip_if_empty=_bool(
+            value.get("skip_if_empty", True),
+            f"{field_name}.skip_if_empty",
+        ),
+        target=_delivery_target(
+            value.get("target", "digest"),
+            f"{field_name}.target",
+        ),
+    )
+
+
+def _build_feishu_webhook_config(
+    value: dict[str, Any],
+    field_name: str,
+) -> FeishuWebhookConfig:
+    return FeishuWebhookConfig(
+        webhook_url=_required_string(
+            value.get("webhook_url"), f"{field_name}.webhook_url"
+        ),
+        title_prefix=_default_prefixed_string(
+            value.get("title_prefix", "[Paper Digest]"),
+            f"{field_name}.title_prefix",
+            "[Paper Digest]",
+        ),
+        skip_if_empty=_bool(
+            value.get("skip_if_empty", True),
+            f"{field_name}.skip_if_empty",
+        ),
+        target=_delivery_target(
+            value.get("target", "digest"),
+            f"{field_name}.target",
+        ),
     )
 
 
@@ -244,6 +331,12 @@ def _optional_string(value: Any, field_name: str) -> str | None:
     return _required_string(value, field_name)
 
 
+def _default_prefixed_string(value: Any, field_name: str, default: str) -> str:
+    if value is None:
+        return default
+    return _required_string(value, field_name)
+
+
 def _bool(value: Any, field_name: str) -> bool:
     if isinstance(value, bool):
         return value
@@ -260,6 +353,30 @@ def _feed_source(value: Any, field_name: str) -> FeedSource:
     if normalized == "arxiv":
         return "arxiv"
     return "crossref"
+
+
+def _delivery_type(value: Any, field_name: str) -> DeliveryType:
+    if not isinstance(value, str):
+        raise ConfigError(f"{field_name} must be 'email' or 'feishu_webhook'")
+
+    normalized = value.strip().lower()
+    if normalized not in {"email", "feishu_webhook"}:
+        raise ConfigError(f"{field_name} must be 'email' or 'feishu_webhook'")
+    if normalized == "email":
+        return "email"
+    return "feishu_webhook"
+
+
+def _delivery_target(value: Any, field_name: str) -> DeliveryTarget:
+    if not isinstance(value, str):
+        raise ConfigError(f"{field_name} must be 'digest' or 'per_feed'")
+
+    normalized = value.strip().lower()
+    if normalized not in {"digest", "per_feed"}:
+        raise ConfigError(f"{field_name} must be 'digest' or 'per_feed'")
+    if normalized == "digest":
+        return "digest"
+    return "per_feed"
 
 
 def _positive_int(value: Any, field_name: str) -> int:

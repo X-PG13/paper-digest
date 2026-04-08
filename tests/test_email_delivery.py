@@ -3,12 +3,10 @@ from __future__ import annotations
 import os
 import smtplib
 import unittest
-from datetime import UTC, datetime
 from unittest.mock import patch
 
 from paper_digest.config import EmailConfig
-from paper_digest.digest import DigestRun, FeedDigest
-from paper_digest.email_delivery import EmailDeliveryError, send_digest_email
+from paper_digest.email_delivery import EmailDeliveryError, send_email_message
 
 
 class FakeSMTP:
@@ -47,13 +45,7 @@ class EmailDeliveryTests(unittest.TestCase):
     def setUp(self) -> None:
         FakeSMTP.instances.clear()
 
-    def test_send_digest_email_uses_starttls_and_login(self) -> None:
-        digest = DigestRun(
-            generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
-            timezone="UTC",
-            lookback_hours=24,
-            feeds=[FeedDigest(name="LLM", papers=[])],
-        )
+    def test_send_email_message_uses_starttls_and_login(self) -> None:
         config = EmailConfig(
             smtp_host="smtp.example.com",
             smtp_port=587,
@@ -69,21 +61,20 @@ class EmailDeliveryTests(unittest.TestCase):
 
         with patch("paper_digest.email_delivery.smtplib.SMTP", FakeSMTP):
             with patch.dict(os.environ, {"SMTP_PASSWORD": "secret"}, clear=False):
-                send_digest_email(config, digest)
+                send_email_message(
+                    config,
+                    subject="[Digest] 2026-04-08 | LLM=1",
+                    body="Digest body",
+                )
 
         server = FakeSMTP.instances[0]
         assert server.message is not None
         self.assertTrue(server.starttls_called)
         self.assertEqual(server.login_args, ("bot@example.com", "secret"))
-        self.assertIn("[Digest] 2026-04-08 | LLM=0", server.message["Subject"])
+        self.assertEqual(server.message["Subject"], "[Digest] 2026-04-08 | LLM=1")
+        self.assertEqual(server.message.get_content().strip(), "Digest body")
 
-    def test_send_digest_email_requires_password_env(self) -> None:
-        digest = DigestRun(
-            generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
-            timezone="UTC",
-            lookback_hours=24,
-            feeds=[],
-        )
+    def test_send_email_message_requires_password_env(self) -> None:
         config = EmailConfig(
             smtp_host="smtp.example.com",
             smtp_port=465,
@@ -99,19 +90,17 @@ class EmailDeliveryTests(unittest.TestCase):
 
         with patch.dict(os.environ, {}, clear=True):
             with self.assertRaises(EmailDeliveryError):
-                send_digest_email(config, digest)
+                send_email_message(
+                    config,
+                    subject="[Digest] 2026-04-08 | LLM=0",
+                    body="Digest body",
+                )
 
     @patch(
         "paper_digest.email_delivery.smtplib.SMTP_SSL",
         side_effect=smtplib.SMTPException("boom"),
     )
-    def test_send_digest_email_wraps_smtp_errors(self, _mock_smtp_ssl) -> None:
-        digest = DigestRun(
-            generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
-            timezone="UTC",
-            lookback_hours=24,
-            feeds=[],
-        )
+    def test_send_email_message_wraps_smtp_errors(self, _mock_smtp_ssl) -> None:
         config = EmailConfig(
             smtp_host="smtp.example.com",
             smtp_port=465,
@@ -126,4 +115,8 @@ class EmailDeliveryTests(unittest.TestCase):
         )
 
         with self.assertRaises(EmailDeliveryError):
-            send_digest_email(config, digest)
+            send_email_message(
+                config,
+                subject="[Digest] 2026-04-08 | LLM=0",
+                body="Digest body",
+            )

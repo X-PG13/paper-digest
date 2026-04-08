@@ -13,8 +13,10 @@ Versioning.
 - Persistent state-based deduplication across runs.
 - Crossref support as a second paper source.
 - A scheduled GitHub Actions workflow for daily digest generation.
+- A unified delivery layer with feed-level notification fan-out.
+- Feishu webhook delivery support.
 - Expanded unit coverage for arXiv parsing, Crossref parsing, digest rendering,
-  output writing, and state management.
+  output writing, delivery orchestration, and state management.
 
 ## [0.1.0] - 2026-04-08
 

@@ -11,9 +11,10 @@ from . import __version__
 from .arxiv_client import ArxivClientError
 from .config import ConfigError, load_config
 from .crossref_client import CrossrefClientError
-from .digest import digest_has_papers, summarize_digest, write_outputs
-from .email_delivery import EmailDeliveryError, send_digest_email
+from .delivery import DeliveryError, send_configured_deliveries
+from .digest import summarize_digest, write_outputs
 from .service import generate_digest
+from .state import load_state, save_state
 
 
 def build_parser() -> ArgumentParser:
@@ -38,20 +39,29 @@ def build_parser() -> ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    json_path: Path | None = None
+    markdown_path: Path | None = None
 
     try:
         config = load_config(args.config)
-        digest = generate_digest(config)
+        state = load_state(config.state)
+        digest = generate_digest(config, state=state)
         json_path, markdown_path = write_outputs(config, digest)
-        if config.email is not None and (
-            digest_has_papers(digest) or not config.email.skip_if_empty
-        ):
-            send_digest_email(config.email, digest)
+        delivery_receipts = send_configured_deliveries(config, digest)
+        save_state(config.state, state)
+    except DeliveryError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        if json_path is not None and markdown_path is not None:
+            print(
+                "Artifacts preserved at "
+                f"{Path(json_path).resolve()} and {Path(markdown_path).resolve()}",
+                file=sys.stderr,
+            )
+        return 1
     except (
         ConfigError,
         ArxivClientError,
         CrossrefClientError,
-        EmailDeliveryError,
     ) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
@@ -60,10 +70,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"JSON written to {Path(json_path).resolve()}")
         print(f"Markdown written to {Path(markdown_path).resolve()}")
         print(f"Matched papers: {summarize_digest(digest)}")
-        if config.email is not None and (
-            digest_has_papers(digest) or not config.email.skip_if_empty
-        ):
-            print(f"Email sent to {', '.join(config.email.to_addresses)}")
+        for receipt in delivery_receipts:
+            print(receipt)
     return 0
 
 

@@ -52,9 +52,11 @@ max_items = 10
 # max_results = 50
 # max_items = 10
 
-[email]
-# Optional email delivery. Keep disabled until SMTP details are ready.
-enabled = false
+# Preferred notification configuration uses [[deliveries]].
+
+# Example SMTP delivery:
+# [[deliveries]]
+# type = "email"
 # smtp_host = "smtp.example.com"
 # smtp_port = 465
 # username = "bot@example.com"
@@ -65,3 +67,27 @@ enabled = false
 # use_starttls = false
 # subject_prefix = "[Paper Digest]"
 # skip_if_empty = true
+# target = "digest"
+
+# Example Feishu webhook delivery:
+# [[deliveries]]
+# type = "feishu_webhook"
+# webhook_url = "https://open.feishu.cn/open-apis/bot/v2/hook/your-token"
+# title_prefix = "[Paper Digest]"
+# skip_if_empty = true
+# target = "per_feed"
+
+# Legacy email configuration is still supported:
+# [email]
+# enabled = false
+# smtp_host = "smtp.example.com"
+# smtp_port = 465
+# username = "bot@example.com"
+# password_env = "PAPER_DIGEST_SMTP_PASSWORD"
+# from_address = "bot@example.com"
+# to_addresses = ["you@example.com"]
+# use_tls = true
+# use_starttls = false
+# subject_prefix = "[Paper Digest]"
+# skip_if_empty = true
+# target = "digest"

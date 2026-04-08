@@ -14,14 +14,13 @@ class EmailDeliveryError(RuntimeError):
     """Raised when digest email delivery fails."""
 
 
-def send_digest_email(config: EmailConfig, digest: DigestRun) -> None:
-    """Send the digest via SMTP using standard-library email support."""
-
+def send_email_message(config: EmailConfig, *, subject: str, body: str) -> None:
+    """Send a single email notification using standard-library SMTP support."""
     message = EmailMessage()
-    message["Subject"] = _build_subject(config, digest)
+    message["Subject"] = subject
     message["From"] = config.from_address
     message["To"] = ", ".join(config.to_addresses)
-    message.set_content(render_markdown(digest))
+    message.set_content(body)
 
     password = _resolve_password(config)
 
@@ -50,6 +49,16 @@ def send_digest_email(config: EmailConfig, digest: DigestRun) -> None:
             "failed to send digest email via "
             f"{config.smtp_host}:{config.smtp_port}: {exc}"
         ) from exc
+
+
+def send_digest_email(config: EmailConfig, digest: DigestRun) -> None:
+    """Backward-compatible wrapper for sending the full digest by email."""
+
+    send_email_message(
+        config,
+        subject=_build_subject(config, digest),
+        body=render_markdown(digest),
+    )
 
 
 def _authenticate_and_send(

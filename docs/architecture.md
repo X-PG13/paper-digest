@@ -28,10 +28,21 @@ scale as new paper sources and output channels are added.
 - Renders digest output for JSON and Markdown.
 - Contains formatting-specific helpers rather than network logic.
 
+### `paper_digest.delivery`
+
+- Builds channel-agnostic notification messages from a digest.
+- Applies delivery policies such as `skip_if_empty` and `per_feed`.
+- Keeps notification orchestration out of the CLI.
+
 ### `paper_digest.email_delivery`
 
-- Sends the generated digest through SMTP.
-- Keeps email-specific transport logic out of the CLI and service layer.
+- Sends email notifications through SMTP.
+- Only handles email transport and authentication concerns.
+
+### `paper_digest.feishu_delivery`
+
+- Sends structured messages to Feishu incoming webhooks.
+- Translates rendered digest text into Feishu post payloads.
 
 ### `paper_digest.state`
 
@@ -43,6 +54,7 @@ scale as new paper sources and output channels are added.
 - Orchestrates the end-to-end digest generation flow.
 - Keeps the CLI thin.
 - Provides a stable place for future business rules.
+- Supports deferred state persistence so failed deliveries do not drop papers.
 
 ### `paper_digest.cli`
 
@@ -56,7 +68,7 @@ The next clean extension points are:
 1. Add a new source client module such as `pubmed_client.py`.
 2. Normalize foreign payloads into the existing `Paper` model, or extract a
    source-agnostic protocol if the model starts diverging.
-3. Add output adapters for Slack or other destinations without putting
+3. Add output adapters for Slack, WeCom, or other destinations without putting
    transport code into the CLI.
 
 ## Design Constraints

@@ -107,6 +107,73 @@ class LoadConfigTests(unittest.TestCase):
         self.assertEqual(config.email.to_addresses, ["reader@example.com"])
         self.assertFalse(config.email.use_tls)
         self.assertTrue(config.email.use_starttls)
+        self.assertEqual(config.email.target, "digest")
+
+    def test_load_config_reads_delivery_settings(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text(
+                textwrap.dedent(
+                    """
+                    [app]
+                    timezone = "UTC"
+
+                    [[feeds]]
+                    name = "LLM"
+                    categories = ["cs.AI"]
+
+                    [[deliveries]]
+                    type = "email"
+                    smtp_host = "smtp.example.com"
+                    smtp_port = 465
+                    from_address = "bot@example.com"
+                    to_addresses = ["reader@example.com"]
+                    use_tls = true
+                    subject_prefix = "[Digest]"
+                    skip_if_empty = true
+                    target = "per_feed"
+
+                    [[deliveries]]
+                    type = "feishu_webhook"
+                    webhook_url = "https://open.feishu.cn/example"
+                    title_prefix = "[Robot]"
+                    skip_if_empty = true
+                    target = "digest"
+                    """
+                ).strip(),
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        self.assertEqual(len(config.deliveries), 2)
+        self.assertEqual(config.deliveries[0].target, "per_feed")
+        self.assertEqual(config.deliveries[1].target, "digest")
+
+    def test_delivery_target_must_be_valid(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text(
+                textwrap.dedent(
+                    """
+                    [app]
+                    timezone = "UTC"
+
+                    [[feeds]]
+                    name = "LLM"
+                    categories = ["cs.AI"]
+
+                    [[deliveries]]
+                    type = "feishu_webhook"
+                    webhook_url = "https://open.feishu.cn/example"
+                    target = "unknown"
+                    """
+                ).strip(),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(ConfigError):
+                load_config(config_path)
 
     def test_load_config_reads_state_settings(self) -> None:
         with TemporaryDirectory() as temp_dir:

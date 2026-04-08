@@ -8,13 +8,14 @@ from zoneinfo import ZoneInfo
 from .config import AppConfig
 from .digest import DigestRun, FeedDigest, filter_papers
 from .sources import fetch_feed_papers
-from .state import dedupe_papers, load_state, save_state
+from .state import DigestState, dedupe_papers, load_state, save_state
 
 
 def generate_digest(
     config: AppConfig,
     *,
     now: datetime | None = None,
+    state: DigestState | None = None,
 ) -> DigestRun:
     """Build a digest for every configured feed."""
 
@@ -28,7 +29,9 @@ def generate_digest(
 
     now_utc = local_now.astimezone(UTC)
     feeds: list[FeedDigest] = []
-    state = load_state(config.state)
+    managed_state = state
+    if managed_state is None:
+        managed_state = load_state(config.state)
     contact_email = config.email.from_address if config.email is not None else None
 
     for feed in config.feeds:
@@ -46,7 +49,7 @@ def generate_digest(
             lookback_hours=config.lookback_hours,
         )
         filtered = dedupe_papers(
-            state,
+            managed_state,
             feed_name=feed.name,
             papers=filtered,
             now=local_now,
@@ -60,5 +63,6 @@ def generate_digest(
         lookback_hours=config.lookback_hours,
         feeds=feeds,
     )
-    save_state(config.state, state)
+    if state is None:
+        save_state(config.state, managed_state)
     return digest

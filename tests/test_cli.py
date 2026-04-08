@@ -1,16 +1,17 @@
 from __future__ import annotations
 
+import io
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from paper_digest.arxiv_client import Paper
 from paper_digest.cli import main
-from paper_digest.config import AppConfig, EmailConfig, FeedConfig, StateConfig
+from paper_digest.config import AppConfig, StateConfig
+from paper_digest.delivery import DeliveryError
 from paper_digest.digest import DigestRun, FeedDigest
-from paper_digest.email_delivery import EmailDeliveryError
+from paper_digest.state import DigestState
 
 
 class CliTests(unittest.TestCase):
@@ -21,63 +22,20 @@ class CliTests(unittest.TestCase):
             retention_days=90,
         )
 
+    @patch("paper_digest.cli.save_state")
+    @patch("paper_digest.cli.send_configured_deliveries")
     @patch("paper_digest.cli.write_outputs")
-    @patch("paper_digest.cli.send_digest_email")
     @patch("paper_digest.cli.generate_digest")
+    @patch("paper_digest.cli.load_state")
     @patch("paper_digest.cli.load_config")
     def test_main_returns_zero_on_success(
         self,
         mock_load_config,
+        mock_load_state,
         mock_generate_digest,
-        _mock_send_digest_email,
         mock_write_outputs,
-    ) -> None:
-        with TemporaryDirectory() as temp_dir:
-            output_dir = Path(temp_dir) / "output"
-            config = AppConfig(
-                timezone="UTC",
-                lookback_hours=24,
-                output_dir=output_dir,
-                request_delay_seconds=0.0,
-                feeds=[
-                    FeedConfig(
-                        name="LLM",
-                        categories=["cs.AI"],
-                        keywords=["agent"],
-                        exclude_keywords=[],
-                        max_results=10,
-                        max_items=5,
-                    )
-                ],
-                state=self._state_config(output_dir),
-            )
-            digest = DigestRun(
-                generated_at=datetime(2026, 4, 8, 10, 0, tzinfo=UTC),
-                timezone="UTC",
-                lookback_hours=24,
-                feeds=[],
-            )
-            mock_load_config.return_value = config
-            mock_generate_digest.return_value = digest
-            mock_write_outputs.return_value = (
-                output_dir / "digest.json",
-                output_dir / "digest.md",
-            )
-
-            exit_code = main(["--config", "config.toml", "--quiet"])
-
-        self.assertEqual(exit_code, 0)
-
-    @patch("paper_digest.cli.write_outputs")
-    @patch("paper_digest.cli.send_digest_email")
-    @patch("paper_digest.cli.generate_digest")
-    @patch("paper_digest.cli.load_config")
-    def test_main_sends_email_when_configured(
-        self,
-        mock_load_config,
-        mock_generate_digest,
-        mock_send_digest_email,
-        mock_write_outputs,
+        mock_send_configured_deliveries,
+        mock_save_state,
     ) -> None:
         with TemporaryDirectory() as temp_dir:
             output_dir = Path(temp_dir) / "output"
@@ -88,71 +46,51 @@ class CliTests(unittest.TestCase):
                 request_delay_seconds=0.0,
                 feeds=[],
                 state=self._state_config(output_dir),
-                email=EmailConfig(
-                    smtp_host="smtp.example.com",
-                    smtp_port=465,
-                    username=None,
-                    password_env=None,
-                    from_address="bot@example.com",
-                    to_addresses=["reader@example.com"],
-                    use_tls=True,
-                    use_starttls=False,
-                    subject_prefix="[Digest]",
-                    skip_if_empty=True,
-                ),
             )
+            state = DigestState(seen_papers={})
             digest = DigestRun(
                 generated_at=datetime(2026, 4, 8, 10, 0, tzinfo=UTC),
                 timezone="UTC",
                 lookback_hours=24,
-                feeds=[
-                    FeedDigest(
-                        name="LLM",
-                        papers=[
-                            Paper(
-                                title="Agent systems",
-                                summary="Summary",
-                                authors=["Alice"],
-                                categories=["cs.AI"],
-                                paper_id="https://arxiv.org/abs/1",
-                                abstract_url="https://arxiv.org/abs/1",
-                                pdf_url=None,
-                                published_at=datetime(2026, 4, 8, 9, 0, tzinfo=UTC),
-                                updated_at=datetime(2026, 4, 8, 9, 0, tzinfo=UTC),
-                            )
-                        ],
-                    )
-                ],
+                feeds=[],
             )
             mock_load_config.return_value = config
+            mock_load_state.return_value = state
             mock_generate_digest.return_value = digest
             mock_write_outputs.return_value = (
                 output_dir / "digest.json",
                 output_dir / "digest.md",
             )
+            mock_send_configured_deliveries.return_value = []
 
             exit_code = main(["--config", "config.toml", "--quiet"])
 
         self.assertEqual(exit_code, 0)
-        mock_send_digest_email.assert_called_once_with(config.email, digest)
+        mock_generate_digest.assert_called_once_with(config, state=state)
+        mock_send_configured_deliveries.assert_called_once_with(config, digest)
+        mock_save_state.assert_called_once_with(config.state, state)
 
     def test_main_returns_nonzero_on_missing_config(self) -> None:
         exit_code = main(["--config", "does-not-exist.toml", "--quiet"])
         self.assertEqual(exit_code, 1)
 
-    @patch("paper_digest.cli.write_outputs")
+    @patch("paper_digest.cli.save_state")
     @patch(
-        "paper_digest.cli.send_digest_email",
-        side_effect=EmailDeliveryError("smtp failed"),
+        "paper_digest.cli.send_configured_deliveries",
+        side_effect=DeliveryError("delivery failed"),
     )
+    @patch("paper_digest.cli.write_outputs")
     @patch("paper_digest.cli.generate_digest")
+    @patch("paper_digest.cli.load_state")
     @patch("paper_digest.cli.load_config")
-    def test_main_returns_nonzero_on_email_failure(
+    def test_main_returns_nonzero_on_delivery_failure_and_preserves_artifacts(
         self,
         mock_load_config,
+        mock_load_state,
         mock_generate_digest,
-        _mock_send_digest_email,
         mock_write_outputs,
+        _mock_send_configured_deliveries,
+        mock_save_state,
     ) -> None:
         with TemporaryDirectory() as temp_dir:
             output_dir = Path(temp_dir) / "output"
@@ -163,100 +101,26 @@ class CliTests(unittest.TestCase):
                 request_delay_seconds=0.0,
                 feeds=[],
                 state=self._state_config(output_dir),
-                email=EmailConfig(
-                    smtp_host="smtp.example.com",
-                    smtp_port=465,
-                    username=None,
-                    password_env=None,
-                    from_address="bot@example.com",
-                    to_addresses=["reader@example.com"],
-                    use_tls=True,
-                    use_starttls=False,
-                    subject_prefix="[Digest]",
-                    skip_if_empty=True,
-                ),
             )
+            state = DigestState(seen_papers={})
             digest = DigestRun(
                 generated_at=datetime(2026, 4, 8, 10, 0, tzinfo=UTC),
                 timezone="UTC",
                 lookback_hours=24,
-                feeds=[
-                    FeedDigest(
-                        name="LLM",
-                        papers=[
-                            Paper(
-                                title="Agent systems",
-                                summary="Summary",
-                                authors=["Alice"],
-                                categories=["cs.AI"],
-                                paper_id="https://arxiv.org/abs/1",
-                                abstract_url="https://arxiv.org/abs/1",
-                                pdf_url=None,
-                                published_at=datetime(2026, 4, 8, 9, 0, tzinfo=UTC),
-                                updated_at=datetime(2026, 4, 8, 9, 0, tzinfo=UTC),
-                            )
-                        ],
-                    )
-                ],
+                feeds=[FeedDigest(name="LLM", papers=[])],
             )
+            json_path = output_dir / "digest.json"
+            markdown_path = output_dir / "digest.md"
             mock_load_config.return_value = config
+            mock_load_state.return_value = state
             mock_generate_digest.return_value = digest
-            mock_write_outputs.return_value = (
-                output_dir / "digest.json",
-                output_dir / "digest.md",
-            )
+            mock_write_outputs.return_value = (json_path, markdown_path)
 
-            exit_code = main(["--config", "config.toml", "--quiet"])
+            stderr = io.StringIO()
+            with patch("sys.stderr", stderr):
+                exit_code = main(["--config", "config.toml", "--quiet"])
 
         self.assertEqual(exit_code, 1)
-
-    @patch("paper_digest.cli.write_outputs")
-    @patch("paper_digest.cli.send_digest_email")
-    @patch("paper_digest.cli.generate_digest")
-    @patch("paper_digest.cli.load_config")
-    def test_main_skips_empty_email_when_configured(
-        self,
-        mock_load_config,
-        mock_generate_digest,
-        mock_send_digest_email,
-        mock_write_outputs,
-    ) -> None:
-        with TemporaryDirectory() as temp_dir:
-            output_dir = Path(temp_dir) / "output"
-            config = AppConfig(
-                timezone="UTC",
-                lookback_hours=24,
-                output_dir=output_dir,
-                request_delay_seconds=0.0,
-                feeds=[],
-                state=self._state_config(output_dir),
-                email=EmailConfig(
-                    smtp_host="smtp.example.com",
-                    smtp_port=465,
-                    username=None,
-                    password_env=None,
-                    from_address="bot@example.com",
-                    to_addresses=["reader@example.com"],
-                    use_tls=True,
-                    use_starttls=False,
-                    subject_prefix="[Digest]",
-                    skip_if_empty=True,
-                ),
-            )
-            digest = DigestRun(
-                generated_at=datetime(2026, 4, 8, 10, 0, tzinfo=UTC),
-                timezone="UTC",
-                lookback_hours=24,
-                feeds=[],
-            )
-            mock_load_config.return_value = config
-            mock_generate_digest.return_value = digest
-            mock_write_outputs.return_value = (
-                output_dir / "digest.json",
-                output_dir / "digest.md",
-            )
-
-            exit_code = main(["--config", "config.toml", "--quiet"])
-
-        self.assertEqual(exit_code, 0)
-        mock_send_digest_email.assert_not_called()
+        self.assertIn("delivery failed", stderr.getvalue())
+        self.assertIn("Artifacts preserved at", stderr.getvalue())
+        mock_save_state.assert_not_called()
