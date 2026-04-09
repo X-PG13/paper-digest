@@ -27,7 +27,7 @@ retention_days = 90
 template = "default"
 # Number of top-of-digest highlight lines to render.
 top_highlights = 3
-# Number of feed-level "key points" lines to render before the paper list.
+# Number of per-feed "本组速览" lines to render before the paper list.
 feed_key_points = 3
 
 [analysis]
@@ -51,6 +51,8 @@ reasoning_effort = "minimal"
 # template = "zh_daily_brief"
 # top_highlights = 3
 # feed_key_points = 3
+# The rule-based briefing will still extract recurring topic terms and assign
+# lightweight tags such as 方法 / 数据 / 应用.
 
 [[feeds]]
 # Free-form label used in the generated digest.

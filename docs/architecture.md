@@ -25,10 +25,11 @@ scale as new paper sources and output channels are added.
 ### `paper_digest.analysis`
 
 - Selects which papers should be enriched in a given run.
-- Applies structured paper analysis and builds top-of-digest highlights plus
-  per-feed key points.
+- Applies structured paper analysis and builds top-of-digest highlights,
+  topic clusters, and per-feed key points.
 - Also supports rule-based briefing generation when a richer digest template is
-  requested without enabling any LLM provider.
+  requested without enabling any LLM provider, including high-frequency topic
+  extraction and rule-based paper tags.
 - Keeps analysis policy out of the fetch and delivery layers.
 
 ### `paper_digest.openai_analysis`
@@ -40,8 +41,8 @@ scale as new paper sources and output channels are added.
 
 - Applies filtering rules such as lookback windows and keyword matching.
 - Renders digest output for JSON and Markdown, including optional highlights,
-  structured per-paper analysis, and alternate templates such as the Chinese
-  daily-brief layout.
+  topic sections, structured per-paper analysis, and alternate templates such
+  as the Chinese daily-brief layout.
 - Contains formatting-specific helpers rather than network logic.
 
 ### `paper_digest.archive_site`

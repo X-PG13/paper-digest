@@ -11,6 +11,9 @@ Versioning.
   tracking pages, and a trends overview alongside the daily archive index.
 - WeCom webhook delivery joins email and Feishu as a first-class notification
   channel.
+- Rule-based Chinese briefing mode now extracts recurring topic terms, assigns
+  lightweight paper tags, and organizes "今日重点" around topics instead of
+  only feed order.
 
 ## [0.4.1] - 2026-04-09
 

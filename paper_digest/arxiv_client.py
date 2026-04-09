@@ -42,6 +42,8 @@ class Paper:
     source: str = "arxiv"
     date_label: str = "Published"
     analysis: PaperAnalysis | None = None
+    tags: list[str] = field(default_factory=list)
+    topics: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         data = asdict(self)

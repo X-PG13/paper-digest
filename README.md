@@ -142,10 +142,11 @@ Digest notes:
 - `feed_key_points` controls how many feed-level "today's key points" lines
   appear before the detailed paper list.
 - `template = "zh_daily_brief"` switches the output into a Chinese briefing
-  layout with "今日重点" sections at both the whole-digest and per-feed level.
+  layout with a topic-organized "今日重点" section plus per-feed "本组速览".
 - `zh_daily_brief` works even when analysis is disabled. In that mode, the
   project generates rule-based Chinese briefing scaffolding around the raw
-  paper title and abstract summary.
+  paper title and abstract summary, including high-frequency topic extraction,
+  rule-based tags such as `方法` / `数据` / `应用`, and topic-oriented highlights.
 
 Analysis notes:
 
