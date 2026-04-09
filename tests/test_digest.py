@@ -10,6 +10,7 @@ from paper_digest.config import AnalysisConfig, AppConfig, FeedConfig, StateConf
 from paper_digest.digest import (
     DigestRun,
     FeedDigest,
+    TopicDigest,
     filter_papers,
     render_markdown,
     summarize_digest,
@@ -140,6 +141,8 @@ class DigestTests(unittest.TestCase):
             hours_ago=1,
             authors=["Alice", "Bob"],
         )
+        analyzed_paper.tags = ["评测", "应用"]
+        analyzed_paper.topics = ["多模态推理", "视频理解"]
         analyzed_paper.analysis = PaperAnalysis(
             conclusion="提出了一个适合日报消费的简明结论。",
             contributions=["统一了评测设置", "给出了更稳定的对比结果"],
@@ -150,12 +153,29 @@ class DigestTests(unittest.TestCase):
             generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
             timezone="Asia/Shanghai",
             lookback_hours=24,
-            highlights=["LLM：多模态推理论文 - 更适合日报阅读的研究结论。"],
+            highlights=[
+                "主题「多模态推理」：命中 1 篇，覆盖 LLM，"
+                "代表论文包括 《多模态推理论文》。"
+            ],
+            topic_sections=[
+                TopicDigest(
+                    name="多模态推理",
+                    paper_count=1,
+                    feed_names=["LLM"],
+                    paper_titles=["多模态推理论文"],
+                    key_points=[
+                        "《多模态推理论文》〔评测 / 应用〕：更适合日报阅读的研究结论。"
+                    ],
+                )
+            ],
             feeds=[
                 FeedDigest(
                     name="LLM",
                     papers=[analyzed_paper],
-                    key_points=["多模态推理论文：这篇工作更像一次高质量的评测整合。"],
+                    key_points=[
+                        "《多模态推理论文》〔评测 / 应用〕："
+                        "这篇工作更像一次高质量的评测整合。"
+                    ],
                 )
             ],
             template="zh_daily_brief",
@@ -165,9 +185,13 @@ class DigestTests(unittest.TestCase):
 
         self.assertIn("# 每日论文简报", markdown)
         self.assertIn("## 今日重点", markdown)
+        self.assertIn("## 主题聚焦", markdown)
+        self.assertIn("### 多模态推理", markdown)
         self.assertIn("## LLM 观察", markdown)
-        self.assertIn("### 今日重点", markdown)
+        self.assertIn("### 本组速览", markdown)
         self.assertIn("### 论文速览", markdown)
+        self.assertIn("标签：评测 / 应用", markdown)
+        self.assertIn("主题词：多模态推理 / 视频理解", markdown)
         self.assertIn("一句话结论：提出了一个适合日报消费的简明结论。", markdown)
         self.assertIn("主要贡献：统一了评测设置；给出了更稳定的对比结果", markdown)
         self.assertIn("适合谁看：关注多模态评测和应用落地的研究者。", markdown)

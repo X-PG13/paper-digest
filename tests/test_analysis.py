@@ -113,3 +113,53 @@ class AnalysisTests(unittest.TestCase):
         self.assertEqual(digest.template, "zh_daily_brief")
         self.assertEqual(digest.highlights, [])
         self.assertEqual(digest.feeds[0].key_points, [])
+
+    def test_apply_digest_briefing_extracts_topics_tags_and_topic_highlights(
+        self,
+    ) -> None:
+        first_paper = build_paper("Agent benchmark")
+        first_paper.summary = "A benchmark for agent evaluation."
+        second_paper = build_paper("Agent dataset")
+        second_paper.summary = "An agent dataset for assistant training."
+        digest = DigestRun(
+            generated_at=datetime(2026, 4, 8, 10, 0, tzinfo=UTC),
+            timezone="UTC",
+            lookback_hours=24,
+            feeds=[
+                FeedDigest(
+                    name="LLM",
+                    papers=[first_paper, second_paper],
+                )
+            ],
+        )
+
+        apply_digest_briefing(
+            digest,
+            template="zh_daily_brief",
+            top_highlights=2,
+            feed_key_points=2,
+            topic_candidates=["agent", "dataset"],
+        )
+
+        self.assertEqual(first_paper.tags, ["评测", "方法"])
+        self.assertEqual(first_paper.topics, ["Agent"])
+        self.assertEqual(second_paper.topics, ["Agent", "Dataset"])
+        self.assertEqual(digest.topic_sections[0].name, "Agent")
+        self.assertEqual(digest.topic_sections[0].paper_count, 2)
+        self.assertEqual(
+            digest.highlights[0],
+            (
+                "主题「Agent」：命中 2 篇，覆盖 LLM，"
+                "代表论文包括 《Agent benchmark》、《Agent dataset》。"
+            ),
+        )
+        self.assertEqual(
+            digest.feeds[0].key_points,
+            [
+                "《Agent benchmark》〔评测 / 方法〕：A benchmark for agent evaluation.",
+                (
+                    "《Agent dataset》〔数据 / 应用 / 方法〕："
+                    "An agent dataset for assistant training."
+                ),
+            ],
+        )

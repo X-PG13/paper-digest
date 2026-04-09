@@ -20,12 +20,22 @@ class FeedDigest:
 
 
 @dataclass(slots=True)
+class TopicDigest:
+    name: str
+    paper_count: int
+    feed_names: list[str]
+    paper_titles: list[str] = field(default_factory=list)
+    key_points: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class DigestRun:
     generated_at: datetime
     timezone: str
     lookback_hours: int
     feeds: list[FeedDigest]
     highlights: list[str] = field(default_factory=list)
+    topic_sections: list[TopicDigest] = field(default_factory=list)
     template: DigestTemplate = "default"
 
     def to_dict(self) -> dict[str, object]:
@@ -34,6 +44,16 @@ class DigestRun:
             "timezone": self.timezone,
             "lookback_hours": self.lookback_hours,
             "highlights": list(self.highlights),
+            "topic_sections": [
+                {
+                    "name": topic.name,
+                    "paper_count": topic.paper_count,
+                    "feed_names": list(topic.feed_names),
+                    "paper_titles": list(topic.paper_titles),
+                    "key_points": list(topic.key_points),
+                }
+                for topic in self.topic_sections
+            ],
             "template": self.template,
             "feeds": [
                 {
@@ -160,6 +180,25 @@ def _render_zh_daily_brief(digest: DigestRun) -> str:
         lines.extend(f"- {highlight}" for highlight in digest.highlights)
         lines.append("")
 
+    if digest.topic_sections:
+        lines.append("## 主题聚焦")
+        lines.append("")
+        for topic in digest.topic_sections:
+            feed_names = "、".join(topic.feed_names)
+            lines.append(f"### {topic.name}")
+            lines.append("")
+            lines.append(f"- 命中篇数：{topic.paper_count}")
+            lines.append(f"- 覆盖分组：{feed_names}")
+            if topic.paper_titles:
+                lines.append(
+                    "- 代表论文："
+                    + "、".join(f"《{title}》" for title in topic.paper_titles[:3])
+                )
+            if topic.key_points:
+                lines.append("- 主题速读：")
+                lines.extend(f"  - {point}" for point in topic.key_points)
+            lines.append("")
+
     for feed in digest.feeds:
         lines.append(f"## {feed.name} 观察")
         lines.append("")
@@ -169,7 +208,7 @@ def _render_zh_daily_brief(digest: DigestRun) -> str:
             continue
 
         if feed.key_points:
-            lines.append("### 今日重点")
+            lines.append("### 本组速览")
             lines.append("")
             lines.extend(f"- {point}" for point in feed.key_points)
             lines.append("")
@@ -189,6 +228,10 @@ def _render_zh_daily_brief(digest: DigestRun) -> str:
             lines.append(f"   - 作者：{authors}")
             lines.append(f"   - 来源：{paper.source}")
             lines.append(f"   - 分类：{', '.join(paper.categories)}")
+            if paper.tags:
+                lines.append(f"   - 标签：{' / '.join(paper.tags)}")
+            if paper.topics:
+                lines.append(f"   - 主题词：{' / '.join(paper.topics)}")
             if paper.pdf_url:
                 lines.append(f"   - PDF：{paper.pdf_url}")
             if paper.analysis is not None:

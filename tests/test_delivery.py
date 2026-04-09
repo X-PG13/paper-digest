@@ -17,34 +17,55 @@ from paper_digest.delivery import (
     build_notification_messages,
     send_configured_deliveries,
 )
-from paper_digest.digest import DigestRun, FeedDigest
+from paper_digest.digest import DigestRun, FeedDigest, TopicDigest
 
 
 def build_digest() -> DigestRun:
+    paper = Paper(
+        title="Agent systems",
+        summary="Summary",
+        authors=["Alice"],
+        categories=["cs.AI"],
+        paper_id="https://arxiv.org/abs/1",
+        abstract_url="https://arxiv.org/abs/1",
+        pdf_url=None,
+        published_at=datetime(2026, 4, 8, 9, 0, tzinfo=UTC),
+        updated_at=datetime(2026, 4, 8, 9, 0, tzinfo=UTC),
+        tags=["评测", "方法"],
+        topics=["Agent"],
+    )
     return DigestRun(
         generated_at=datetime(2026, 4, 8, 10, 0, tzinfo=UTC),
         timezone="UTC",
         lookback_hours=24,
         highlights=[
-            "LLM：Agent systems：适合直接放进中文日报头部的结论。",
-            "Vision：Vision paper：这一条不该出现在 LLM 单独通知里。",
+            "主题「Agent」：命中 1 篇，覆盖 LLM，代表论文包括 《Agent systems》。",
+            "主题「Vision」：命中 1 篇，覆盖 Vision，代表论文包括 《Vision paper》。",
+        ],
+        topic_sections=[
+            TopicDigest(
+                name="Agent",
+                paper_count=1,
+                feed_names=["LLM"],
+                paper_titles=["Agent systems"],
+                key_points=[
+                    "《Agent systems》〔评测 / 方法〕：适合直接放进中文日报头部的结论。"
+                ],
+            ),
+            TopicDigest(
+                name="Vision",
+                paper_count=1,
+                feed_names=["Vision"],
+                paper_titles=["Vision paper"],
+                key_points=[
+                    "《Vision paper》〔应用〕：这一条不该出现在 LLM 单独通知里。"
+                ],
+            ),
         ],
         feeds=[
             FeedDigest(
                 name="LLM",
-                papers=[
-                    Paper(
-                        title="Agent systems",
-                        summary="Summary",
-                        authors=["Alice"],
-                        categories=["cs.AI"],
-                        paper_id="https://arxiv.org/abs/1",
-                        abstract_url="https://arxiv.org/abs/1",
-                        pdf_url=None,
-                        published_at=datetime(2026, 4, 8, 9, 0, tzinfo=UTC),
-                        updated_at=datetime(2026, 4, 8, 9, 0, tzinfo=UTC),
-                    )
-                ],
+                papers=[paper],
                 key_points=["Agent systems：更适合作为今日重点的摘要。"],
             ),
             FeedDigest(name="Vision", papers=[]),
@@ -75,10 +96,13 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(messages[0].feed_name, "LLM")
         self.assertIn("[Digest] 2026-04-08 | LLM=1", messages[0].title)
         self.assertIn("# 每日论文简报", messages[0].body)
-        self.assertIn("### 今日重点", messages[0].body)
+        self.assertIn("## 今日重点", messages[0].body)
+        self.assertIn("## 主题聚焦", messages[0].body)
+        self.assertIn("### 本组速览", messages[0].body)
         self.assertIn("Agent systems：更适合作为今日重点的摘要。", messages[0].body)
         self.assertIn(
-            "LLM：Agent systems：适合直接放进中文日报头部的结论。", messages[0].body
+            "主题「Agent」：命中 1 篇，覆盖 LLM，代表论文包括 《Agent systems》。",
+            messages[0].body,
         )
         self.assertNotIn("Vision paper", messages[0].body)
 

@@ -8,6 +8,7 @@ from .config import AppConfig, EmailConfig, FeishuWebhookConfig, WeComWebhookCon
 from .digest import (
     DigestRun,
     FeedDigest,
+    TopicDigest,
     digest_has_papers,
     render_markdown,
     summarize_digest,
@@ -106,6 +107,11 @@ def _build_title(
 
 
 def _single_feed_digest(digest: DigestRun, feed: FeedDigest) -> DigestRun:
+    topic_sections = _build_feed_topic_sections(feed)
+    highlights = _filter_highlights_for_feed(digest.highlights, feed.name)
+    if not highlights and topic_sections:
+        highlights = [_format_topic_highlight(topic) for topic in topic_sections]
+
     return DigestRun(
         generated_at=digest.generated_at,
         timezone=digest.timezone,
@@ -117,14 +123,61 @@ def _single_feed_digest(digest: DigestRun, feed: FeedDigest) -> DigestRun:
                 key_points=list(feed.key_points),
             )
         ],
-        highlights=_filter_highlights_for_feed(digest.highlights, feed.name),
+        highlights=highlights,
+        topic_sections=topic_sections,
         template=digest.template,
+    )
+
+
+def _build_feed_topic_sections(feed: FeedDigest) -> list[TopicDigest]:
+    buckets: dict[str, TopicDigest] = {}
+    for paper in feed.papers:
+        for topic_name in paper.topics:
+            bucket = buckets.setdefault(
+                topic_name,
+                TopicDigest(
+                    name=topic_name,
+                    paper_count=0,
+                    feed_names=[feed.name],
+                    paper_titles=[],
+                    key_points=[],
+                ),
+            )
+            bucket.paper_count += 1
+            if paper.title not in bucket.paper_titles:
+                bucket.paper_titles.append(paper.title)
+            point = _format_topic_key_point(paper)
+            if point not in bucket.key_points and len(bucket.key_points) < 2:
+                bucket.key_points.append(point)
+
+    return sorted(
+        buckets.values(),
+        key=lambda topic: (-topic.paper_count, topic.name),
     )
 
 
 def _filter_highlights_for_feed(highlights: list[str], feed_name: str) -> list[str]:
     prefixes = (f"{feed_name}: ", f"{feed_name}：")
     return [highlight for highlight in highlights if highlight.startswith(prefixes)]
+
+
+def _format_topic_highlight(topic: TopicDigest) -> str:
+    title_label = "、".join(f"《{title}》" for title in topic.paper_titles[:2])
+    return (
+        f"主题「{topic.name}」：命中 {topic.paper_count} 篇，"
+        f"覆盖 {topic.feed_names[0]}，"
+        f"代表论文包括 {title_label}。"
+    )
+
+
+def _format_topic_key_point(paper: object) -> str:
+    title = getattr(paper, "title", "")
+    tags = getattr(paper, "tags", [])
+    analysis = getattr(paper, "analysis", None)
+    summary = getattr(paper, "summary", "")
+    summary_line = analysis.conclusion if analysis is not None else summary
+    tag_label = f"〔{' / '.join(tags)}〕" if tags else ""
+    return f"《{title}》{tag_label}：{summary_line}"
 
 
 def _send_messages(

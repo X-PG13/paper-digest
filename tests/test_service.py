@@ -100,7 +100,7 @@ class GenerateDigestTests(unittest.TestCase):
         feed = FeedConfig(
             name="LLM",
             categories=["cs.AI"],
-            keywords=[],
+            keywords=["agent"],
             exclude_keywords=[],
             max_results=10,
             max_items=5,
@@ -149,7 +149,7 @@ class GenerateDigestTests(unittest.TestCase):
         feed = FeedConfig(
             name="LLM",
             categories=["cs.AI"],
-            keywords=[],
+            keywords=["agent"],
             exclude_keywords=[],
             max_results=10,
             max_items=5,
@@ -199,7 +199,7 @@ class GenerateDigestTests(unittest.TestCase):
         feed = FeedConfig(
             name="LLM",
             categories=["cs.AI"],
-            keywords=[],
+            keywords=["agent"],
             exclude_keywords=[],
             max_results=10,
             max_items=5,
@@ -248,6 +248,8 @@ class GenerateDigestTests(unittest.TestCase):
         self.assertEqual(len(digest.feeds[0].papers), 1)
         self.assertEqual(digest.template, "zh_daily_brief")
         mock_enrich_digest_with_analysis.assert_called_once()
+        kwargs = mock_enrich_digest_with_analysis.call_args.kwargs
+        self.assertEqual(kwargs["topic_candidates"], ["agent"])
 
     @patch("paper_digest.service.fetch_feed_papers")
     def test_generate_digest_builds_zh_daily_brief_without_analysis(
@@ -258,7 +260,7 @@ class GenerateDigestTests(unittest.TestCase):
         feed = FeedConfig(
             name="LLM",
             categories=["cs.AI"],
-            keywords=[],
+            keywords=["agent"],
             exclude_keywords=[],
             max_results=10,
             max_items=5,
@@ -300,9 +302,12 @@ class GenerateDigestTests(unittest.TestCase):
         self.assertEqual(digest.template, "zh_daily_brief")
         self.assertEqual(
             digest.highlights,
-            ["LLM：关注《Agent systems》，今日要点：A benchmark for agent evaluation."],
+            [
+                "主题「Agent」：命中 1 篇，覆盖 LLM，代表论文包括 《Agent systems》。"
+            ],
         )
         self.assertEqual(
             digest.feeds[0].key_points,
-            ["《Agent systems》：A benchmark for agent evaluation."],
+            ["《Agent systems》〔评测 / 方法〕：A benchmark for agent evaluation."],
         )
+        self.assertEqual(digest.topic_sections[0].name, "Agent")

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
@@ -21,6 +22,7 @@ def generate_digest(
     """Build a digest for every configured feed."""
 
     local_tz = ZoneInfo(config.timezone)
+    topic_candidates = _topic_candidates_from_feeds(config.feeds)
     if now is None:
         local_now = datetime.now(local_tz)
     else:
@@ -75,6 +77,7 @@ def generate_digest(
             template=config.digest.template,
             top_highlights=config.digest.top_highlights,
             feed_key_points=config.digest.feed_key_points,
+            topic_candidates=topic_candidates,
         )
     elif config.digest.template != "default":
         apply_digest_briefing(
@@ -82,7 +85,22 @@ def generate_digest(
             top_highlights=config.digest.top_highlights,
             feed_key_points=config.digest.feed_key_points,
             template=config.digest.template,
+            topic_candidates=topic_candidates,
         )
     if state is None:
         save_state(config.state, managed_state)
     return digest
+
+
+def _topic_candidates_from_feeds(feeds: Sequence[object]) -> list[str]:
+    keywords: list[str] = []
+    seen: set[str] = set()
+    for feed in feeds:
+        for keyword in getattr(feed, "keywords", []):
+            stripped = keyword.strip()
+            normalized = stripped.lower()
+            if not stripped or normalized in seen:
+                continue
+            seen.add(normalized)
+            keywords.append(stripped)
+    return keywords
