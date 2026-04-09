@@ -17,8 +17,8 @@ The current scope is intentionally narrow:
 - Build a static archive site with search, feed subscriptions, topic tracking,
   trend views, and RSS subscription feeds.
 - Persist state to avoid repeating already-sent papers.
-- Optionally deliver the digest through SMTP email, Feishu webhooks, or WeCom
-  webhooks.
+- Optionally deliver the digest through SMTP email, Feishu webhooks, WeCom
+  webhooks, or Slack incoming webhooks.
 - Stay easy to automate from `cron`, GitHub Actions, or a notification bot.
 
 ## Project Goals
@@ -111,7 +111,7 @@ Field reference:
 - `digest`: Rendering options for template selection and feed-level briefings.
 - `analysis`: Optional structured paper analysis, currently backed by OpenAI.
 - `deliveries`: Optional notification outputs such as email, Feishu webhook,
-  or WeCom webhook.
+  WeCom webhook, or Slack webhook.
 - `output/site`: Generated static archive site for historical browsing.
 
 Digest rendering:
@@ -197,6 +197,13 @@ webhook_url = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=your-key"
 title_prefix = "[Paper Digest]"
 skip_if_empty = true
 target = "per_feed"
+
+[[deliveries]]
+type = "slack_webhook"
+webhook_url = "https://hooks.slack.com/services/T000/B000/your-secret"
+title_prefix = "[Paper Digest]"
+skip_if_empty = true
+target = "per_feed"
 ```
 
 Notes:
@@ -205,6 +212,8 @@ Notes:
 - Feishu delivery uses the incoming webhook URL directly; keep it in your
   untracked `config.toml` or a GitHub secret-backed config.
 - WeCom delivery uses the group robot webhook URL directly; keep it in your
+  untracked `config.toml` or a GitHub secret-backed config.
+- Slack delivery uses an incoming webhook URL directly; keep it in your
   untracked `config.toml` or a GitHub secret-backed config.
 - Use either `use_tls = true` for implicit TLS, usually port `465`, or
   `use_starttls = true` for STARTTLS, usually port `587`.
@@ -338,6 +347,7 @@ On macOS or Linux you can run the digest every morning with `cron`:
 
 - Add more literature sources such as Semantic Scholar.
 - Support more output adapters such as Slack.
+- Support more output adapters such as Discord.
 - Support additional LLM providers and richer feed-level briefings.
 
 ## Status

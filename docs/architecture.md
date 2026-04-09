@@ -102,6 +102,12 @@ scale as new paper sources and output channels are added.
 - Sends markdown notifications to WeCom incoming webhooks.
 - Normalizes rendered digest markdown into a WeCom-friendly webhook payload.
 
+### `paper_digest.slack_delivery`
+
+- Sends digest notifications to Slack incoming webhooks.
+- Normalizes rendered digest markdown into Slack mrkdwn blocks while keeping
+  links and feed-level fan-out compatible with the existing delivery layer.
+
 ### `paper_digest.state`
 
 - Persists the set of already-seen papers.
@@ -126,7 +132,7 @@ The next clean extension points are:
 1. Add a new source client module such as `semantic_scholar_client.py`.
 2. Normalize foreign payloads into the existing `Paper` model, or extract a
    source-agnostic protocol if the model starts diverging.
-3. Add output adapters for Slack or other destinations without putting
+3. Add output adapters for Discord or other destinations without putting
    transport code into the CLI.
 4. Add more analysis providers behind the existing analysis interface rather
    than coupling the service layer to a single LLM vendor.

@@ -8,6 +8,8 @@ Versioning.
 ## [Unreleased]
 
 - PubMed joins arXiv and Crossref as a third supported literature source.
+- Slack incoming webhook delivery joins email, Feishu, and WeCom as a
+  first-class notification channel.
 - Static archive site now includes fixed feed subscription pages, keyword
   tracking pages, and a trends overview alongside the daily archive index.
 - Archive subscription pages now publish RSS feeds for both fixed feed views

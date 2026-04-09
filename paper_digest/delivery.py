@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .config import AppConfig, EmailConfig, FeishuWebhookConfig, WeComWebhookConfig
+from .config import (
+    AppConfig,
+    DeliveryConfig,
+    EmailConfig,
+    FeishuWebhookConfig,
+    WeComWebhookConfig,
+)
 from .digest import (
     DigestRun,
     FeedDigest,
@@ -15,6 +21,7 @@ from .digest import (
 )
 from .email_delivery import EmailDeliveryError, send_email_message
 from .feishu_delivery import FeishuDeliveryError, send_feishu_message
+from .slack_delivery import SlackDeliveryError, send_slack_message
 from .wecom_delivery import WeComDeliveryError, send_wecom_message
 
 
@@ -32,7 +39,7 @@ class NotificationMessage:
 
 def configured_deliveries(
     config: AppConfig,
-) -> list[EmailConfig | FeishuWebhookConfig | WeComWebhookConfig]:
+) -> list[DeliveryConfig]:
     """Return all configured deliveries, including legacy email config."""
 
     deliveries = list(config.deliveries)
@@ -42,7 +49,7 @@ def configured_deliveries(
 
 
 def build_notification_messages(
-    delivery: EmailConfig | FeishuWebhookConfig | WeComWebhookConfig,
+    delivery: DeliveryConfig,
     digest: DigestRun,
 ) -> list[NotificationMessage]:
     """Build delivery messages according to channel policy."""
@@ -76,7 +83,12 @@ def send_configured_deliveries(config: AppConfig, digest: DigestRun) -> list[str
 
         try:
             receipts.extend(_send_messages(delivery, messages))
-        except (EmailDeliveryError, FeishuDeliveryError, WeComDeliveryError) as exc:
+        except (
+            EmailDeliveryError,
+            FeishuDeliveryError,
+            WeComDeliveryError,
+            SlackDeliveryError,
+        ) as exc:
             errors.append(str(exc))
 
     if errors:
@@ -85,7 +97,7 @@ def send_configured_deliveries(config: AppConfig, digest: DigestRun) -> list[str
 
 
 def _build_notification_message(
-    delivery: EmailConfig | FeishuWebhookConfig | WeComWebhookConfig,
+    delivery: DeliveryConfig,
     digest: DigestRun,
     feed_name: str | None = None,
 ) -> NotificationMessage:
@@ -98,7 +110,7 @@ def _build_notification_message(
 
 
 def _build_title(
-    delivery: EmailConfig | FeishuWebhookConfig | WeComWebhookConfig,
+    delivery: DeliveryConfig,
     digest: DigestRun,
 ) -> str:
     date_label = digest.generated_at.strftime("%Y-%m-%d")
@@ -181,7 +193,7 @@ def _format_topic_key_point(paper: object) -> str:
 
 
 def _send_messages(
-    delivery: EmailConfig | FeishuWebhookConfig | WeComWebhookConfig,
+    delivery: DeliveryConfig,
     messages: list[NotificationMessage],
 ) -> list[str]:
     receipts: list[str] = []
@@ -200,9 +212,17 @@ def _send_messages(
             )
         return receipts
 
+    if isinstance(delivery, WeComWebhookConfig):
+        for message in messages:
+            send_wecom_message(delivery, title=message.title, body=message.body)
+            receipts.append(
+                _build_receipt("WeCom webhook", delivery.webhook_url, message)
+            )
+        return receipts
+
     for message in messages:
-        send_wecom_message(delivery, title=message.title, body=message.body)
-        receipts.append(_build_receipt("WeCom webhook", delivery.webhook_url, message))
+        send_slack_message(delivery, title=message.title, body=message.body)
+        receipts.append(_build_receipt("Slack webhook", delivery.webhook_url, message))
     return receipts
 
 
@@ -220,13 +240,13 @@ def _build_receipt(
 
 
 def _skip_if_empty(
-    delivery: EmailConfig | FeishuWebhookConfig | WeComWebhookConfig,
+    delivery: DeliveryConfig,
 ) -> bool:
     return delivery.skip_if_empty
 
 
 def _title_prefix(
-    delivery: EmailConfig | FeishuWebhookConfig | WeComWebhookConfig,
+    delivery: DeliveryConfig,
 ) -> str:
     if isinstance(delivery, EmailConfig):
         return delivery.subject_prefix
@@ -234,6 +254,6 @@ def _title_prefix(
 
 
 def _delivery_target(
-    delivery: EmailConfig | FeishuWebhookConfig | WeComWebhookConfig,
+    delivery: DeliveryConfig,
 ) -> str:
     return delivery.target
