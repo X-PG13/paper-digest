@@ -61,11 +61,11 @@ def backfill_archive_history(
     artifacts_dir: Path,
     *,
     window: BackfillWindow | None = None,
+    dry_run: bool = False,
 ) -> BackfillResult:
     """Merge historical digest outputs into the configured output directory."""
 
     output_dir = config.output_dir
-    output_dir.mkdir(parents=True, exist_ok=True)
     tracked_keywords = _tracked_keywords(config)
     effective_window = window or BackfillWindow()
 
@@ -93,14 +93,17 @@ def backfill_archive_history(
         current = current_by_date.get(date_str)
         if current is not None and _snapshot_rank(candidate) == _snapshot_rank(current):
             continue
-        _copy_snapshot(candidate, output_dir / date_str)
         if current is None:
             imported_dates.append(date_str)
         else:
             replaced_dates.append(date_str)
 
-    _refresh_latest_files(output_dir)
-    build_archive_site(output_dir, tracked_keywords=tracked_keywords)
+    if not dry_run:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        for date_str in imported_dates + replaced_dates:
+            _copy_snapshot(selected_by_date[date_str], output_dir / date_str)
+        _refresh_latest_files(output_dir)
+        build_archive_site(output_dir, tracked_keywords=tracked_keywords)
 
     return BackfillResult(
         imported_dates=imported_dates,
@@ -130,6 +133,14 @@ def build_parser() -> ArgumentParser:
         "--date-to",
         help="Optional latest digest date to import (YYYY-MM-DD).",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "Preview which dates would be imported or replaced without writing "
+            "output."
+        ),
+    )
     return parser
 
 
@@ -151,14 +162,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             config,
             Path(args.artifacts_dir),
             window=window,
+            dry_run=args.dry_run,
         )
     except (ArchiveBackfillError, ArchiveSiteError, ConfigError) as exc:
         print(f"Error: {exc}")
         return 1
 
     print(
-        "Backfill complete: "
-        f"imported={len(result.imported_dates)}, "
+        ("Backfill preview: " if args.dry_run else "Backfill complete: ")
+        + f"imported={len(result.imported_dates)}, "
         f"replaced={len(result.replaced_dates)}, "
         f"skipped={len(result.skipped_dates)}, "
         f"scanned={result.scanned_snapshots}"

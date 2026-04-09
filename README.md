@@ -276,10 +276,12 @@ That workflow now accepts three manual inputs:
 - `run_limit`: how many successful `Daily Digest` runs to inspect
 - `date_from`: optional inclusive earliest digest date to import
 - `date_to`: optional inclusive latest digest date to import
+- `dry_run`: preview what would change without writing `output/`, cache, or Pages
 
 That makes it practical to do a narrow backfill such as "only recover the last
 30 successful runs" or "rebuild just 2026-04-01 through 2026-04-07" without
-editing workflow code.
+editing workflow code. It also lets you preview a risky backfill first, inspect
+the run log for imported and replaced dates, and then re-run without `dry_run`.
 
 For scheduled stability, source fetches use bounded retry and backoff for
 transient `429`, `5xx`, and timeout-style failures. You can tune that behavior
