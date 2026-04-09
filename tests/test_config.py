@@ -411,3 +411,54 @@ class LoadConfigTests(unittest.TestCase):
 
             with self.assertRaises(ConfigError):
                 load_config(config_path)
+
+    def test_pubmed_feed_requires_queries(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text(
+                textwrap.dedent(
+                    """
+                    [app]
+                    timezone = "UTC"
+
+                    [[feeds]]
+                    name = "PubMed"
+                    source = "pubmed"
+                    """
+                ).strip(),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(ConfigError):
+                load_config(config_path)
+
+    def test_load_config_accepts_pubmed_feed(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text(
+                textwrap.dedent(
+                    """
+                    [app]
+                    timezone = "UTC"
+
+                    [[feeds]]
+                    name = "PubMed AI"
+                    source = "pubmed"
+                    queries = ["agent systems", "clinical benchmark"]
+                    types = ["Journal Article", "Review"]
+                    keywords = ["agent"]
+                    max_results = 40
+                    max_items = 8
+                    """
+                ).strip(),
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        self.assertEqual(config.feeds[0].source, "pubmed")
+        self.assertEqual(
+            config.feeds[0].queries,
+            ["agent systems", "clinical benchmark"],
+        )
+        self.assertEqual(config.feeds[0].types, ["Journal Article", "Review"])

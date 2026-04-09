@@ -7,6 +7,7 @@ from datetime import datetime
 from .arxiv_client import Paper, fetch_latest_papers
 from .config import FeedConfig
 from .crossref_client import fetch_latest_crossref_papers
+from .pubmed_client import fetch_latest_pubmed_papers
 
 
 def fetch_feed_papers(
@@ -32,6 +33,17 @@ def fetch_feed_papers(
         )
     if feed.source == "crossref":
         return fetch_latest_crossref_papers(
+            feed,
+            now=now,
+            lookback_hours=lookback_hours,
+            request_delay_seconds=request_delay_seconds,
+            request_timeout_seconds=request_timeout_seconds,
+            retry_attempts=retry_attempts,
+            retry_backoff_seconds=retry_backoff_seconds,
+            contact_email=contact_email,
+        )
+    if feed.source == "pubmed":
+        return fetch_latest_pubmed_papers(
             feed,
             now=now,
             lookback_hours=lookback_hours,

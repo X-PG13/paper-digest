@@ -22,6 +22,14 @@ scale as new paper sources and output channels are added.
 - Fetches newly indexed works from Crossref.
 - Normalizes Crossref JSON into the shared `Paper` model.
 
+### `paper_digest.pubmed_client`
+
+- Searches PubMed for recently entered records with configured free-text
+  queries.
+- Fetches PubMed XML for matching PMID batches.
+- Normalizes PubMed metadata, abstracts, authors, and publication types into
+  the shared `Paper` model.
+
 ### `paper_digest.analysis`
 
 - Selects which papers should be enriched in a given run.
@@ -115,7 +123,7 @@ scale as new paper sources and output channels are added.
 
 The next clean extension points are:
 
-1. Add a new source client module such as `pubmed_client.py`.
+1. Add a new source client module such as `semantic_scholar_client.py`.
 2. Normalize foreign payloads into the existing `Paper` model, or extract a
    source-agnostic protocol if the model starts diverging.
 3. Add output adapters for Slack or other destinations without putting

@@ -13,7 +13,7 @@ class ConfigError(ValueError):
     """Raised when the project configuration is invalid."""
 
 
-FeedSource = Literal["arxiv", "crossref"]
+FeedSource = Literal["arxiv", "crossref", "pubmed"]
 DeliveryTarget = Literal["digest", "per_feed"]
 DeliveryType = Literal["email", "feishu_webhook", "wecom_webhook"]
 AnalysisProvider = Literal["openai"]
@@ -197,8 +197,10 @@ def _load_feed(raw_feed: Any, index: int) -> FeedConfig:
 
     if source == "arxiv" and not categories:
         raise ConfigError(f"feeds[{index}].categories must not be empty for arxiv")
-    if source == "crossref" and not queries:
-        raise ConfigError(f"feeds[{index}].queries must not be empty for crossref")
+    if source in {"crossref", "pubmed"} and not queries:
+        raise ConfigError(
+            f"feeds[{index}].queries must not be empty for {source}"
+        )
 
     return FeedConfig(
         name=name,
@@ -502,14 +504,16 @@ def _bool(value: Any, field_name: str) -> bool:
 
 def _feed_source(value: Any, field_name: str) -> FeedSource:
     if not isinstance(value, str):
-        raise ConfigError(f"{field_name} must be 'arxiv' or 'crossref'")
+        raise ConfigError(f"{field_name} must be 'arxiv', 'crossref', or 'pubmed'")
 
     normalized = value.strip().lower()
-    if normalized not in {"arxiv", "crossref"}:
-        raise ConfigError(f"{field_name} must be 'arxiv' or 'crossref'")
+    if normalized not in {"arxiv", "crossref", "pubmed"}:
+        raise ConfigError(f"{field_name} must be 'arxiv', 'crossref', or 'pubmed'")
     if normalized == "arxiv":
         return "arxiv"
-    return "crossref"
+    if normalized == "crossref":
+        return "crossref"
+    return "pubmed"
 
 
 def _delivery_type(value: Any, field_name: str) -> DeliveryType:
