@@ -60,7 +60,7 @@ jobs:
 
       - name: Upload digest artifacts
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: digest-output
           path: output/
@@ -68,13 +68,28 @@ jobs:
 
       - name: Configure Pages
         if: success()
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
+
+      - name: Archive Pages artifact
+        if: success() && hashFiles('output/site/**') != ''
+        run: |
+          tar \
+            --dereference --hard-dereference \
+            --directory output/site \
+            -cvf "$RUNNER_TEMP/artifact.tar" \
+            --exclude=.git \
+            --exclude=.github \
+            --exclude=".[^/]*" \
+            .
 
       - name: Upload Pages artifact
         if: success() && hashFiles('output/site/**') != ''
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          path: output/site
+          name: github-pages
+          path: ${{ runner.temp }}/artifact.tar
+          retention-days: 1
+          if-no-files-found: error
 
       - name: Save digest state cache
         if: always() && hashFiles('.paper-digest-state/**') != ''
@@ -97,4 +112,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
