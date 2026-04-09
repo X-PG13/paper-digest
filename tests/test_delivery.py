@@ -13,6 +13,7 @@ from paper_digest.config import (
     FeishuWebhookConfig,
     SlackWebhookConfig,
     StateConfig,
+    TelegramBotConfig,
     WeComWebhookConfig,
 )
 from paper_digest.delivery import (
@@ -129,12 +130,14 @@ class DeliveryTests(unittest.TestCase):
     @patch("paper_digest.delivery.send_wecom_message")
     @patch("paper_digest.delivery.send_slack_message")
     @patch("paper_digest.delivery.send_discord_message")
+    @patch("paper_digest.delivery.send_telegram_message")
     @patch("paper_digest.delivery.send_feishu_message")
     @patch("paper_digest.delivery.send_email_message")
     def test_send_configured_deliveries_uses_legacy_email_and_webhooks(
         self,
         mock_send_email_message,
         mock_send_feishu_message,
+        mock_send_telegram_message,
         mock_send_discord_message,
         mock_send_slack_message,
         mock_send_wecom_message,
@@ -179,6 +182,13 @@ class DeliveryTests(unittest.TestCase):
                     skip_if_empty=True,
                     target="digest",
                 ),
+                TelegramBotConfig(
+                    bot_token="123456:telegram-token",
+                    chat_id="-1001234567890",
+                    title_prefix="[Telegram]",
+                    skip_if_empty=True,
+                    target="digest",
+                ),
             ],
             email=EmailConfig(
                 smtp_host="smtp.example.com",
@@ -201,4 +211,5 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(mock_send_wecom_message.call_count, 1)
         self.assertEqual(mock_send_slack_message.call_count, 1)
         self.assertEqual(mock_send_discord_message.call_count, 1)
-        self.assertEqual(len(receipts), 5)
+        self.assertEqual(mock_send_telegram_message.call_count, 1)
+        self.assertEqual(len(receipts), 6)
