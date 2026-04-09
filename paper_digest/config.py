@@ -15,7 +15,13 @@ class ConfigError(ValueError):
 
 FeedSource = Literal["arxiv", "crossref", "pubmed"]
 DeliveryTarget = Literal["digest", "per_feed"]
-DeliveryType = Literal["email", "feishu_webhook", "wecom_webhook", "slack_webhook"]
+DeliveryType = Literal[
+    "email",
+    "feishu_webhook",
+    "wecom_webhook",
+    "slack_webhook",
+    "discord_webhook",
+]
 AnalysisProvider = Literal["openai"]
 AnalysisReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
 DigestTemplate = Literal["default", "zh_daily_brief"]
@@ -73,8 +79,20 @@ class SlackWebhookConfig:
     target: DeliveryTarget = "digest"
 
 
+@dataclass(slots=True, frozen=True)
+class DiscordWebhookConfig:
+    webhook_url: str
+    title_prefix: str
+    skip_if_empty: bool
+    target: DeliveryTarget = "digest"
+
+
 DeliveryConfig = (
-    EmailConfig | FeishuWebhookConfig | WeComWebhookConfig | SlackWebhookConfig
+    EmailConfig
+    | FeishuWebhookConfig
+    | WeComWebhookConfig
+    | SlackWebhookConfig
+    | DiscordWebhookConfig
 )
 
 
@@ -363,7 +381,10 @@ def _load_deliveries(
         if delivery_type == "wecom_webhook":
             deliveries.append(_build_wecom_webhook_config(delivery, field_name))
             continue
-        deliveries.append(_build_slack_webhook_config(delivery, field_name))
+        if delivery_type == "slack_webhook":
+            deliveries.append(_build_slack_webhook_config(delivery, field_name))
+            continue
+        deliveries.append(_build_discord_webhook_config(delivery, field_name))
     return deliveries
 
 
@@ -498,6 +519,30 @@ def _build_slack_webhook_config(
     )
 
 
+def _build_discord_webhook_config(
+    value: dict[str, Any],
+    field_name: str,
+) -> DiscordWebhookConfig:
+    return DiscordWebhookConfig(
+        webhook_url=_required_string(
+            value.get("webhook_url"), f"{field_name}.webhook_url"
+        ),
+        title_prefix=_default_prefixed_string(
+            value.get("title_prefix", "[Paper Digest]"),
+            f"{field_name}.title_prefix",
+            "[Paper Digest]",
+        ),
+        skip_if_empty=_bool(
+            value.get("skip_if_empty", True),
+            f"{field_name}.skip_if_empty",
+        ),
+        target=_delivery_target(
+            value.get("target", "digest"),
+            f"{field_name}.target",
+        ),
+    )
+
+
 def _string_list(value: Any, field_name: str) -> list[str]:
     if not isinstance(value, list):
         raise ConfigError(f"{field_name} must be an array of strings")
@@ -558,7 +603,7 @@ def _delivery_type(value: Any, field_name: str) -> DeliveryType:
     if not isinstance(value, str):
         raise ConfigError(
             f"{field_name} must be 'email', 'feishu_webhook', "
-            "'wecom_webhook', or 'slack_webhook'"
+            "'wecom_webhook', 'slack_webhook', or 'discord_webhook'"
         )
 
     normalized = value.strip().lower()
@@ -567,10 +612,11 @@ def _delivery_type(value: Any, field_name: str) -> DeliveryType:
         "feishu_webhook",
         "wecom_webhook",
         "slack_webhook",
+        "discord_webhook",
     }:
         raise ConfigError(
             f"{field_name} must be 'email', 'feishu_webhook', "
-            "'wecom_webhook', or 'slack_webhook'"
+            "'wecom_webhook', 'slack_webhook', or 'discord_webhook'"
         )
     if normalized == "email":
         return "email"
@@ -578,7 +624,9 @@ def _delivery_type(value: Any, field_name: str) -> DeliveryType:
         return "feishu_webhook"
     if normalized == "wecom_webhook":
         return "wecom_webhook"
-    return "slack_webhook"
+    if normalized == "slack_webhook":
+        return "slack_webhook"
+    return "discord_webhook"
 
 
 def _delivery_target(value: Any, field_name: str) -> DeliveryTarget:

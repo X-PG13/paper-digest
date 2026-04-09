@@ -8,6 +8,7 @@ from unittest.mock import patch
 from paper_digest.arxiv_client import Paper
 from paper_digest.config import (
     AppConfig,
+    DiscordWebhookConfig,
     EmailConfig,
     FeishuWebhookConfig,
     SlackWebhookConfig,
@@ -127,12 +128,14 @@ class DeliveryTests(unittest.TestCase):
 
     @patch("paper_digest.delivery.send_wecom_message")
     @patch("paper_digest.delivery.send_slack_message")
+    @patch("paper_digest.delivery.send_discord_message")
     @patch("paper_digest.delivery.send_feishu_message")
     @patch("paper_digest.delivery.send_email_message")
     def test_send_configured_deliveries_uses_legacy_email_and_webhooks(
         self,
         mock_send_email_message,
         mock_send_feishu_message,
+        mock_send_discord_message,
         mock_send_slack_message,
         mock_send_wecom_message,
     ) -> None:
@@ -167,6 +170,15 @@ class DeliveryTests(unittest.TestCase):
                     skip_if_empty=True,
                     target="digest",
                 ),
+                DiscordWebhookConfig(
+                    webhook_url=(
+                        "https://discord.com/api/webhooks/123456789012345678/"
+                        "secret"
+                    ),
+                    title_prefix="[Discord]",
+                    skip_if_empty=True,
+                    target="digest",
+                ),
             ],
             email=EmailConfig(
                 smtp_host="smtp.example.com",
@@ -188,4 +200,5 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(mock_send_feishu_message.call_count, 1)
         self.assertEqual(mock_send_wecom_message.call_count, 1)
         self.assertEqual(mock_send_slack_message.call_count, 1)
-        self.assertEqual(len(receipts), 4)
+        self.assertEqual(mock_send_discord_message.call_count, 1)
+        self.assertEqual(len(receipts), 5)
