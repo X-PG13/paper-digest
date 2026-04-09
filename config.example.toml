@@ -57,7 +57,7 @@ reasoning_effort = "minimal"
 [[feeds]]
 # Free-form label used in the generated digest.
 name = "LLM"
-# Supported sources: arxiv, crossref
+# Supported sources: arxiv, crossref, pubmed
 source = "arxiv"
 # arXiv categories: https://arxiv.org/category_taxonomy
 categories = ["cs.AI", "cs.CL", "cs.LG"]
@@ -87,6 +87,17 @@ max_items = 10
 # types = ["journal-article", "proceedings-article"]
 # keywords = ["agent", "reasoning"]
 # exclude_keywords = []
+# max_results = 50
+# max_items = 10
+
+# Example PubMed feed:
+# [[feeds]]
+# name = "PubMed AI"
+# source = "pubmed"
+# queries = ["agent systems", "clinical benchmark"]
+# types = ["Journal Article", "Review"]
+# keywords = ["agent", "benchmark"]
+# exclude_keywords = ["protocol"]
 # max_results = 50
 # max_items = 10
 

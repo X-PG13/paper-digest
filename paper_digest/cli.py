@@ -15,12 +15,15 @@ from .config import ConfigError, load_config
 from .crossref_client import CrossrefClientError
 from .delivery import DeliveryError, send_configured_deliveries
 from .digest import summarize_digest, write_outputs
+from .pubmed_client import PubMedClientError
 from .service import generate_digest
 from .state import load_state, save_state
 
 
 def build_parser() -> ArgumentParser:
-    parser = ArgumentParser(description="Generate a daily paper digest from arXiv.")
+    parser = ArgumentParser(
+        description="Generate a daily paper digest from supported literature sources."
+    )
     parser.add_argument(
         "--config",
         default="config.toml",
@@ -71,6 +74,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ConfigError,
         ArxivClientError,
         CrossrefClientError,
+        PubMedClientError,
     ) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

@@ -103,3 +103,53 @@ class SourceDispatchTests(unittest.TestCase):
             retry_backoff_seconds=6.0,
             contact_email="bot@example.com",
         )
+
+    @patch("paper_digest.sources.fetch_latest_pubmed_papers")
+    def test_fetch_feed_papers_dispatches_to_pubmed(
+        self,
+        mock_fetch_latest_pubmed_papers,
+    ) -> None:
+        paper = Paper(
+            title="PubMed agents",
+            summary="PubMed summary",
+            authors=["Alice"],
+            categories=["Journal Article"],
+            paper_id="pubmed:12345",
+            abstract_url="https://pubmed.ncbi.nlm.nih.gov/12345/",
+            pdf_url=None,
+            published_at=datetime(2026, 4, 8, 0, 30, tzinfo=ZoneInfo("UTC")),
+            updated_at=datetime(2026, 4, 8, 0, 30, tzinfo=ZoneInfo("UTC")),
+            source="pubmed",
+            date_label="Entered",
+        )
+        mock_fetch_latest_pubmed_papers.return_value = [paper]
+        feed = FeedConfig(
+            name="PubMed AI",
+            source="pubmed",
+            queries=["agent systems"],
+            types=["Journal Article"],
+        )
+        now = datetime(2026, 4, 8, 0, 30, tzinfo=ZoneInfo("UTC"))
+
+        papers = fetch_feed_papers(
+            feed,
+            now=now,
+            lookback_hours=24,
+            request_delay_seconds=0.25,
+            request_timeout_seconds=30,
+            retry_attempts=2,
+            retry_backoff_seconds=3.0,
+            contact_email="bot@example.com",
+        )
+
+        self.assertEqual(papers, [paper])
+        mock_fetch_latest_pubmed_papers.assert_called_once_with(
+            feed,
+            now=now,
+            lookback_hours=24,
+            request_delay_seconds=0.25,
+            request_timeout_seconds=30,
+            retry_attempts=2,
+            retry_backoff_seconds=3.0,
+            contact_email="bot@example.com",
+        )
