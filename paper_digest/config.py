@@ -13,7 +13,7 @@ class ConfigError(ValueError):
     """Raised when the project configuration is invalid."""
 
 
-FeedSource = Literal["arxiv", "crossref", "pubmed", "semantic_scholar"]
+FeedSource = Literal["arxiv", "crossref", "pubmed", "semantic_scholar", "openalex"]
 DeliveryTarget = Literal["digest", "per_feed"]
 DeliveryType = Literal[
     "email",
@@ -145,6 +145,7 @@ class AppConfig:
     request_timeout_seconds: int = 60
     fetch_retry_attempts: int = 4
     fetch_retry_backoff_seconds: float = 10.0
+    openalex_api_key_env: str | None = None
     digest: DigestConfig = field(default_factory=DigestConfig)
     analysis: AnalysisConfig | None = None
     deliveries: list[DeliveryConfig] = field(default_factory=list)
@@ -217,6 +218,10 @@ def load_config(path: str | Path) -> AppConfig:
         request_timeout_seconds=request_timeout_seconds,
         fetch_retry_attempts=fetch_retry_attempts,
         fetch_retry_backoff_seconds=fetch_retry_backoff_seconds,
+        openalex_api_key_env=_optional_string(
+            app_section.get("openalex_api_key_env"),
+            "app.openalex_api_key_env",
+        ),
         digest=digest,
         analysis=analysis,
         deliveries=deliveries,
@@ -237,7 +242,7 @@ def _load_feed(raw_feed: Any, index: int) -> FeedConfig:
 
     if source == "arxiv" and not categories:
         raise ConfigError(f"feeds[{index}].categories must not be empty for arxiv")
-    if source in {"crossref", "pubmed", "semantic_scholar"} and not queries:
+    if source in {"crossref", "pubmed", "semantic_scholar", "openalex"} and not queries:
         raise ConfigError(
             f"feeds[{index}].queries must not be empty for {source}"
         )
@@ -626,14 +631,20 @@ def _feed_source(value: Any, field_name: str) -> FeedSource:
     if not isinstance(value, str):
         raise ConfigError(
             f"{field_name} must be 'arxiv', 'crossref', 'pubmed', "
-            "or 'semantic_scholar'"
+            "'semantic_scholar', or 'openalex'"
         )
 
     normalized = value.strip().lower()
-    if normalized not in {"arxiv", "crossref", "pubmed", "semantic_scholar"}:
+    if normalized not in {
+        "arxiv",
+        "crossref",
+        "pubmed",
+        "semantic_scholar",
+        "openalex",
+    }:
         raise ConfigError(
             f"{field_name} must be 'arxiv', 'crossref', 'pubmed', "
-            "or 'semantic_scholar'"
+            "'semantic_scholar', or 'openalex'"
         )
     if normalized == "arxiv":
         return "arxiv"
@@ -641,7 +652,9 @@ def _feed_source(value: Any, field_name: str) -> FeedSource:
         return "crossref"
     if normalized == "pubmed":
         return "pubmed"
-    return "semantic_scholar"
+    if normalized == "semantic_scholar":
+        return "semantic_scholar"
+    return "openalex"
 
 
 def _delivery_type(value: Any, field_name: str) -> DeliveryType:

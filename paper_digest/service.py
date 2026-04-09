@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
@@ -36,6 +37,9 @@ def generate_digest(
     if managed_state is None:
         managed_state = load_state(config.state)
     contact_email = config.email.from_address if config.email is not None else None
+    openalex_api_key = None
+    if config.openalex_api_key_env is not None:
+        openalex_api_key = os.getenv(config.openalex_api_key_env)
 
     for feed in config.feeds:
         papers = fetch_feed_papers(
@@ -47,6 +51,7 @@ def generate_digest(
             retry_attempts=config.fetch_retry_attempts,
             retry_backoff_seconds=config.fetch_retry_backoff_seconds,
             contact_email=contact_email,
+            openalex_api_key=openalex_api_key,
         )
         filtered = filter_papers(
             papers,

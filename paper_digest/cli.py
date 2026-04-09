@@ -15,7 +15,9 @@ from .config import ConfigError, load_config
 from .crossref_client import CrossrefClientError
 from .delivery import DeliveryError, send_configured_deliveries
 from .digest import summarize_digest, write_outputs
+from .openalex_client import OpenAlexClientError
 from .pubmed_client import PubMedClientError
+from .semantic_scholar_client import SemanticScholarClientError
 from .service import generate_digest
 from .state import load_state, save_state
 
@@ -74,7 +76,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         ConfigError,
         ArxivClientError,
         CrossrefClientError,
+        OpenAlexClientError,
         PubMedClientError,
+        SemanticScholarClientError,
     ) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

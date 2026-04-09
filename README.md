@@ -10,7 +10,7 @@ latest research papers every day and turning them into a readable digest.
 
 The current scope is intentionally narrow:
 
-- Fetch the newest papers from arXiv, Crossref, PubMed, and Semantic Scholar.
+- Fetch the newest papers from arXiv, Crossref, PubMed, Semantic Scholar, and OpenAlex.
 - Apply include and exclude keyword filters on title and abstract.
 - Optionally enrich selected papers with structured LLM analysis.
 - Generate machine-readable `JSON` and human-readable `Markdown`.
@@ -95,16 +95,20 @@ Field reference:
 - `output_dir`: Directory where dated and latest digests are written.
 - `request_delay_seconds`: Delay between arXiv API requests.
 - `request_timeout_seconds`: Per-request timeout for arXiv, Crossref, PubMed,
-  and Semantic Scholar fetches.
+  Semantic Scholar, and OpenAlex fetches.
 - `fetch_retry_attempts`: Maximum number of fetch attempts for transient failures.
 - `fetch_retry_backoff_seconds`: Base backoff used between retry attempts.
+- `openalex_api_key_env`: Optional environment variable name for an OpenAlex API
+  key on manual or scheduled runs.
 - `state`: Persistent history used for deduplication across runs.
-- `source`: `arxiv`, `crossref`, `pubmed`, or `semantic_scholar`.
+- `source`: `arxiv`, `crossref`, `pubmed`, `semantic_scholar`, or `openalex`.
 - `categories`: arXiv categories such as `cs.AI`, `cs.CL`, or `cs.CV`.
-- `queries`: Required for `crossref`, `pubmed`, and `semantic_scholar` feeds.
+- `queries`: Required for `crossref`, `pubmed`, `semantic_scholar`, and
+  `openalex` feeds.
 - `types`: Optional Crossref work types such as `journal-article`, PubMed
   publication types such as `Journal Article` or `Review`, or Semantic Scholar
-  publication types such as `Review` or `JournalArticle`.
+  publication types such as `Review` or `JournalArticle`, or OpenAlex work
+  types such as `article` or `preprint`.
 - `keywords`: Keep a paper when any keyword matches title or abstract.
 - `exclude_keywords`: Drop a paper when any excluded keyword matches.
 - `max_results`: Number of newest candidates fetched before local filtering.
@@ -235,6 +239,9 @@ Notes:
   untracked `config.toml` or a GitHub secret-backed config.
 - Telegram delivery uses a bot token plus target chat ID; keep them in your
   untracked `config.toml` or a GitHub secret-backed config.
+- OpenAlex can run without an API key for lightweight usage, but an
+  `OPENALEX_API_KEY` wired through `app.openalex_api_key_env` is the safer
+  production path for newer OpenAlex rate-limit rules.
 - Use either `use_tls = true` for implicit TLS, usually port `465`, or
   `use_starttls = true` for STARTTLS, usually port `587`.
 - `skip_if_empty = true` suppresses notifications when a digest or feed has no
@@ -278,6 +285,16 @@ keywords = ["agent", "benchmark"]
 exclude_keywords = ["survey"]
 max_results = 50
 max_items = 10
+
+[[feeds]]
+name = "OpenAlex AI"
+source = "openalex"
+queries = ["large language model", "agent systems"]
+types = ["article", "preprint"]
+keywords = ["agent", "benchmark"]
+exclude_keywords = ["survey"]
+max_results = 50
+max_items = 10
 ```
 
 ## Development
@@ -317,6 +334,8 @@ To use it, create these GitHub repository secrets:
 
 - `PAPER_DIGEST_CONFIG_TOML`: your full `config.toml` content
 - `OPENAI_API_KEY`: needed when `[analysis] enabled = true`
+- `OPENALEX_API_KEY`: optional, only needed when an OpenAlex feed sets
+  `app.openalex_api_key_env = "OPENALEX_API_KEY"`
 - `PAPER_DIGEST_SMTP_PASSWORD`: only needed when email delivery is enabled
 
 For manual validation runs, `workflow_dispatch` also accepts an optional
@@ -388,7 +407,7 @@ On macOS or Linux you can run the digest every morning with `cron`:
 
 ## Roadmap
 
-- Add more literature sources such as OpenAlex.
+- Add more literature sources such as Lens or CORE.
 - Support more output adapters such as Matrix.
 - Support additional LLM providers and richer feed-level briefings.
 

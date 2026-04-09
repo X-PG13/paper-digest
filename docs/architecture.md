@@ -37,6 +37,13 @@ scale as new paper sources and output channels are added.
 - Normalizes Semantic Scholar JSON metadata, authors, publication dates, and
   open-access links into the shared `Paper` model.
 
+### `paper_digest.openalex_client`
+
+- Fetches recently published works from the OpenAlex Works API with free-text
+  search, date-window filters, and optional type filtering.
+- Normalizes OpenAlex JSON metadata, reconstructed abstracts, authors, and
+  topic/type metadata into the shared `Paper` model.
+
 ### `paper_digest.analysis`
 
 - Selects which papers should be enriched in a given run.
@@ -87,7 +94,7 @@ scale as new paper sources and output channels are added.
 - Centralizes bounded retry, timeout, and backoff behavior for upstream source
   fetches.
 - Keeps transient network handling consistent across arXiv, Crossref, PubMed,
-  and Semantic Scholar.
+  Semantic Scholar, and OpenAlex.
 
 ### `paper_digest.delivery`
 

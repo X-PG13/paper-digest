@@ -89,6 +89,7 @@ class GenerateDigestTests(unittest.TestCase):
             retry_attempts=4,
             retry_backoff_seconds=10.0,
             contact_email=None,
+            openalex_api_key=None,
         )
 
     @patch("paper_digest.service.fetch_feed_papers")
@@ -137,6 +138,53 @@ class GenerateDigestTests(unittest.TestCase):
 
         self.assertEqual(len(first_digest.feeds[0].papers), 1)
         self.assertEqual(len(second_digest.feeds[0].papers), 0)
+
+    @patch("paper_digest.service.fetch_feed_papers")
+    def test_generate_digest_passes_openalex_api_key_from_env(
+        self,
+        mock_fetch_feed_papers,
+    ) -> None:
+        now = datetime(2026, 4, 8, 9, 30, tzinfo=ZoneInfo("UTC"))
+        feed = FeedConfig(
+            name="OpenAlex AI",
+            source="openalex",
+            queries=["agent systems"],
+            keywords=["agent"],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+        )
+        mock_fetch_feed_papers.return_value = []
+
+        with TemporaryDirectory() as temp_dir:
+            config = AppConfig(
+                timezone="UTC",
+                lookback_hours=24,
+                output_dir=Path(temp_dir) / "output",
+                request_delay_seconds=0.0,
+                feeds=[feed],
+                state=StateConfig(
+                    enabled=True,
+                    path=Path(temp_dir) / "state.json",
+                    retention_days=90,
+                ),
+                openalex_api_key_env="OPENALEX_API_KEY",
+            )
+
+            with patch.dict("os.environ", {"OPENALEX_API_KEY": "openalex-secret"}):
+                generate_digest(config, now=now)
+
+        mock_fetch_feed_papers.assert_called_once_with(
+            feed,
+            now=now,
+            lookback_hours=24,
+            request_delay_seconds=0.0,
+            request_timeout_seconds=60,
+            retry_attempts=4,
+            retry_backoff_seconds=10.0,
+            contact_email=None,
+            openalex_api_key="openalex-secret",
+        )
 
     @patch("paper_digest.service.save_state")
     @patch("paper_digest.service.fetch_feed_papers")
