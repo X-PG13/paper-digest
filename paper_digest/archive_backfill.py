@@ -7,6 +7,7 @@ import re
 import shutil
 from argparse import ArgumentParser
 from dataclasses import dataclass
+from datetime import date as Date
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -27,10 +28,24 @@ class ArchiveBackfillError(RuntimeError):
 @dataclass(slots=True, frozen=True)
 class DigestSnapshot:
     date: str
+    day: Date
     generated_at: datetime
     total_papers: int
     feed_names: tuple[str, ...]
     source_dir: Path
+
+
+@dataclass(slots=True, frozen=True)
+class BackfillWindow:
+    date_from: Date | None = None
+    date_to: Date | None = None
+
+    def includes(self, day: Date) -> bool:
+        if self.date_from is not None and day < self.date_from:
+            return False
+        if self.date_to is not None and day > self.date_to:
+            return False
+        return True
 
 
 @dataclass(slots=True, frozen=True)
@@ -41,12 +56,18 @@ class BackfillResult:
     scanned_snapshots: int
 
 
-def backfill_archive_history(config: AppConfig, artifacts_dir: Path) -> BackfillResult:
+def backfill_archive_history(
+    config: AppConfig,
+    artifacts_dir: Path,
+    *,
+    window: BackfillWindow | None = None,
+) -> BackfillResult:
     """Merge historical digest outputs into the configured output directory."""
 
     output_dir = config.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     tracked_keywords = _tracked_keywords(config)
+    effective_window = window or BackfillWindow()
 
     current_by_date = _collect_snapshots(output_dir)
     selected_by_date = dict(current_by_date)
@@ -59,6 +80,8 @@ def backfill_archive_history(config: AppConfig, artifacts_dir: Path) -> Backfill
         if _is_synthetic_snapshot(candidate):
             skipped_dates.add(candidate.date)
             continue
+        if not effective_window.includes(candidate.day):
+            continue
 
         current = selected_by_date.get(candidate.date)
         if current is None or _snapshot_rank(candidate) > _snapshot_rank(current):
@@ -66,15 +89,15 @@ def backfill_archive_history(config: AppConfig, artifacts_dir: Path) -> Backfill
 
     imported_dates: list[str] = []
     replaced_dates: list[str] = []
-    for date, candidate in sorted(selected_by_date.items()):
-        current = current_by_date.get(date)
+    for date_str, candidate in sorted(selected_by_date.items()):
+        current = current_by_date.get(date_str)
         if current is not None and _snapshot_rank(candidate) == _snapshot_rank(current):
             continue
-        _copy_snapshot(candidate, output_dir / date)
+        _copy_snapshot(candidate, output_dir / date_str)
         if current is None:
-            imported_dates.append(date)
+            imported_dates.append(date_str)
         else:
-            replaced_dates.append(date)
+            replaced_dates.append(date_str)
 
     _refresh_latest_files(output_dir)
     build_archive_site(output_dir, tracked_keywords=tracked_keywords)
@@ -99,6 +122,14 @@ def build_parser() -> ArgumentParser:
         required=True,
         help="Directory containing downloaded workflow artifacts.",
     )
+    parser.add_argument(
+        "--date-from",
+        help="Optional earliest digest date to import (YYYY-MM-DD).",
+    )
+    parser.add_argument(
+        "--date-to",
+        help="Optional latest digest date to import (YYYY-MM-DD).",
+    )
     return parser
 
 
@@ -106,7 +137,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         config = load_config(args.config)
-        result = backfill_archive_history(config, Path(args.artifacts_dir))
+        window = BackfillWindow(
+            date_from=_parse_filter_date(args.date_from, "--date-from"),
+            date_to=_parse_filter_date(args.date_to, "--date-to"),
+        )
+        if (
+            window.date_from is not None
+            and window.date_to is not None
+            and window.date_from > window.date_to
+        ):
+            raise ArchiveBackfillError("--date-from cannot be after --date-to")
+        result = backfill_archive_history(
+            config,
+            Path(args.artifacts_dir),
+            window=window,
+        )
     except (ArchiveBackfillError, ArchiveSiteError, ConfigError) as exc:
         print(f"Error: {exc}")
         return 1
@@ -191,6 +236,7 @@ def _load_snapshot(digest_json_path: Path) -> DigestSnapshot:
 
     return DigestSnapshot(
         date=digest_json_path.parent.name,
+        day=Date.fromisoformat(digest_json_path.parent.name),
         generated_at=generated_at,
         total_papers=total_papers,
         feed_names=tuple(feed_names),
@@ -235,6 +281,15 @@ def _tracked_keywords(config: AppConfig) -> list[str]:
             seen.add(normalized)
             keywords.append(stripped)
     return keywords
+
+
+def _parse_filter_date(value: str | None, flag: str) -> Date | None:
+    if value is None or not value.strip():
+        return None
+    try:
+        return Date.fromisoformat(value)
+    except ValueError as exc:
+        raise ArchiveBackfillError(f"invalid {flag} value: {value}") from exc
 
 
 if __name__ == "__main__":
