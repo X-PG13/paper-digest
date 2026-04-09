@@ -448,6 +448,27 @@ class LoadConfigTests(unittest.TestCase):
             with self.assertRaises(ConfigError):
                 load_config(config_path)
 
+    def test_semantic_scholar_feed_requires_queries(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text(
+                textwrap.dedent(
+                    """
+                    [app]
+                    timezone = "UTC"
+
+                    [[feeds]]
+                    name = "Semantic Scholar AI"
+                    source = "semantic_scholar"
+                    keywords = ["agent"]
+                    """
+                ).strip(),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(ConfigError):
+                load_config(config_path)
+
     def test_load_config_accepts_pubmed_feed(self) -> None:
         with TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "config.toml"
@@ -478,3 +499,35 @@ class LoadConfigTests(unittest.TestCase):
             ["agent systems", "clinical benchmark"],
         )
         self.assertEqual(config.feeds[0].types, ["Journal Article", "Review"])
+
+    def test_load_config_accepts_semantic_scholar_feed(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text(
+                textwrap.dedent(
+                    """
+                    [app]
+                    timezone = "UTC"
+
+                    [[feeds]]
+                    name = "Semantic Scholar AI"
+                    source = "semantic_scholar"
+                    queries = ["large language model", "agent systems"]
+                    types = ["Review"]
+                    keywords = ["agent"]
+                    exclude_keywords = ["survey"]
+                    max_results = 25
+                    max_items = 5
+                    """
+                ).strip(),
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        self.assertEqual(config.feeds[0].source, "semantic_scholar")
+        self.assertEqual(
+            config.feeds[0].queries,
+            ["large language model", "agent systems"],
+        )
+        self.assertEqual(config.feeds[0].types, ["Review"])

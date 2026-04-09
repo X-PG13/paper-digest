@@ -13,7 +13,7 @@ class ConfigError(ValueError):
     """Raised when the project configuration is invalid."""
 
 
-FeedSource = Literal["arxiv", "crossref", "pubmed"]
+FeedSource = Literal["arxiv", "crossref", "pubmed", "semantic_scholar"]
 DeliveryTarget = Literal["digest", "per_feed"]
 DeliveryType = Literal[
     "email",
@@ -226,7 +226,7 @@ def _load_feed(raw_feed: Any, index: int) -> FeedConfig:
 
     if source == "arxiv" and not categories:
         raise ConfigError(f"feeds[{index}].categories must not be empty for arxiv")
-    if source in {"crossref", "pubmed"} and not queries:
+    if source in {"crossref", "pubmed", "semantic_scholar"} and not queries:
         raise ConfigError(
             f"feeds[{index}].queries must not be empty for {source}"
         )
@@ -587,16 +587,24 @@ def _bool(value: Any, field_name: str) -> bool:
 
 def _feed_source(value: Any, field_name: str) -> FeedSource:
     if not isinstance(value, str):
-        raise ConfigError(f"{field_name} must be 'arxiv', 'crossref', or 'pubmed'")
+        raise ConfigError(
+            f"{field_name} must be 'arxiv', 'crossref', 'pubmed', "
+            "or 'semantic_scholar'"
+        )
 
     normalized = value.strip().lower()
-    if normalized not in {"arxiv", "crossref", "pubmed"}:
-        raise ConfigError(f"{field_name} must be 'arxiv', 'crossref', or 'pubmed'")
+    if normalized not in {"arxiv", "crossref", "pubmed", "semantic_scholar"}:
+        raise ConfigError(
+            f"{field_name} must be 'arxiv', 'crossref', 'pubmed', "
+            "or 'semantic_scholar'"
+        )
     if normalized == "arxiv":
         return "arxiv"
     if normalized == "crossref":
         return "crossref"
-    return "pubmed"
+    if normalized == "pubmed":
+        return "pubmed"
+    return "semantic_scholar"
 
 
 def _delivery_type(value: Any, field_name: str) -> DeliveryType:
