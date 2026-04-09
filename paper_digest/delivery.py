@@ -7,8 +7,10 @@ from dataclasses import dataclass
 from .config import (
     AppConfig,
     DeliveryConfig,
+    DiscordWebhookConfig,
     EmailConfig,
     FeishuWebhookConfig,
+    SlackWebhookConfig,
     WeComWebhookConfig,
 )
 from .digest import (
@@ -19,6 +21,7 @@ from .digest import (
     render_markdown,
     summarize_digest,
 )
+from .discord_delivery import DiscordDeliveryError, send_discord_message
 from .email_delivery import EmailDeliveryError, send_email_message
 from .feishu_delivery import FeishuDeliveryError, send_feishu_message
 from .slack_delivery import SlackDeliveryError, send_slack_message
@@ -85,6 +88,7 @@ def send_configured_deliveries(config: AppConfig, digest: DigestRun) -> list[str
             receipts.extend(_send_messages(delivery, messages))
         except (
             EmailDeliveryError,
+            DiscordDeliveryError,
             FeishuDeliveryError,
             WeComDeliveryError,
             SlackDeliveryError,
@@ -220,9 +224,20 @@ def _send_messages(
             )
         return receipts
 
+    if isinstance(delivery, SlackWebhookConfig):
+        for message in messages:
+            send_slack_message(delivery, title=message.title, body=message.body)
+            receipts.append(
+                _build_receipt("Slack webhook", delivery.webhook_url, message)
+            )
+        return receipts
+
+    assert isinstance(delivery, DiscordWebhookConfig)
     for message in messages:
-        send_slack_message(delivery, title=message.title, body=message.body)
-        receipts.append(_build_receipt("Slack webhook", delivery.webhook_url, message))
+        send_discord_message(delivery, title=message.title, body=message.body)
+        receipts.append(
+            _build_receipt("Discord webhook", delivery.webhook_url, message)
+        )
     return receipts
 
 

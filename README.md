@@ -18,7 +18,7 @@ The current scope is intentionally narrow:
   trend views, and RSS subscription feeds.
 - Persist state to avoid repeating already-sent papers.
 - Optionally deliver the digest through SMTP email, Feishu webhooks, WeCom
-  webhooks, or Slack incoming webhooks.
+  webhooks, Slack incoming webhooks, or Discord incoming webhooks.
 - Stay easy to automate from `cron`, GitHub Actions, or a notification bot.
 
 ## Project Goals
@@ -111,7 +111,7 @@ Field reference:
 - `digest`: Rendering options for template selection and feed-level briefings.
 - `analysis`: Optional structured paper analysis, currently backed by OpenAI.
 - `deliveries`: Optional notification outputs such as email, Feishu webhook,
-  WeCom webhook, or Slack webhook.
+  WeCom webhook, Slack webhook, or Discord webhook.
 - `output/site`: Generated static archive site for historical browsing.
 
 Digest rendering:
@@ -158,7 +158,7 @@ Analysis notes:
   papers that actually make it into the digest.
 - `max_papers` caps analysis cost for a single run. Papers beyond that limit
   still appear in the digest with their raw abstract summaries.
-- When analysis is enabled, the Markdown, email, and Feishu outputs add:
+- When analysis is enabled, the Markdown and notification outputs add:
   top-of-digest highlights, a one-sentence conclusion per paper, contribution
   bullets, best-fit audience, and likely limitations.
 - A practical Chinese setup is `language = "Chinese"` plus
@@ -204,6 +204,13 @@ webhook_url = "https://hooks.slack.com/services/T000/B000/your-secret"
 title_prefix = "[Paper Digest]"
 skip_if_empty = true
 target = "per_feed"
+
+[[deliveries]]
+type = "discord_webhook"
+webhook_url = "https://discord.com/api/webhooks/123456789012345678/your-secret"
+title_prefix = "[Paper Digest]"
+skip_if_empty = true
+target = "per_feed"
 ```
 
 Notes:
@@ -214,6 +221,8 @@ Notes:
 - WeCom delivery uses the group robot webhook URL directly; keep it in your
   untracked `config.toml` or a GitHub secret-backed config.
 - Slack delivery uses an incoming webhook URL directly; keep it in your
+  untracked `config.toml` or a GitHub secret-backed config.
+- Discord delivery uses an incoming webhook URL directly; keep it in your
   untracked `config.toml` or a GitHub secret-backed config.
 - Use either `use_tls = true` for implicit TLS, usually port `465`, or
   `use_starttls = true` for STARTTLS, usually port `587`.
@@ -346,8 +355,7 @@ On macOS or Linux you can run the digest every morning with `cron`:
 ## Roadmap
 
 - Add more literature sources such as Semantic Scholar.
-- Support more output adapters such as Slack.
-- Support more output adapters such as Discord.
+- Support more output adapters such as Telegram.
 - Support additional LLM providers and richer feed-level briefings.
 
 ## Status

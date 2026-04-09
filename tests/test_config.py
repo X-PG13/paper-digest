@@ -180,6 +180,13 @@ class LoadConfigTests(unittest.TestCase):
                     title_prefix = "[Slack]"
                     skip_if_empty = true
                     target = "per_feed"
+
+                    [[deliveries]]
+                    type = "discord_webhook"
+                    webhook_url = "https://discord.com/api/webhooks/123456789012345678/secret"
+                    title_prefix = "[Discord]"
+                    skip_if_empty = false
+                    target = "digest"
                     """
                 ).strip(),
                 encoding="utf-8",
@@ -187,11 +194,12 @@ class LoadConfigTests(unittest.TestCase):
 
             config = load_config(config_path)
 
-        self.assertEqual(len(config.deliveries), 4)
+        self.assertEqual(len(config.deliveries), 5)
         self.assertEqual(config.deliveries[0].target, "per_feed")
         self.assertEqual(config.deliveries[1].target, "digest")
         self.assertEqual(config.deliveries[2].target, "digest")
         self.assertEqual(config.deliveries[3].target, "per_feed")
+        self.assertEqual(config.deliveries[4].target, "digest")
 
     def test_load_config_reads_analysis_settings(self) -> None:
         with TemporaryDirectory() as temp_dir:
