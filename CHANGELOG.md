@@ -13,6 +13,9 @@ Versioning.
   and keyword tracking views.
 - The scheduled GitHub Actions workflow now restores and saves `output/`
   history, so archive pages, trends, and RSS feeds can accumulate across runs.
+- A manual archive backfill workflow can import historical successful
+  `Daily Digest` artifacts into `output/`, rebuild the site and RSS, and seed
+  the archive cache in one pass while skipping synthetic validation digests.
 - WeCom webhook delivery joins email and Feishu as a first-class notification
   channel.
 - Rule-based Chinese briefing mode now extracts recurring topic terms, assigns
