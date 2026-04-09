@@ -7,6 +7,9 @@ Versioning.
 
 ## [Unreleased]
 
+- The manual `Daily Digest` workflow now accepts a temporary `config.toml`
+  override input and isolates those validation runs from caches and Pages
+  deployment.
 - Semantic Scholar joins arXiv, Crossref, and PubMed as a supported literature
   source.
 - PubMed joins arXiv and Crossref as a third supported literature source.

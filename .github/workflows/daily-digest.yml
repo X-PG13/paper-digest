@@ -4,6 +4,13 @@ on:
   schedule:
     - cron: "5 0 * * *"
   workflow_dispatch:
+    inputs:
+      config_toml_override:
+        description: >-
+          Optional full config.toml content for this manual run only. When set,
+          the workflow skips cache restore/save and Pages deployment.
+        required: false
+        type: string
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -34,6 +41,7 @@ jobs:
         run: python -m pip install .
 
       - name: Restore digest state cache
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.config_toml_override == '' }}
         id: state-restore
         uses: actions/cache/restore@v5
         with:
@@ -43,6 +51,7 @@ jobs:
             paper-digest-state-
 
       - name: Restore archive history cache
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.config_toml_override == '' }}
         id: archive-restore
         uses: actions/cache/restore@v5
         with:
@@ -56,7 +65,12 @@ jobs:
       - name: Materialize config
         env:
           PAPER_DIGEST_CONFIG_TOML: ${{ secrets.PAPER_DIGEST_CONFIG_TOML }}
+          PAPER_DIGEST_CONFIG_TOML_OVERRIDE: ${{ github.event.inputs.config_toml_override }}
         run: |
+          if [ -n "$PAPER_DIGEST_CONFIG_TOML_OVERRIDE" ]; then
+            printf '%s\n' "$PAPER_DIGEST_CONFIG_TOML_OVERRIDE" > config.toml
+            exit 0
+          fi
           if [ -z "$PAPER_DIGEST_CONFIG_TOML" ]; then
             echo "Missing PAPER_DIGEST_CONFIG_TOML repository secret." >&2
             exit 1
@@ -78,11 +92,11 @@ jobs:
           if-no-files-found: ignore
 
       - name: Configure Pages
-        if: success()
+        if: ${{ success() && (github.event_name != 'workflow_dispatch' || github.event.inputs.config_toml_override == '') }}
         uses: actions/configure-pages@v6
 
       - name: Archive Pages artifact
-        if: success() && hashFiles('output/site/**') != ''
+        if: ${{ success() && hashFiles('output/site/**') != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.config_toml_override == '') }}
         run: |
           tar \
             --dereference --hard-dereference \
@@ -94,7 +108,7 @@ jobs:
             .
 
       - name: Upload Pages artifact
-        if: success() && hashFiles('output/site/**') != ''
+        if: ${{ success() && hashFiles('output/site/**') != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.config_toml_override == '') }}
         uses: actions/upload-artifact@v7
         with:
           name: github-pages
@@ -103,14 +117,14 @@ jobs:
           if-no-files-found: error
 
       - name: Save digest state cache
-        if: always() && hashFiles('.paper-digest-state/**') != ''
+        if: ${{ always() && hashFiles('.paper-digest-state/**') != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.config_toml_override == '') }}
         uses: actions/cache/save@v5
         with:
           path: .paper-digest-state
           key: paper-digest-state-${{ github.run_id }}
 
       - name: Save archive history cache
-        if: success() && hashFiles('output/**') != ''
+        if: ${{ success() && hashFiles('output/**') != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.config_toml_override == '') }}
         uses: actions/cache/save@v5
         with:
           path: |
@@ -119,7 +133,7 @@ jobs:
           key: paper-digest-output-${{ github.run_id }}
 
   deploy-pages:
-    if: github.ref == 'refs/heads/main'
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || github.event.inputs.config_toml_override == '') }}
     needs: digest
     runs-on: ubuntu-latest
     permissions:
