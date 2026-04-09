@@ -6,7 +6,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 from paper_digest.arxiv_client import Paper
-from paper_digest.config import AppConfig, EmailConfig, FeishuWebhookConfig, StateConfig
+from paper_digest.config import (
+    AppConfig,
+    EmailConfig,
+    FeishuWebhookConfig,
+    StateConfig,
+    WeComWebhookConfig,
+)
 from paper_digest.delivery import (
     build_notification_messages,
     send_configured_deliveries,
@@ -94,12 +100,14 @@ class DeliveryTests(unittest.TestCase):
 
         self.assertEqual(messages, [])
 
+    @patch("paper_digest.delivery.send_wecom_message")
     @patch("paper_digest.delivery.send_feishu_message")
     @patch("paper_digest.delivery.send_email_message")
-    def test_send_configured_deliveries_uses_legacy_email_and_feishu(
+    def test_send_configured_deliveries_uses_legacy_email_and_webhooks(
         self,
         mock_send_email_message,
         mock_send_feishu_message,
+        mock_send_wecom_message,
     ) -> None:
         digest = build_digest()
         config = AppConfig(
@@ -119,7 +127,13 @@ class DeliveryTests(unittest.TestCase):
                     title_prefix="[Robot]",
                     skip_if_empty=True,
                     target="per_feed",
-                )
+                ),
+                WeComWebhookConfig(
+                    webhook_url="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=abc",
+                    title_prefix="[WeCom]",
+                    skip_if_empty=True,
+                    target="digest",
+                ),
             ],
             email=EmailConfig(
                 smtp_host="smtp.example.com",
@@ -139,4 +153,5 @@ class DeliveryTests(unittest.TestCase):
 
         self.assertEqual(mock_send_email_message.call_count, 1)
         self.assertEqual(mock_send_feishu_message.call_count, 1)
-        self.assertEqual(len(receipts), 2)
+        self.assertEqual(mock_send_wecom_message.call_count, 1)
+        self.assertEqual(len(receipts), 3)

@@ -47,8 +47,10 @@ scale as new paper sources and output channels are added.
 ### `paper_digest.archive_site`
 
 - Scans historical `output/YYYY-MM-DD/digest.json` files.
-- Builds a static archive site with daily cards, feed summaries, and client-side
-  filtering for feed, title keyword, and recent date windows.
+- Builds a static archive site with daily cards, feed summaries, feed-specific
+  fixed pages, keyword tracking pages, and a trend overview page.
+- Provides client-side filtering for feed, title keyword, and recent date
+  windows on the main archive page.
 - Copies dated Markdown and JSON files into a Pages-friendly output tree.
 
 ### `paper_digest.network`
@@ -72,6 +74,11 @@ scale as new paper sources and output channels are added.
 
 - Sends structured messages to Feishu incoming webhooks.
 - Translates rendered digest text into Feishu post payloads.
+
+### `paper_digest.wecom_delivery`
+
+- Sends markdown notifications to WeCom incoming webhooks.
+- Normalizes rendered digest markdown into a WeCom-friendly webhook payload.
 
 ### `paper_digest.state`
 
@@ -97,7 +104,7 @@ The next clean extension points are:
 1. Add a new source client module such as `pubmed_client.py`.
 2. Normalize foreign payloads into the existing `Paper` model, or extract a
    source-agnostic protocol if the model starts diverging.
-3. Add output adapters for Slack, WeCom, or other destinations without putting
+3. Add output adapters for Slack or other destinations without putting
    transport code into the CLI.
 4. Add more analysis providers behind the existing analysis interface rather
    than coupling the service layer to a single LLM vendor.

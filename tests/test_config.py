@@ -166,6 +166,13 @@ class LoadConfigTests(unittest.TestCase):
                     title_prefix = "[Robot]"
                     skip_if_empty = true
                     target = "digest"
+
+                    [[deliveries]]
+                    type = "wecom_webhook"
+                    webhook_url = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=abc"
+                    title_prefix = "[WeCom]"
+                    skip_if_empty = false
+                    target = "digest"
                     """
                 ).strip(),
                 encoding="utf-8",
@@ -173,9 +180,10 @@ class LoadConfigTests(unittest.TestCase):
 
             config = load_config(config_path)
 
-        self.assertEqual(len(config.deliveries), 2)
+        self.assertEqual(len(config.deliveries), 3)
         self.assertEqual(config.deliveries[0].target, "per_feed")
         self.assertEqual(config.deliveries[1].target, "digest")
+        self.assertEqual(config.deliveries[2].target, "digest")
 
     def test_load_config_reads_analysis_settings(self) -> None:
         with TemporaryDirectory() as temp_dir:

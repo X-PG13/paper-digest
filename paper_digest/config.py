@@ -15,7 +15,7 @@ class ConfigError(ValueError):
 
 FeedSource = Literal["arxiv", "crossref"]
 DeliveryTarget = Literal["digest", "per_feed"]
-DeliveryType = Literal["email", "feishu_webhook"]
+DeliveryType = Literal["email", "feishu_webhook", "wecom_webhook"]
 AnalysisProvider = Literal["openai"]
 AnalysisReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
 DigestTemplate = Literal["default", "zh_daily_brief"]
@@ -51,6 +51,14 @@ class EmailConfig:
 
 @dataclass(slots=True, frozen=True)
 class FeishuWebhookConfig:
+    webhook_url: str
+    title_prefix: str
+    skip_if_empty: bool
+    target: DeliveryTarget = "digest"
+
+
+@dataclass(slots=True, frozen=True)
+class WeComWebhookConfig:
     webhook_url: str
     title_prefix: str
     skip_if_empty: bool
@@ -97,7 +105,9 @@ class AppConfig:
     fetch_retry_backoff_seconds: float = 10.0
     digest: DigestConfig = field(default_factory=DigestConfig)
     analysis: AnalysisConfig | None = None
-    deliveries: list[EmailConfig | FeishuWebhookConfig] = field(default_factory=list)
+    deliveries: list[
+        EmailConfig | FeishuWebhookConfig | WeComWebhookConfig
+    ] = field(default_factory=list)
     email: EmailConfig | None = None
 
 
@@ -318,13 +328,15 @@ def _load_analysis(value: Any) -> AnalysisConfig | None:
     )
 
 
-def _load_deliveries(value: Any) -> list[EmailConfig | FeishuWebhookConfig]:
+def _load_deliveries(
+    value: Any,
+) -> list[EmailConfig | FeishuWebhookConfig | WeComWebhookConfig]:
     if value is None:
         return []
     if not isinstance(value, list):
         raise ConfigError("deliveries must be an array of tables")
 
-    deliveries: list[EmailConfig | FeishuWebhookConfig] = []
+    deliveries: list[EmailConfig | FeishuWebhookConfig | WeComWebhookConfig] = []
     for index, raw_delivery in enumerate(value, start=1):
         field_name = f"deliveries[{index}]"
         delivery = _as_table(raw_delivery, field_name)
@@ -332,7 +344,10 @@ def _load_deliveries(value: Any) -> list[EmailConfig | FeishuWebhookConfig]:
         if delivery_type == "email":
             deliveries.append(_build_email_config(delivery, field_name))
             continue
-        deliveries.append(_build_feishu_webhook_config(delivery, field_name))
+        if delivery_type == "feishu_webhook":
+            deliveries.append(_build_feishu_webhook_config(delivery, field_name))
+            continue
+        deliveries.append(_build_wecom_webhook_config(delivery, field_name))
     return deliveries
 
 
@@ -419,6 +434,30 @@ def _build_feishu_webhook_config(
     )
 
 
+def _build_wecom_webhook_config(
+    value: dict[str, Any],
+    field_name: str,
+) -> WeComWebhookConfig:
+    return WeComWebhookConfig(
+        webhook_url=_required_string(
+            value.get("webhook_url"), f"{field_name}.webhook_url"
+        ),
+        title_prefix=_default_prefixed_string(
+            value.get("title_prefix", "[Paper Digest]"),
+            f"{field_name}.title_prefix",
+            "[Paper Digest]",
+        ),
+        skip_if_empty=_bool(
+            value.get("skip_if_empty", True),
+            f"{field_name}.skip_if_empty",
+        ),
+        target=_delivery_target(
+            value.get("target", "digest"),
+            f"{field_name}.target",
+        ),
+    )
+
+
 def _string_list(value: Any, field_name: str) -> list[str]:
     if not isinstance(value, list):
         raise ConfigError(f"{field_name} must be an array of strings")
@@ -475,14 +514,20 @@ def _feed_source(value: Any, field_name: str) -> FeedSource:
 
 def _delivery_type(value: Any, field_name: str) -> DeliveryType:
     if not isinstance(value, str):
-        raise ConfigError(f"{field_name} must be 'email' or 'feishu_webhook'")
+        raise ConfigError(
+            f"{field_name} must be 'email', 'feishu_webhook', or 'wecom_webhook'"
+        )
 
     normalized = value.strip().lower()
-    if normalized not in {"email", "feishu_webhook"}:
-        raise ConfigError(f"{field_name} must be 'email' or 'feishu_webhook'")
+    if normalized not in {"email", "feishu_webhook", "wecom_webhook"}:
+        raise ConfigError(
+            f"{field_name} must be 'email', 'feishu_webhook', or 'wecom_webhook'"
+        )
     if normalized == "email":
         return "email"
-    return "feishu_webhook"
+    if normalized == "feishu_webhook":
+        return "feishu_webhook"
+    return "wecom_webhook"
 
 
 def _delivery_target(value: Any, field_name: str) -> DeliveryTarget:
