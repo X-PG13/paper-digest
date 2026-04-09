@@ -11,6 +11,8 @@ Versioning.
   tracking pages, and a trends overview alongside the daily archive index.
 - Archive subscription pages now publish RSS feeds for both fixed feed views
   and keyword tracking views.
+- The scheduled GitHub Actions workflow now restores and saves `output/`
+  history, so archive pages, trends, and RSS feeds can accumulate across runs.
 - WeCom webhook delivery joins email and Feishu as a first-class notification
   channel.
 - Rule-based Chinese briefing mode now extracts recurring topic terms, assigns

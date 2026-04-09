@@ -257,6 +257,11 @@ To use it, create these GitHub repository secrets:
 The workflow restores and saves `.paper-digest-state/` through the GitHub
 Actions cache so deduplication survives across runs.
 
+It also restores and saves `output/` history through the GitHub Actions cache.
+That keeps dated digest folders alive across runs, so feed pages, keyword pages,
+trend views, and RSS subscriptions can reflect accumulated history instead of
+only the latest execution.
+
 For scheduled stability, source fetches use bounded retry and backoff for
 transient `429`, `5xx`, and timeout-style failures. You can tune that behavior
 through `request_timeout_seconds`, `fetch_retry_attempts`, and
