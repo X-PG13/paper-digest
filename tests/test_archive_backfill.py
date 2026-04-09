@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 import unittest
+from datetime import date
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from paper_digest.archive_backfill import backfill_archive_history
+from paper_digest.archive_backfill import BackfillWindow, backfill_archive_history, main
 from paper_digest.config import AppConfig, FeedConfig, StateConfig
 
 
@@ -114,6 +115,121 @@ class ArchiveBackfillTests(unittest.TestCase):
             )
             self.assertEqual(latest["generated_at"], "2026-04-09T08:30:00+08:00")
             self.assertTrue((output_dir / "site/index.html").exists())
+
+    def test_backfill_respects_date_window(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            output_dir = root / "output"
+            artifacts_dir = root / "artifacts"
+
+            self._write_digest(
+                artifacts_dir / "run-1",
+                "2026-04-07",
+                generated_at="2026-04-07T08:00:00+08:00",
+                feeds=[
+                    {
+                        "name": "LLM",
+                        "papers": [{"title": "Too old", "abstract_url": "https://x/7"}],
+                    }
+                ],
+            )
+            self._write_digest(
+                artifacts_dir / "run-2",
+                "2026-04-08",
+                generated_at="2026-04-08T08:00:00+08:00",
+                feeds=[
+                    {
+                        "name": "LLM",
+                        "papers": [{"title": "Keep me", "abstract_url": "https://x/8"}],
+                    }
+                ],
+            )
+            self._write_digest(
+                artifacts_dir / "run-3",
+                "2026-04-09",
+                generated_at="2026-04-09T08:00:00+08:00",
+                feeds=[
+                    {
+                        "name": "Vision",
+                        "papers": [
+                            {"title": "Also keep me", "abstract_url": "https://x/9"}
+                        ],
+                    }
+                ],
+            )
+
+            config = AppConfig(
+                timezone="Asia/Shanghai",
+                lookback_hours=24,
+                output_dir=output_dir,
+                request_delay_seconds=0.0,
+                feeds=[
+                    FeedConfig(name="LLM", categories=["cs.AI"], keywords=["agent"]),
+                    FeedConfig(
+                        name="Vision",
+                        categories=["cs.CV"],
+                        keywords=["benchmark"],
+                    ),
+                ],
+                state=StateConfig(
+                    enabled=True,
+                    path=root / "state.json",
+                    retention_days=90,
+                ),
+            )
+
+            result = backfill_archive_history(
+                config,
+                artifacts_dir,
+                window=BackfillWindow(
+                    date_from=date(2026, 4, 8),
+                    date_to=date(2026, 4, 9),
+                ),
+            )
+
+            self.assertEqual(result.imported_dates, ["2026-04-08", "2026-04-09"])
+            self.assertEqual(result.replaced_dates, [])
+            self.assertFalse((output_dir / "2026-04-07").exists())
+            self.assertTrue((output_dir / "2026-04-08/digest.json").exists())
+            self.assertTrue((output_dir / "2026-04-09/digest.json").exists())
+
+    def test_main_rejects_invalid_date_window(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = root / "config.toml"
+            config_path.write_text(
+                '\n'.join(
+                    [
+                        '[app]',
+                        'timezone = "Asia/Shanghai"',
+                        'lookback_hours = 24',
+                        'output_dir = "output"',
+                        '',
+                        '[[feeds]]',
+                        'name = "LLM"',
+                        'categories = ["cs.AI"]',
+                        'keywords = ["agent"]',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            artifacts_dir = root / "artifacts"
+            artifacts_dir.mkdir()
+
+            exit_code = main(
+                [
+                    "--config",
+                    str(config_path),
+                    "--artifacts-dir",
+                    str(artifacts_dir),
+                    "--date-from",
+                    "2026-04-10",
+                    "--date-to",
+                    "2026-04-09",
+                ]
+            )
+
+            self.assertEqual(exit_code, 1)
 
     def _write_digest(
         self,

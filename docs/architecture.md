@@ -60,6 +60,8 @@ scale as new paper sources and output channels are added.
 - Scans downloaded GitHub Actions digest artifacts from past runs.
 - Selects the strongest non-synthetic snapshot for each day and merges it into
   `output/YYYY-MM-DD/`.
+- Supports one-time date-window filtering so manual backfills can target only a
+  specific slice of historical output.
 - Refreshes `latest.*` and rebuilds the archive site so Pages and RSS can be
   seeded from pre-cache history in one manual pass.
 

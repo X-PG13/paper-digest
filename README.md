@@ -271,6 +271,16 @@ site and RSS feeds, and then seeds the same `output/` cache used by the daily
 workflow. Synthetic validation runs such as delivery-check digests are skipped
 so they do not pollute the long-term archive.
 
+That workflow now accepts three manual inputs:
+
+- `run_limit`: how many successful `Daily Digest` runs to inspect
+- `date_from`: optional inclusive earliest digest date to import
+- `date_to`: optional inclusive latest digest date to import
+
+That makes it practical to do a narrow backfill such as "only recover the last
+30 successful runs" or "rebuild just 2026-04-01 through 2026-04-07" without
+editing workflow code.
+
 For scheduled stability, source fetches use bounded retry and backoff for
 transient `429`, `5xx`, and timeout-style failures. You can tune that behavior
 through `request_timeout_seconds`, `fetch_retry_attempts`, and

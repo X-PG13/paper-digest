@@ -16,6 +16,8 @@ Versioning.
 - A manual archive backfill workflow can import historical successful
   `Daily Digest` artifacts into `output/`, rebuild the site and RSS, and seed
   the archive cache in one pass while skipping synthetic validation digests.
+- The manual backfill workflow now supports configurable run limits and
+  inclusive date windows for targeted archive recovery.
 - WeCom webhook delivery joins email and Feishu as a first-class notification
   channel.
 - Rule-based Chinese briefing mode now extracts recurring topic terms, assigns

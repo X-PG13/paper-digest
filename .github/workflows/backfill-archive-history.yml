@@ -2,6 +2,19 @@ name: Backfill Archive History
 
 on:
   workflow_dispatch:
+    inputs:
+      run_limit:
+        description: How many successful Daily Digest runs to inspect
+        required: true
+        default: "50"
+      date_from:
+        description: Optional earliest digest date to import (YYYY-MM-DD)
+        required: false
+        default: ""
+      date_to:
+        description: Optional latest digest date to import (YYYY-MM-DD)
+        required: false
+        default: ""
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -60,7 +73,7 @@ jobs:
           gh run list \
             --workflow "Daily Digest" \
             --branch main \
-            --limit 50 \
+            --limit "${{ inputs.run_limit }}" \
             --json databaseId,conclusion \
             --jq '.[] | select(.conclusion == "success") | .databaseId' \
             > backfill/run_ids.txt
@@ -74,7 +87,22 @@ jobs:
           done < backfill/run_ids.txt
 
       - name: Backfill archive history
-        run: python -m paper_digest.archive_backfill --config config.toml --artifacts-dir backfill/runs
+        env:
+          DATE_FROM: ${{ inputs.date_from }}
+          DATE_TO: ${{ inputs.date_to }}
+        run: |
+          args=(
+            python -m paper_digest.archive_backfill
+            --config config.toml
+            --artifacts-dir backfill/runs
+          )
+          if [ -n "$DATE_FROM" ]; then
+            args+=(--date-from "$DATE_FROM")
+          fi
+          if [ -n "$DATE_TO" ]; then
+            args+=(--date-to "$DATE_TO")
+          fi
+          "${args[@]}"
 
       - name: Upload digest artifacts
         if: always()
