@@ -55,6 +55,14 @@ scale as new paper sources and output channels are added.
   windows on the main archive page.
 - Copies dated Markdown and JSON files into a Pages-friendly output tree.
 
+### `paper_digest.archive_backfill`
+
+- Scans downloaded GitHub Actions digest artifacts from past runs.
+- Selects the strongest non-synthetic snapshot for each day and merges it into
+  `output/YYYY-MM-DD/`.
+- Refreshes `latest.*` and rebuilds the archive site so Pages and RSS can be
+  seeded from pre-cache history in one manual pass.
+
 ### `paper_digest.network`
 
 - Centralizes bounded retry, timeout, and backoff behavior for upstream source

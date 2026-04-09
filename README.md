@@ -262,6 +262,15 @@ That keeps dated digest folders alive across runs, so feed pages, keyword pages,
 trend views, and RSS subscriptions can reflect accumulated history instead of
 only the latest execution.
 
+For repositories that added archive caching after the project was already
+running, there is also a manual backfill workflow at
+[`backfill-archive-history.yml`](./.github/workflows/backfill-archive-history.yml).
+It downloads historical successful `Daily Digest` artifacts, imports the
+strongest snapshot for each day into `output/YYYY-MM-DD/`, rebuilds the archive
+site and RSS feeds, and then seeds the same `output/` cache used by the daily
+workflow. Synthetic validation runs such as delivery-check digests are skipped
+so they do not pollute the long-term archive.
+
 For scheduled stability, source fetches use bounded retry and backoff for
 transient `429`, `5xx`, and timeout-style failures. You can tune that behavior
 through `request_timeout_seconds`, `fetch_retry_attempts`, and

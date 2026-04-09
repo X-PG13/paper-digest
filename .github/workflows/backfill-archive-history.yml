@@ -1,0 +1,135 @@
+name: Backfill Archive History
+
+on:
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+permissions:
+  actions: read
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: paper-digest-backfill
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install project
+        run: python -m pip install .
+
+      - name: Restore archive history cache
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            output
+            !output/site
+          key: paper-digest-output-${{ github.run_id }}
+          restore-keys: |
+            paper-digest-output-
+
+      - name: Materialize config
+        env:
+          PAPER_DIGEST_CONFIG_TOML: ${{ secrets.PAPER_DIGEST_CONFIG_TOML }}
+        run: |
+          if [ -z "$PAPER_DIGEST_CONFIG_TOML" ]; then
+            echo "Missing PAPER_DIGEST_CONFIG_TOML repository secret." >&2
+            exit 1
+          fi
+          printf '%s\n' "$PAPER_DIGEST_CONFIG_TOML" > config.toml
+
+      - name: Download historical digest artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p backfill/runs
+          gh run list \
+            --workflow "Daily Digest" \
+            --branch main \
+            --limit 50 \
+            --json databaseId,conclusion \
+            --jq '.[] | select(.conclusion == "success") | .databaseId' \
+            > backfill/run_ids.txt
+          while IFS= read -r run_id; do
+            if [ -z "$run_id" ]; then
+              continue
+            fi
+            gh run download "$run_id" \
+              -n digest-output \
+              -D "backfill/runs/$run_id" || true
+          done < backfill/run_ids.txt
+
+      - name: Backfill archive history
+        run: python -m paper_digest.archive_backfill --config config.toml --artifacts-dir backfill/runs
+
+      - name: Upload digest artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: digest-output
+          path: output/
+          if-no-files-found: ignore
+
+      - name: Configure Pages
+        if: success()
+        uses: actions/configure-pages@v6
+
+      - name: Archive Pages artifact
+        if: success() && hashFiles('output/site/**') != ''
+        run: |
+          tar \
+            --dereference --hard-dereference \
+            --directory output/site \
+            -cvf "$RUNNER_TEMP/artifact.tar" \
+            --exclude=.git \
+            --exclude=.github \
+            --exclude=".[^/]*" \
+            .
+
+      - name: Upload Pages artifact
+        if: success() && hashFiles('output/site/**') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: github-pages
+          path: ${{ runner.temp }}/artifact.tar
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Save archive history cache
+        if: success() && hashFiles('output/**') != ''
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            output
+            !output/site
+          key: paper-digest-output-${{ github.run_id }}
+
+  deploy-pages:
+    if: github.ref == 'refs/heads/main'
+    needs: backfill
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
