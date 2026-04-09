@@ -7,10 +7,14 @@ Versioning.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-04-09
+
 - Configurable request timeout, retry attempts, and retry backoff for upstream
   source fetches.
 - Shared network retry handling for transient timeout, `429`, and `5xx` source
-  failures.
+  failures across arXiv and Crossref fetches.
+- GitHub Actions workflows updated for Node 24 compatibility, including the
+  Pages deployment and release paths.
 
 ## [0.4.0] - 2026-04-09
 
