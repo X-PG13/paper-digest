@@ -15,6 +15,10 @@ on:
         description: Optional latest digest date to import (YYYY-MM-DD)
         required: false
         default: ""
+      dry_run:
+        description: Preview changes only without writing output, cache, or Pages
+        required: true
+        default: "false"
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -90,6 +94,7 @@ jobs:
         env:
           DATE_FROM: ${{ inputs.date_from }}
           DATE_TO: ${{ inputs.date_to }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
           args=(
             python -m paper_digest.archive_backfill
@@ -102,10 +107,13 @@ jobs:
           if [ -n "$DATE_TO" ]; then
             args+=(--date-to "$DATE_TO")
           fi
+          if [ "$DRY_RUN" = "true" ]; then
+            args+=(--dry-run)
+          fi
           "${args[@]}"
 
       - name: Upload digest artifacts
-        if: always()
+        if: always() && inputs.dry_run != 'true'
         uses: actions/upload-artifact@v7
         with:
           name: digest-output
@@ -113,11 +121,11 @@ jobs:
           if-no-files-found: ignore
 
       - name: Configure Pages
-        if: success()
+        if: success() && inputs.dry_run != 'true'
         uses: actions/configure-pages@v6
 
       - name: Archive Pages artifact
-        if: success() && hashFiles('output/site/**') != ''
+        if: success() && inputs.dry_run != 'true' && hashFiles('output/site/**') != ''
         run: |
           tar \
             --dereference --hard-dereference \
@@ -129,7 +137,7 @@ jobs:
             .
 
       - name: Upload Pages artifact
-        if: success() && hashFiles('output/site/**') != ''
+        if: success() && inputs.dry_run != 'true' && hashFiles('output/site/**') != ''
         uses: actions/upload-artifact@v7
         with:
           name: github-pages
@@ -138,7 +146,7 @@ jobs:
           if-no-files-found: error
 
       - name: Save archive history cache
-        if: success() && hashFiles('output/**') != ''
+        if: success() && inputs.dry_run != 'true' && hashFiles('output/**') != ''
         uses: actions/cache/save@v5
         with:
           path: |
@@ -147,7 +155,7 @@ jobs:
           key: paper-digest-output-${{ github.run_id }}
 
   deploy-pages:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && inputs.dry_run != 'true'
     needs: backfill
     runs-on: ubuntu-latest
     permissions:

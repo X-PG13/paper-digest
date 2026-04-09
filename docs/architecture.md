@@ -62,6 +62,8 @@ scale as new paper sources and output channels are added.
   `output/YYYY-MM-DD/`.
 - Supports one-time date-window filtering so manual backfills can target only a
   specific slice of historical output.
+- Supports dry-run previews so maintainers can inspect which dates would be
+  imported or replaced before mutating cached archive history.
 - Refreshes `latest.*` and rebuilds the archive site so Pages and RSS can be
   seeded from pre-cache history in one manual pass.
 

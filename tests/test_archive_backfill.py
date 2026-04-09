@@ -193,6 +193,47 @@ class ArchiveBackfillTests(unittest.TestCase):
             self.assertTrue((output_dir / "2026-04-08/digest.json").exists())
             self.assertTrue((output_dir / "2026-04-09/digest.json").exists())
 
+    def test_backfill_dry_run_reports_changes_without_writing_output(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            output_dir = root / "output"
+            artifacts_dir = root / "artifacts"
+
+            self._write_digest(
+                artifacts_dir / "run-1",
+                "2026-04-08",
+                generated_at="2026-04-08T08:00:00+08:00",
+                feeds=[
+                    {
+                        "name": "LLM",
+                        "papers": [
+                            {"title": "Preview only", "abstract_url": "https://x/10"}
+                        ],
+                    }
+                ],
+            )
+
+            config = AppConfig(
+                timezone="Asia/Shanghai",
+                lookback_hours=24,
+                output_dir=output_dir,
+                request_delay_seconds=0.0,
+                feeds=[
+                    FeedConfig(name="LLM", categories=["cs.AI"], keywords=["agent"]),
+                ],
+                state=StateConfig(
+                    enabled=True,
+                    path=root / "state.json",
+                    retention_days=90,
+                ),
+            )
+
+            result = backfill_archive_history(config, artifacts_dir, dry_run=True)
+
+            self.assertEqual(result.imported_dates, ["2026-04-08"])
+            self.assertEqual(result.replaced_dates, [])
+            self.assertFalse(output_dir.exists())
+
     def test_main_rejects_invalid_date_window(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

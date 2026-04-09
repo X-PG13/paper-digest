@@ -18,6 +18,8 @@ Versioning.
   the archive cache in one pass while skipping synthetic validation digests.
 - The manual backfill workflow now supports configurable run limits and
   inclusive date windows for targeted archive recovery.
+- The manual backfill workflow can also run in dry-run mode to preview imports
+  and replacements without mutating `output/`, cache, or Pages.
 - WeCom webhook delivery joins email and Feishu as a first-class notification
   channel.
 - Rule-based Chinese briefing mode now extracts recurring topic terms, assigns
