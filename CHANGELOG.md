@@ -7,6 +7,8 @@ Versioning.
 
 ## [Unreleased]
 
+- Semantic Scholar joins arXiv, Crossref, and PubMed as a supported literature
+  source.
 - PubMed joins arXiv and Crossref as a third supported literature source.
 - Slack incoming webhook delivery joins email, Feishu, and WeCom as a
   first-class notification channel.

@@ -153,3 +153,53 @@ class SourceDispatchTests(unittest.TestCase):
             retry_backoff_seconds=3.0,
             contact_email="bot@example.com",
         )
+
+    @patch("paper_digest.sources.fetch_latest_semantic_scholar_papers")
+    def test_fetch_feed_papers_dispatches_to_semantic_scholar(
+        self,
+        mock_fetch_latest_semantic_scholar_papers,
+    ) -> None:
+        paper = Paper(
+            title="Semantic Scholar agents",
+            summary="Semantic Scholar summary",
+            authors=["Alice"],
+            categories=["Computer Science"],
+            paper_id="semantic_scholar:abc123",
+            abstract_url="https://arxiv.org/abs/2604.06666",
+            pdf_url="https://arxiv.org/pdf/2604.06666.pdf",
+            published_at=datetime(2026, 4, 8, 0, 0, tzinfo=ZoneInfo("UTC")),
+            updated_at=datetime(2026, 4, 8, 0, 0, tzinfo=ZoneInfo("UTC")),
+            source="semantic_scholar",
+            date_label="Published",
+        )
+        mock_fetch_latest_semantic_scholar_papers.return_value = [paper]
+        feed = FeedConfig(
+            name="Semantic Scholar AI",
+            source="semantic_scholar",
+            queries=["large language model", "agent"],
+            types=["Review"],
+        )
+        now = datetime(2026, 4, 8, 0, 30, tzinfo=ZoneInfo("UTC"))
+
+        papers = fetch_feed_papers(
+            feed,
+            now=now,
+            lookback_hours=24,
+            request_delay_seconds=0.25,
+            request_timeout_seconds=30,
+            retry_attempts=2,
+            retry_backoff_seconds=3.0,
+            contact_email="bot@example.com",
+        )
+
+        self.assertEqual(papers, [paper])
+        mock_fetch_latest_semantic_scholar_papers.assert_called_once_with(
+            feed,
+            now=now,
+            lookback_hours=24,
+            request_delay_seconds=0.25,
+            request_timeout_seconds=30,
+            retry_attempts=2,
+            retry_backoff_seconds=3.0,
+            contact_email="bot@example.com",
+        )

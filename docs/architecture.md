@@ -30,6 +30,13 @@ scale as new paper sources and output channels are added.
 - Normalizes PubMed metadata, abstracts, authors, and publication types into
   the shared `Paper` model.
 
+### `paper_digest.semantic_scholar_client`
+
+- Fetches recently published records from the Semantic Scholar Graph API bulk
+  search endpoint.
+- Normalizes Semantic Scholar JSON metadata, authors, publication dates, and
+  open-access links into the shared `Paper` model.
+
 ### `paper_digest.analysis`
 
 - Selects which papers should be enriched in a given run.
@@ -79,7 +86,8 @@ scale as new paper sources and output channels are added.
 
 - Centralizes bounded retry, timeout, and backoff behavior for upstream source
   fetches.
-- Keeps transient network handling consistent across arXiv and Crossref.
+- Keeps transient network handling consistent across arXiv, Crossref, PubMed,
+  and Semantic Scholar.
 
 ### `paper_digest.delivery`
 
@@ -135,7 +143,7 @@ scale as new paper sources and output channels are added.
 
 The next clean extension points are:
 
-1. Add a new source client module such as `semantic_scholar_client.py`.
+1. Add a new source client module such as `openalex_client.py`.
 2. Normalize foreign payloads into the existing `Paper` model, or extract a
    source-agnostic protocol if the model starts diverging.
 3. Add output adapters for Telegram or other destinations without putting

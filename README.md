@@ -10,7 +10,7 @@ latest research papers every day and turning them into a readable digest.
 
 The current scope is intentionally narrow:
 
-- Fetch the newest papers from arXiv, Crossref, and PubMed.
+- Fetch the newest papers from arXiv, Crossref, PubMed, and Semantic Scholar.
 - Apply include and exclude keyword filters on title and abstract.
 - Optionally enrich selected papers with structured LLM analysis.
 - Generate machine-readable `JSON` and human-readable `Markdown`.
@@ -94,16 +94,17 @@ Field reference:
 - `lookback_hours`: Papers older than this time window are ignored.
 - `output_dir`: Directory where dated and latest digests are written.
 - `request_delay_seconds`: Delay between arXiv API requests.
-- `request_timeout_seconds`: Per-request timeout for arXiv, Crossref, and
-  PubMed fetches.
+- `request_timeout_seconds`: Per-request timeout for arXiv, Crossref, PubMed,
+  and Semantic Scholar fetches.
 - `fetch_retry_attempts`: Maximum number of fetch attempts for transient failures.
 - `fetch_retry_backoff_seconds`: Base backoff used between retry attempts.
 - `state`: Persistent history used for deduplication across runs.
-- `source`: `arxiv`, `crossref`, or `pubmed`.
+- `source`: `arxiv`, `crossref`, `pubmed`, or `semantic_scholar`.
 - `categories`: arXiv categories such as `cs.AI`, `cs.CL`, or `cs.CV`.
-- `queries`: Required for `crossref` and `pubmed` feeds.
-- `types`: Optional Crossref work types such as `journal-article`, or PubMed
-  publication types such as `Journal Article` or `Review`.
+- `queries`: Required for `crossref`, `pubmed`, and `semantic_scholar` feeds.
+- `types`: Optional Crossref work types such as `journal-article`, PubMed
+  publication types such as `Journal Article` or `Review`, or Semantic Scholar
+  publication types such as `Review` or `JournalArticle`.
 - `keywords`: Keep a paper when any keyword matches title or abstract.
 - `exclude_keywords`: Drop a paper when any excluded keyword matches.
 - `max_results`: Number of newest candidates fetched before local filtering.
@@ -257,6 +258,16 @@ keywords = ["agent", "benchmark"]
 exclude_keywords = ["protocol"]
 max_results = 50
 max_items = 10
+
+[[feeds]]
+name = "Semantic Scholar AI"
+source = "semantic_scholar"
+queries = ["large language model", "agent systems"]
+types = ["Review", "JournalArticle"]
+keywords = ["agent", "benchmark"]
+exclude_keywords = ["survey"]
+max_results = 50
+max_items = 10
 ```
 
 ## Development
@@ -354,7 +365,7 @@ On macOS or Linux you can run the digest every morning with `cron`:
 
 ## Roadmap
 
-- Add more literature sources such as Semantic Scholar.
+- Add more literature sources such as OpenAlex.
 - Support more output adapters such as Telegram.
 - Support additional LLM providers and richer feed-level briefings.
 
