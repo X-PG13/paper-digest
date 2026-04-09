@@ -113,6 +113,14 @@ max_items = 10
 # skip_if_empty = true
 # target = "per_feed"
 
+# Example WeCom webhook delivery:
+# [[deliveries]]
+# type = "wecom_webhook"
+# webhook_url = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=your-key"
+# title_prefix = "[Paper Digest]"
+# skip_if_empty = true
+# target = "per_feed"
+
 # Legacy email configuration is still supported:
 # [email]
 # enabled = false

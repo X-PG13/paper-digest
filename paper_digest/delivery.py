@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .config import AppConfig, EmailConfig, FeishuWebhookConfig
+from .config import AppConfig, EmailConfig, FeishuWebhookConfig, WeComWebhookConfig
 from .digest import (
     DigestRun,
     FeedDigest,
@@ -14,6 +14,7 @@ from .digest import (
 )
 from .email_delivery import EmailDeliveryError, send_email_message
 from .feishu_delivery import FeishuDeliveryError, send_feishu_message
+from .wecom_delivery import WeComDeliveryError, send_wecom_message
 
 
 class DeliveryError(RuntimeError):
@@ -30,7 +31,7 @@ class NotificationMessage:
 
 def configured_deliveries(
     config: AppConfig,
-) -> list[EmailConfig | FeishuWebhookConfig]:
+) -> list[EmailConfig | FeishuWebhookConfig | WeComWebhookConfig]:
     """Return all configured deliveries, including legacy email config."""
 
     deliveries = list(config.deliveries)
@@ -40,7 +41,7 @@ def configured_deliveries(
 
 
 def build_notification_messages(
-    delivery: EmailConfig | FeishuWebhookConfig,
+    delivery: EmailConfig | FeishuWebhookConfig | WeComWebhookConfig,
     digest: DigestRun,
 ) -> list[NotificationMessage]:
     """Build delivery messages according to channel policy."""
@@ -74,7 +75,7 @@ def send_configured_deliveries(config: AppConfig, digest: DigestRun) -> list[str
 
         try:
             receipts.extend(_send_messages(delivery, messages))
-        except (EmailDeliveryError, FeishuDeliveryError) as exc:
+        except (EmailDeliveryError, FeishuDeliveryError, WeComDeliveryError) as exc:
             errors.append(str(exc))
 
     if errors:
@@ -83,7 +84,7 @@ def send_configured_deliveries(config: AppConfig, digest: DigestRun) -> list[str
 
 
 def _build_notification_message(
-    delivery: EmailConfig | FeishuWebhookConfig,
+    delivery: EmailConfig | FeishuWebhookConfig | WeComWebhookConfig,
     digest: DigestRun,
     feed_name: str | None = None,
 ) -> NotificationMessage:
@@ -96,7 +97,7 @@ def _build_notification_message(
 
 
 def _build_title(
-    delivery: EmailConfig | FeishuWebhookConfig,
+    delivery: EmailConfig | FeishuWebhookConfig | WeComWebhookConfig,
     digest: DigestRun,
 ) -> str:
     date_label = digest.generated_at.strftime("%Y-%m-%d")
@@ -127,7 +128,7 @@ def _filter_highlights_for_feed(highlights: list[str], feed_name: str) -> list[s
 
 
 def _send_messages(
-    delivery: EmailConfig | FeishuWebhookConfig,
+    delivery: EmailConfig | FeishuWebhookConfig | WeComWebhookConfig,
     messages: list[NotificationMessage],
 ) -> list[str]:
     receipts: list[str] = []
@@ -138,9 +139,17 @@ def _send_messages(
             receipts.append(_build_receipt("Email", recipient_label, message))
         return receipts
 
+    if isinstance(delivery, FeishuWebhookConfig):
+        for message in messages:
+            send_feishu_message(delivery, title=message.title, body=message.body)
+            receipts.append(
+                _build_receipt("Feishu webhook", delivery.webhook_url, message)
+            )
+        return receipts
+
     for message in messages:
-        send_feishu_message(delivery, title=message.title, body=message.body)
-        receipts.append(_build_receipt("Feishu webhook", delivery.webhook_url, message))
+        send_wecom_message(delivery, title=message.title, body=message.body)
+        receipts.append(_build_receipt("WeCom webhook", delivery.webhook_url, message))
     return receipts
 
 
@@ -157,15 +166,21 @@ def _build_receipt(
     return f"{channel_name} sent to {destination} ({message.summary})"
 
 
-def _skip_if_empty(delivery: EmailConfig | FeishuWebhookConfig) -> bool:
+def _skip_if_empty(
+    delivery: EmailConfig | FeishuWebhookConfig | WeComWebhookConfig,
+) -> bool:
     return delivery.skip_if_empty
 
 
-def _title_prefix(delivery: EmailConfig | FeishuWebhookConfig) -> str:
+def _title_prefix(
+    delivery: EmailConfig | FeishuWebhookConfig | WeComWebhookConfig,
+) -> str:
     if isinstance(delivery, EmailConfig):
         return delivery.subject_prefix
     return delivery.title_prefix
 
 
-def _delivery_target(delivery: EmailConfig | FeishuWebhookConfig) -> str:
+def _delivery_target(
+    delivery: EmailConfig | FeishuWebhookConfig | WeComWebhookConfig,
+) -> str:
     return delivery.target

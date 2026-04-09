@@ -7,6 +7,11 @@ Versioning.
 
 ## [Unreleased]
 
+- Static archive site now includes fixed feed subscription pages, keyword
+  tracking pages, and a trends overview alongside the daily archive index.
+- WeCom webhook delivery joins email and Feishu as a first-class notification
+  channel.
+
 ## [0.4.1] - 2026-04-09
 
 - Configurable request timeout, retry attempts, and retry backoff for upstream
