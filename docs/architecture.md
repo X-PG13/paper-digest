@@ -47,8 +47,10 @@ scale as new paper sources and output channels are added.
 ### `paper_digest.archive_site`
 
 - Scans historical `output/YYYY-MM-DD/digest.json` files.
-- Builds a static archive site with daily cards, feed summaries, and client-side
-  filtering for feed, title keyword, and recent date windows.
+- Builds a static archive site with daily cards, feed summaries, feed-specific
+  fixed pages, keyword tracking pages, and a trend overview page.
+- Provides client-side filtering for feed, title keyword, and recent date
+  windows on the main archive page.
 - Copies dated Markdown and JSON files into a Pages-friendly output tree.
 
 ### `paper_digest.network`

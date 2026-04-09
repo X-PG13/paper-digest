@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 import shutil
 from dataclasses import dataclass
 from datetime import datetime
 from html import escape
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 class ArchiveSiteError(RuntimeError):
@@ -15,11 +21,21 @@ class ArchiveSiteError(RuntimeError):
 
 
 @dataclass(slots=True, frozen=True)
+class PaperArchive:
+    title: str
+    href: str
+    summary: str
+    search_text: str
+
+
+@dataclass(slots=True, frozen=True)
 class FeedArchive:
     name: str
+    slug: str
     count: int
     summary: str
-    titles: list[dict[str, str]]
+    key_points: list[str]
+    papers: list[PaperArchive]
 
 
 @dataclass(slots=True, frozen=True)
@@ -38,25 +54,98 @@ class DayArchive:
 @dataclass(slots=True, frozen=True)
 class ArchiveStats:
     label: str
-    digests: int
-    papers: int
+    primary_value: int
+    primary_label: str
+    secondary_value: int
+    secondary_label: str
 
 
-def build_archive_site(output_dir: Path) -> Path:
-    """Build a static HTML archive under ``output_dir / 'site'``."""
+@dataclass(slots=True, frozen=True)
+class CountPoint:
+    label: str
+    count: int
+
+
+@dataclass(slots=True, frozen=True)
+class FeedOverview:
+    name: str
+    slug: str
+    total_papers: int
+    active_days: int
+    recent_7_papers: int
+    recent_30_papers: int
+    recent_7_active_days: int
+    recent_30_active_days: int
+    latest_summary: str
+    daily_counts: list[CountPoint]
+
+
+@dataclass(slots=True, frozen=True)
+class KeywordMatch:
+    date: str
+    generated_label: str
+    days_ago: int
+    feed_name: str
+    title: str
+    href: str
+    summary: str
+
+
+@dataclass(slots=True, frozen=True)
+class KeywordOverview:
+    term: str
+    slug: str
+    total_matches: int
+    active_days: int
+    recent_7_matches: int
+    recent_30_matches: int
+    latest_summary: str
+    daily_counts: list[CountPoint]
+    matches: list[KeywordMatch]
+
+
+def build_archive_site(
+    output_dir: Path,
+    *,
+    tracked_keywords: Sequence[str] = (),
+) -> Path:
+    """Build a static multi-page archive under ``output_dir / 'site'``."""
 
     site_root = output_dir / "site"
     digests_root = site_root / "digests"
+    feeds_root = site_root / "feeds"
+    topics_root = site_root / "topics"
     if site_root.exists():
         shutil.rmtree(site_root)
     digests_root.mkdir(parents=True, exist_ok=True)
+    feeds_root.mkdir(parents=True, exist_ok=True)
+    topics_root.mkdir(parents=True, exist_ok=True)
 
     archives = _load_archives(output_dir, digests_root)
+    feed_overviews = _build_feed_overviews(archives)
+    keyword_overviews = _build_keyword_overviews(archives, tracked_keywords)
+
     _copy_latest_files(output_dir, site_root)
     site_root.joinpath("index.html").write_text(
-        _render_index(archives),
+        _render_index(archives, feed_overviews, keyword_overviews),
         encoding="utf-8",
     )
+    site_root.joinpath("trends.html").write_text(
+        _render_trends_page(feed_overviews, keyword_overviews),
+        encoding="utf-8",
+    )
+
+    for overview in feed_overviews:
+        feeds_root.joinpath(f"{overview.slug}.html").write_text(
+            _render_feed_page(overview, archives, keyword_overviews),
+            encoding="utf-8",
+        )
+
+    for keyword_overview in keyword_overviews:
+        topics_root.joinpath(f"{keyword_overview.slug}.html").write_text(
+            _render_keyword_page(keyword_overview),
+            encoding="utf-8",
+        )
     return site_root
 
 
@@ -128,7 +217,8 @@ def _load_day_archive(digest_json_path: Path, digests_root: Path) -> DayArchive:
         feeds.append(feed)
         total_papers += feed.count
         search_terms.append(feed.name.lower())
-        search_terms.extend(title["title"].lower() for title in feed.titles)
+        for paper in feed.papers:
+            search_terms.append(paper.search_text)
 
     return DayArchive(
         date=date_str,
@@ -157,45 +247,162 @@ def _parse_feed(raw_feed: object, digest_json_path: Path) -> FeedArchive:
             f"invalid papers for feed {name!r} in {digest_json_path}"
         )
 
-    titles: list[dict[str, str]] = []
-    for raw_paper in raw_papers[:5]:
-        if not isinstance(raw_paper, dict):
-            continue
-        title = raw_paper.get("title")
-        abstract_url = raw_paper.get("abstract_url")
-        if isinstance(title, str) and isinstance(abstract_url, str):
-            titles.append({"title": title, "href": abstract_url})
-
+    papers = _parse_papers(raw_papers)
     raw_key_points = raw_feed.get("key_points")
     key_points = (
-        [item for item in raw_key_points if isinstance(item, str) and item.strip()]
+        [
+            item.strip()
+            for item in raw_key_points
+            if isinstance(item, str) and item.strip()
+        ]
         if isinstance(raw_key_points, list)
         else []
     )
 
-    summary = _build_feed_summary(name, len(raw_papers), key_points, titles)
+    summary = _build_feed_summary(name, len(papers), key_points, papers)
     return FeedArchive(
         name=name.strip(),
-        count=len(raw_papers),
+        slug=_slugify(name),
+        count=len(papers),
         summary=summary,
-        titles=titles,
+        key_points=key_points,
+        papers=papers,
     )
+
+
+def _parse_papers(raw_papers: list[object]) -> list[PaperArchive]:
+    papers: list[PaperArchive] = []
+    for raw_paper in raw_papers:
+        if not isinstance(raw_paper, dict):
+            continue
+        title = raw_paper.get("title")
+        abstract_url = raw_paper.get("abstract_url")
+        summary = raw_paper.get("summary", "")
+        if not isinstance(title, str) or not isinstance(abstract_url, str):
+            continue
+        normalized_summary = summary.strip() if isinstance(summary, str) else ""
+        papers.append(
+            PaperArchive(
+                title=title.strip(),
+                href=abstract_url,
+                summary=normalized_summary,
+                search_text=_normalize_search(f"{title} {normalized_summary}"),
+            )
+        )
+    return papers
 
 
 def _build_feed_summary(
     name: str,
     count: int,
     key_points: list[str],
-    titles: list[dict[str, str]],
+    papers: list[PaperArchive],
 ) -> str:
     if count == 0:
         return f"{name} 今日没有新的命中文献。"
     if key_points:
         return _truncate("；".join(key_points[:2]), 220)
-    if titles:
-        label = "、".join(f"《{item['title']}》" for item in titles[:2])
+    if papers:
+        label = "、".join(f"《{paper.title}》" for paper in papers[:2])
         return _truncate(f"收录 {count} 篇，重点包括{label}。", 220)
     return f"收录 {count} 篇新论文。"
+
+
+def _build_feed_overviews(archives: list[DayArchive]) -> list[FeedOverview]:
+    feed_names = sorted({feed.name for day in archives for feed in day.feeds})
+    overviews: list[FeedOverview] = []
+    for feed_name in feed_names:
+        daily_counts: list[CountPoint] = []
+        latest_summary = ""
+        for day in archives:
+            feed = _find_feed(day, feed_name)
+            count = feed.count if feed is not None else 0
+            daily_counts.append(CountPoint(label=day.date, count=count))
+            if (
+                feed is not None
+                and not latest_summary
+                and (feed.count > 0 or feed.summary)
+            ):
+                latest_summary = feed.summary
+        total_papers = sum(point.count for point in daily_counts)
+        active_days = sum(1 for point in daily_counts if point.count > 0)
+        overviews.append(
+            FeedOverview(
+                name=feed_name,
+                slug=_slugify(feed_name),
+                total_papers=total_papers,
+                active_days=active_days,
+                recent_7_papers=_sum_counts(daily_counts, 7),
+                recent_30_papers=_sum_counts(daily_counts, 30),
+                recent_7_active_days=_sum_active_days(daily_counts, 7),
+                recent_30_active_days=_sum_active_days(daily_counts, 30),
+                latest_summary=latest_summary or f"{feed_name} 的长期归档与追踪视图。",
+                daily_counts=daily_counts,
+            )
+        )
+    return sorted(
+        overviews,
+        key=lambda item: (-item.total_papers, item.name.lower()),
+    )
+
+
+def _build_keyword_overviews(
+    archives: list[DayArchive],
+    tracked_keywords: Sequence[str],
+) -> list[KeywordOverview]:
+    normalized_terms = _normalize_keywords(tracked_keywords)
+    overviews: list[KeywordOverview] = []
+    for term in normalized_terms:
+        normalized_term = _normalize_search(term)
+        matches: list[KeywordMatch] = []
+        daily_counts: list[CountPoint] = []
+        for day in archives:
+            count_for_day = 0
+            generated_label = (
+                f"{day.generated_at.strftime('%Y-%m-%d %H:%M:%S')} ({day.timezone})"
+            )
+            for feed in day.feeds:
+                for paper in feed.papers:
+                    if normalized_term and normalized_term in paper.search_text:
+                        count_for_day += 1
+                        matches.append(
+                            KeywordMatch(
+                                date=day.date,
+                                generated_label=generated_label,
+                                days_ago=day.days_ago,
+                                feed_name=feed.name,
+                                title=paper.title,
+                                href=paper.href,
+                                summary=paper.summary,
+                            )
+                        )
+            daily_counts.append(CountPoint(label=day.date, count=count_for_day))
+
+        total_matches = sum(point.count for point in daily_counts)
+        if matches:
+            latest = matches[0]
+            latest_summary = _truncate(
+                f"最近一次命中来自 {latest.feed_name}：{latest.title}", 180
+            )
+        else:
+            latest_summary = "暂未命中，页面会持续追踪后续归档。"
+        overviews.append(
+            KeywordOverview(
+                term=term,
+                slug=_slugify(term),
+                total_matches=total_matches,
+                active_days=sum(1 for point in daily_counts if point.count > 0),
+                recent_7_matches=_sum_counts(daily_counts, 7),
+                recent_30_matches=_sum_counts(daily_counts, 30),
+                latest_summary=latest_summary,
+                daily_counts=daily_counts,
+                matches=matches,
+            )
+        )
+    return sorted(
+        overviews,
+        key=lambda item: (-item.total_matches, item.term.lower()),
+    )
 
 
 def _copy_latest_files(output_dir: Path, site_root: Path) -> None:
@@ -217,9 +424,13 @@ def _parse_datetime(value: object, digest_json_path: Path) -> datetime:
     return parsed
 
 
-def _render_index(archives: list[DayArchive]) -> str:
+def _render_index(
+    archives: list[DayArchive],
+    feed_overviews: list[FeedOverview],
+    keyword_overviews: list[KeywordOverview],
+) -> str:
     latest_archive = archives[0] if archives else None
-    feed_names = sorted({feed.name for day in archives for feed in day.feeds})
+    feed_names = [overview.name for overview in feed_overviews]
     stats = [
         _build_stats("最近 7 天", archives, 7),
         _build_stats("最近 30 天", archives, 30),
@@ -231,339 +442,397 @@ def _render_index(archives: list[DayArchive]) -> str:
     feed_options = "\n".join(
         f'<option value="{escape(name)}">{escape(name)}</option>' for name in feed_names
     )
-    latest_label = (
-        (
-            f"{latest_archive.generated_at.strftime('%Y-%m-%d %H:%M:%S')} "
-            f"({latest_archive.timezone})"
+    latest_label = _latest_label(latest_archive)
+    content = (
+        _render_subscription_panel(feed_overviews, keyword_overviews)
+        + '<section class="section-grid">'
+        + "".join(_render_stats_card(item) for item in stats)
+        + "</section>"
+        + _render_filter_panel(feed_options)
+        + '<section class="archive-grid" id="archive-grid">'
+        + cards_html
+        + "</section>"
+        + (
+            '<section class="empty hidden" id="empty-state">'
+            "当前筛选条件下没有匹配的归档。"
+            "</section>"
         )
-        if latest_archive is not None
-        else "No digest runs yet"
     )
 
+    return _render_page(
+        page_title="Paper Digest Archive",
+        eyebrow="Paper Digest Archive",
+        heading="研究日报归档页",
+        description=(
+            "汇总每天生成的 digest.json 和 digest.md，支持按 feed 过滤、"
+            "按标题关键词搜索，"
+            "并提供固定 feed 页面、关键词长期追踪页和最近 7 天 / 30 天趋势页。"
+        ),
+        hero_links=_render_hero_links(
+            [
+                ("latest.md", "查看最新 Markdown"),
+                ("latest.json", "查看最新 JSON"),
+                ("trends.html", "查看趋势总览"),
+                (None, f"最近构建：{latest_label}"),
+            ]
+        ),
+        content=content,
+        nav_current="home",
+        extra_script=_render_index_script(),
+    )
+
+
+def _render_trends_page(
+    feed_overviews: list[FeedOverview],
+    keyword_overviews: list[KeywordOverview],
+) -> str:
+    total_digests = max((len(item.daily_counts) for item in feed_overviews), default=0)
+    feed_cards = "\n".join(
+        _render_feed_overview_card(item, link_prefix="") for item in feed_overviews
+    ) or _render_empty_note("还没有可展示的 feed 趋势。")
+    keyword_cards = "\n".join(
+        _render_keyword_overview_card(item, link_prefix="")
+        for item in keyword_overviews
+    ) or _render_empty_note("当前没有配置可追踪的关键词。")
+    stats = [
+        ArchiveStats(
+            "Feed 订阅",
+            len(feed_overviews),
+            "个固定入口",
+            total_digests,
+            "个 digest 日",
+        ),
+        ArchiveStats(
+            "关键词追踪",
+            len(keyword_overviews),
+            "个关键词页",
+            sum(item.total_matches for item in keyword_overviews),
+            "次历史命中",
+        ),
+        ArchiveStats(
+            "最近 30 天",
+            sum(item.recent_30_papers for item in feed_overviews),
+            "篇 feed 命中",
+            sum(item.recent_30_matches for item in keyword_overviews),
+            "次关键词命中",
+        ),
+    ]
+    content = (
+        '<section class="section-grid">'
+        + "".join(_render_stats_card(item) for item in stats)
+        + "</section>"
+        + _render_section(
+            "Feed 趋势订阅",
+            "固定链接适合长期追踪某个研究方向的命中量和最近变化。",
+            f'<div class="subscription-grid">{feed_cards}</div>',
+        )
+        + _render_section(
+            "关键词长期追踪",
+            "这些页面来自你配置里的 feed 关键词，适合观察某个主题是否持续冒头。",
+            f'<div class="subscription-grid">{keyword_cards}</div>',
+        )
+    )
+    return _render_page(
+        page_title="Paper Digest Trends",
+        eyebrow="Subscription View",
+        heading="趋势与订阅总览",
+        description=(
+            "从归档里提炼长期信号：每个 feed 的近 7 天 / 30 天命中情况，"
+            "以及配置关键词的长期命中轨迹。"
+        ),
+        hero_links=_render_hero_links(
+            [
+                ("index.html", "返回归档首页"),
+                ("latest.md", "最新 Markdown"),
+                ("latest.json", "最新 JSON"),
+            ]
+        ),
+        content=content,
+        nav_current="trends",
+    )
+
+
+def _render_feed_page(
+    overview: FeedOverview,
+    archives: list[DayArchive],
+    keyword_overviews: list[KeywordOverview],
+) -> str:
+    related_keywords = [
+        item
+        for item in keyword_overviews
+        if any(
+            match.feed_name == overview.name
+            for match in item.matches[: min(len(item.matches), 20)]
+        )
+    ]
+    feed_days: list[DayArchive] = []
+    for day in archives:
+        feed = _find_feed(day, overview.name)
+        if feed is not None and feed.count > 0:
+            feed_days.append(day)
+    cards_html = "\n".join(
+        _render_day_card(day, visible_feed=overview.name, link_prefix="../")
+        for day in feed_days
+    ) or _render_empty_state("这个 feed 还没有命中过论文。")
+    keyword_links = (
+        '<div class="chip-cloud">'
+        + "".join(
+            _render_chip_link(
+                f"../topics/{item.slug}.html",
+                f"{item.term} · {item.total_matches}",
+            )
+            for item in related_keywords[:8]
+        )
+        + "</div>"
+        if related_keywords
+        else _render_empty_note("当前没有与这个 feed 重合的关键词追踪页。")
+    )
+    content = (
+        '<section class="section-grid">'
+        + "".join(
+            _render_stats_card(item)
+            for item in (
+                ArchiveStats(
+                    "最近 7 天",
+                    overview.recent_7_papers,
+                    "篇论文",
+                    overview.recent_7_active_days,
+                    "个活跃 digest",
+                ),
+                ArchiveStats(
+                    "最近 30 天",
+                    overview.recent_30_papers,
+                    "篇论文",
+                    overview.recent_30_active_days,
+                    "个活跃 digest",
+                ),
+                ArchiveStats(
+                    "全部历史",
+                    overview.total_papers,
+                    "篇论文",
+                    overview.active_days,
+                    "个活跃 digest",
+                ),
+            )
+        )
+        + "</section>"
+        + _render_section(
+            "近期走势",
+            overview.latest_summary,
+            _render_trend_list(overview.daily_counts, empty_label="暂无历史数据。"),
+        )
+        + _render_section(
+            "相关关键词页",
+            "如果这个 feed 同时命中了你配置里的关键词，这里会给出长期追踪入口。",
+            keyword_links,
+        )
+        + _render_section(
+            "历史命中",
+            "按天回看这个 feed 的命中文献，并保留当日 digest 的 "
+            "Markdown / JSON 原始产物。",
+            f'<section class="archive-grid">{cards_html}</section>',
+        )
+    )
+    return _render_page(
+        page_title=f"{overview.name} Feed Archive",
+        eyebrow="Feed Subscription",
+        heading=f"{overview.name} 固定订阅页",
+        description=(
+            "适合长期跟踪单个研究方向。页面会汇总这个 feed 的最近 7 天 / 30 天表现，"
+            "并保留每天命中的原始条目和 digest 链接。"
+        ),
+        hero_links=_render_hero_links(
+            [
+                ("../index.html", "返回归档首页"),
+                ("../trends.html", "查看趋势总览"),
+                ("../latest.md", "最新 Markdown"),
+            ]
+        ),
+        content=content,
+        nav_current="feeds",
+        link_prefix="../",
+    )
+
+
+def _render_keyword_page(overview: KeywordOverview) -> str:
+    grouped = _group_keyword_matches(overview.matches)
+    groups_html = "\n".join(
+        _render_keyword_match_group(date, matches) for date, matches in grouped
+    ) or _render_empty_state("这个关键词目前还没有历史命中。")
+    content = (
+        '<section class="section-grid">'
+        + "".join(
+            _render_stats_card(item)
+            for item in (
+                ArchiveStats(
+                    "最近 7 天",
+                    overview.recent_7_matches,
+                    "次命中",
+                    min(overview.active_days, 7),
+                    "个活跃日期",
+                ),
+                ArchiveStats(
+                    "最近 30 天",
+                    overview.recent_30_matches,
+                    "次命中",
+                    min(overview.active_days, 30),
+                    "个活跃日期",
+                ),
+                ArchiveStats(
+                    "全部历史",
+                    overview.total_matches,
+                    "次命中",
+                    overview.active_days,
+                    "个活跃日期",
+                ),
+            )
+        )
+        + "</section>"
+        + _render_section(
+            "近期走势",
+            overview.latest_summary,
+            _render_trend_list(overview.daily_counts, empty_label="暂无历史数据。"),
+        )
+        + _render_section(
+            "命中明细",
+            "按日期回看匹配到这个关键词的论文标题，并保留来源 feed 信息。",
+            f'<section class="match-grid">{groups_html}</section>',
+        )
+    )
+    return _render_page(
+        page_title=f"{overview.term} Topic Archive",
+        eyebrow="Keyword Tracking",
+        heading=f"关键词追踪：{overview.term}",
+        description=(
+            "这个页面会长期追踪你配置里关心的关键词，并把命中的论文按日期沉淀下来。"
+        ),
+        hero_links=_render_hero_links(
+            [
+                ("../index.html", "返回归档首页"),
+                ("../trends.html", "查看趋势总览"),
+                ("../latest.json", "最新 JSON"),
+            ]
+        ),
+        content=content,
+        nav_current="topics",
+        link_prefix="../",
+    )
+
+
+def _render_page(
+    *,
+    page_title: str,
+    eyebrow: str,
+    heading: str,
+    description: str,
+    hero_links: str,
+    content: str,
+    nav_current: str,
+    link_prefix: str = "",
+    extra_script: str = "",
+) -> str:
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Paper Digest Archive</title>
-  <style>
-    :root {{
-      --bg: #f4efe6;
-      --bg-accent: #e4dcc8;
-      --panel: rgba(255, 252, 246, 0.9);
-      --panel-strong: #fffaf1;
-      --text: #1f1a16;
-      --muted: #675e56;
-      --line: rgba(74, 56, 42, 0.18);
-      --brand: #9a3412;
-      --brand-soft: #f97316;
-      --shadow: 0 18px 40px rgba(86, 55, 25, 0.12);
-      --radius: 22px;
-      --max: 1180px;
-    }}
-
-    * {{
-      box-sizing: border-box;
-    }}
-
-    body {{
-      margin: 0;
-      min-height: 100vh;
-      font-family: "IBM Plex Sans", "Segoe UI Variable", sans-serif;
-      color: var(--text);
-      background:
-        radial-gradient(circle at top left, rgba(249, 115, 22, 0.18), transparent 30%),
-        radial-gradient(circle at top right, rgba(180, 83, 9, 0.12), transparent 24%),
-        linear-gradient(180deg, var(--bg) 0%, #f8f5ef 100%);
-    }}
-
-    a {{
-      color: inherit;
-    }}
-
-    .shell {{
-      width: min(calc(100vw - 32px), var(--max));
-      margin: 0 auto;
-      padding: 32px 0 64px;
-    }}
-
-    .hero {{
-      position: relative;
-      overflow: hidden;
-      padding: 32px;
-      border: 1px solid var(--line);
-      border-radius: calc(var(--radius) + 6px);
-      background:
-        linear-gradient(135deg, rgba(255, 250, 241, 0.98), rgba(243, 234, 215, 0.92));
-      box-shadow: var(--shadow);
-    }}
-
-    .hero::after {{
-      content: "";
-      position: absolute;
-      inset: auto -80px -120px auto;
-      width: 260px;
-      height: 260px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(249, 115, 22, 0.12), transparent 65%);
-      pointer-events: none;
-    }}
-
-    .eyebrow {{
-      margin: 0 0 12px;
-      font-size: 13px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--brand);
-    }}
-
-    h1 {{
-      margin: 0;
-      font-family: "Source Serif 4", Georgia, serif;
-      font-size: clamp(2.2rem, 5vw, 4.2rem);
-      line-height: 0.98;
-    }}
-
-    .hero p {{
-      max-width: 760px;
-      margin: 18px 0 0;
-      font-size: 1.03rem;
-      line-height: 1.7;
-      color: var(--muted);
-    }}
-
-    .hero-links {{
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin-top: 24px;
-    }}
-
-    .hero-link, .filter-chip {{
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 14px;
-      border-radius: 999px;
-      border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.72);
-      font-size: 0.96rem;
-      text-decoration: none;
-    }}
-
-    .meta-grid, .filter-grid, .archive-grid {{
-      display: grid;
-      gap: 18px;
-    }}
-
-    .meta-grid {{
-      margin-top: 22px;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    }}
-
-    .metric {{
-      padding: 18px;
-      border-radius: var(--radius);
-      border: 1px solid var(--line);
-      background: var(--panel);
-      box-shadow: var(--shadow);
-    }}
-
-    .metric-label {{
-      margin: 0;
-      font-size: 0.9rem;
-      color: var(--muted);
-    }}
-
-    .metric-value {{
-      margin: 10px 0 0;
-      font-size: 1.9rem;
-      font-weight: 700;
-    }}
-
-    .filter-panel {{
-      margin-top: 28px;
-      padding: 22px;
-      border-radius: var(--radius);
-      border: 1px solid var(--line);
-      background: var(--panel);
-      box-shadow: var(--shadow);
-    }}
-
-    .filter-grid {{
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      align-items: end;
-    }}
-
-    .field {{
-      display: grid;
-      gap: 8px;
-    }}
-
-    .field label {{
-      font-size: 0.92rem;
-      color: var(--muted);
-    }}
-
-    .field input, .field select {{
-      width: 100%;
-      padding: 12px 14px;
-      border-radius: 14px;
-      border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.86);
-      color: var(--text);
-      font: inherit;
-    }}
-
-    .chip-row {{
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }}
-
-    .filter-chip {{
-      cursor: pointer;
-    }}
-
-    .filter-chip[aria-pressed="true"] {{
-      border-color: transparent;
-      background: linear-gradient(135deg, var(--brand), var(--brand-soft));
-      color: white;
-    }}
-
-    .archive-grid {{
-      margin-top: 28px;
-    }}
-
-    .day-card {{
-      padding: 24px;
-      border-radius: calc(var(--radius) + 2px);
-      border: 1px solid var(--line);
-      background: var(--panel-strong);
-      box-shadow: var(--shadow);
-    }}
-
-    .day-header {{
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      gap: 16px;
-      align-items: start;
-    }}
-
-    .day-title {{
-      margin: 0;
-      font-family: "Source Serif 4", Georgia, serif;
-      font-size: 1.8rem;
-    }}
-
-    .day-meta {{
-      margin-top: 10px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      color: var(--muted);
-      font-size: 0.92rem;
-    }}
-
-    .feed-stack {{
-      display: grid;
-      gap: 14px;
-      margin-top: 22px;
-    }}
-
-    .feed-card {{
-      padding: 16px 18px;
-      border-radius: 18px;
-      border: 1px solid var(--line);
-      background: rgba(244, 239, 230, 0.68);
-    }}
-
-    .feed-head {{
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      gap: 8px;
-      align-items: center;
-    }}
-
-    .feed-name {{
-      font-size: 1.02rem;
-      font-weight: 700;
-    }}
-
-    .feed-count {{
-      color: var(--brand);
-      font-size: 0.92rem;
-    }}
-
-    .feed-summary {{
-      margin: 10px 0 0;
-      color: var(--muted);
-      line-height: 1.65;
-    }}
-
-    .paper-list {{
-      margin: 12px 0 0;
-      padding-left: 18px;
-      display: grid;
-      gap: 6px;
-      color: var(--muted);
-    }}
-
-    .paper-list a {{
-      text-decoration: none;
-      border-bottom: 1px dashed rgba(154, 52, 18, 0.45);
-    }}
-
-    .empty {{
-      padding: 28px;
-      text-align: center;
-      border-radius: calc(var(--radius) + 2px);
-      border: 1px dashed var(--line);
-      color: var(--muted);
-      background: rgba(255, 252, 246, 0.75);
-    }}
-
-    .hidden {{
-      display: none !important;
-    }}
-
-    @media (max-width: 720px) {{
-      .shell {{
-        width: min(calc(100vw - 20px), var(--max));
-        padding-top: 20px;
-      }}
-
-      .hero, .filter-panel, .day-card {{
-        padding: 20px;
-      }}
-
-      .day-title {{
-        font-size: 1.45rem;
-      }}
-    }}
-  </style>
+  <title>{escape(page_title)}</title>
+  <style>{_site_styles()}</style>
 </head>
 <body>
   <main class="shell">
+    {_render_nav(nav_current, link_prefix)}
     <section class="hero">
-      <p class="eyebrow">Paper Digest Archive</p>
-      <h1>研究日报归档页</h1>
-      <p>
-        汇总每天生成的 digest.json 和 digest.md，支持按 feed 过滤、按标题关键词搜索，
-        以及按最近 7 天、30 天或全部历史查看归档。
-      </p>
-      <div class="hero-links">
-        <a class="hero-link" href="latest.md">查看最新 Markdown</a>
-        <a class="hero-link" href="latest.json">查看最新 JSON</a>
-        <span class="hero-link">最近构建：{escape(latest_label)}</span>
-      </div>
-      <div class="meta-grid">
-        {"".join(_render_stats_card(item) for item in stats)}
-      </div>
+      <p class="eyebrow">{escape(eyebrow)}</p>
+      <h1>{escape(heading)}</h1>
+      <p>{escape(description)}</p>
+      {hero_links}
     </section>
+    {content}
+  </main>
+  {extra_script}
+</body>
+</html>
+"""
 
+
+def _render_nav(current: str, link_prefix: str) -> str:
+    items = [
+        ("home", f"{link_prefix}index.html", "归档首页"),
+        ("trends", f"{link_prefix}trends.html", "趋势总览"),
+    ]
+    return (
+        '<nav class="top-nav">'
+        + "".join(
+            (
+                f'<a class="nav-link{" is-active" if current == key else ""}" '
+                f'href="{escape(href)}">{escape(label)}</a>'
+            )
+            for key, href, label in items
+        )
+        + "</nav>"
+    )
+
+
+def _render_hero_links(items: Sequence[tuple[str | None, str]]) -> str:
+    return (
+        '<div class="hero-links">'
+        + "".join(
+            (
+                f'<a class="hero-link" href="{escape(href)}">{escape(label)}</a>'
+                if href is not None
+                else f'<span class="hero-link">{escape(label)}</span>'
+            )
+            for href, label in items
+        )
+        + "</div>"
+    )
+
+
+def _render_subscription_panel(
+    feed_overviews: list[FeedOverview],
+    keyword_overviews: list[KeywordOverview],
+) -> str:
+    feed_cards = "\n".join(
+        _render_feed_overview_card(item, link_prefix="") for item in feed_overviews
+    ) or _render_empty_note("还没有可用的 feed 固定页。")
+    keyword_cards = (
+        '<div class="chip-cloud">'
+        + "".join(
+            _render_chip_link(
+                f"topics/{item.slug}.html",
+                f"{item.term} · {item.total_matches}",
+            )
+            for item in keyword_overviews
+        )
+        + "</div>"
+        if keyword_overviews
+        else _render_empty_note("当前没有配置关键词追踪页。")
+    )
+    trends_card = (
+        '<a class="resource-card spotlight" href="trends.html">'
+        '<p class="resource-kicker">Trends</p>'
+        '<h3 class="resource-title">最近 7 天 / 30 天趋势总览</h3>'
+        "<p>把 feed 命中和关键词命中压缩成可持续浏览的长期视角。</p>"
+        "</a>"
+    )
+    return _render_section(
+        "订阅入口",
+        "把站点从“按天翻”升级成“按主题长期追”。固定页更适合每天回看同一类研究信号。",
+        '<div class="subscription-grid">'
+        + trends_card
+        + feed_cards
+        + "</div>"
+        + _render_section_block(
+            "关键词长期追踪",
+            "这些页来自你的 feed 关键词配置。",
+            keyword_cards,
+        ),
+    )
+
+
+def _render_filter_panel(feed_options: str) -> str:
+    return f"""
     <section class="filter-panel">
       <div class="filter-grid">
         <div class="field">
@@ -606,75 +875,29 @@ def _render_index(archives: list[DayArchive]) -> str:
         </div>
       </div>
     </section>
+    """
 
-    <section class="archive-grid" id="archive-grid">
-      {cards_html}
-    </section>
-    <section class="empty hidden" id="empty-state">
-      当前筛选条件下没有匹配的归档。
-    </section>
-  </main>
 
-  <script>
-    const searchInput = document.getElementById("title-search");
-    const feedFilter = document.getElementById("feed-filter");
-    const emptyState = document.getElementById("empty-state");
-    const cards = Array.from(document.querySelectorAll(".day-card"));
-    const chips = Array.from(document.querySelectorAll(".filter-chip"));
-    let activeDays = "30";
+def _render_section(title: str, description: str, body: str) -> str:
+    return (
+        '<section class="section-card">'
+        '<div class="section-head">'
+        f'<h2 class="section-title">{escape(title)}</h2>'
+        f'<p class="section-copy">{escape(description)}</p>'
+        "</div>"
+        f"{body}"
+        "</section>"
+    )
 
-    function setActiveChip(value) {{
-      activeDays = value;
-      for (const chip of chips) {{
-        chip.setAttribute("aria-pressed", String(chip.dataset.days === value));
-      }}
-      applyFilters();
-    }}
 
-    function normalize(value) {{
-      return value.trim().toLowerCase();
-    }}
-
-    function applyFilters() {{
-      const query = normalize(searchInput.value);
-      const activeFeed = normalize(feedFilter.value);
-      let visibleCount = 0;
-
-      for (const card of cards) {{
-        const daysAgo = Number(card.dataset.daysAgo || "0");
-        const searchText = normalize(card.dataset.searchText || "");
-        const feedNames = normalize(card.dataset.feedNames || "");
-        const matchesDays = activeDays === "all" || daysAgo < Number(activeDays);
-        const matchesQuery = query === "" || searchText.includes(query);
-        const matchesFeed =
-          activeFeed === "" || feedNames.includes("|" + activeFeed + "|");
-        const visible = matchesDays && matchesQuery && matchesFeed;
-        card.classList.toggle("hidden", !visible);
-
-        for (const feedCard of card.querySelectorAll(".feed-card")) {{
-          const feedName = normalize(feedCard.dataset.feedName || "");
-          const feedVisible = activeFeed === "" || feedName === activeFeed;
-          feedCard.classList.toggle("hidden", !feedVisible);
-        }}
-
-        if (visible) {{
-          visibleCount += 1;
-        }}
-      }}
-
-      emptyState.classList.toggle("hidden", visibleCount > 0);
-    }}
-
-    searchInput.addEventListener("input", applyFilters);
-    feedFilter.addEventListener("change", applyFilters);
-    for (const chip of chips) {{
-      chip.addEventListener("click", () => setActiveChip(chip.dataset.days || "all"));
-    }}
-    applyFilters();
-  </script>
-</body>
-</html>
-"""
+def _render_section_block(title: str, description: str, body: str) -> str:
+    return (
+        '<div class="section-block">'
+        f'<h3 class="block-title">{escape(title)}</h3>'
+        f'<p class="block-copy">{escape(description)}</p>'
+        f"{body}"
+        "</div>"
+    )
 
 
 def _build_stats(
@@ -688,8 +911,10 @@ def _build_stats(
         relevant = [day for day in archives if day.days_ago < limit_days]
     return ArchiveStats(
         label=label,
-        digests=len(relevant),
-        papers=sum(day.total_papers for day in relevant),
+        primary_value=sum(day.total_papers for day in relevant),
+        primary_label="篇论文",
+        secondary_value=len(relevant),
+        secondary_label="个 digest",
     )
 
 
@@ -697,18 +922,38 @@ def _render_stats_card(stats: ArchiveStats) -> str:
     return (
         '<article class="metric">'
         f'<p class="metric-label">{escape(stats.label)}</p>'
-        f'<p class="metric-value">{stats.papers}</p>'
-        f'<p class="metric-label">{stats.digests} 个 digest</p>'
+        f'<p class="metric-value">{stats.primary_value}</p>'
+        f'<p class="metric-subtle">{escape(stats.primary_label)}</p>'
+        f'<p class="metric-meta">{stats.secondary_value} '
+        f"{escape(stats.secondary_label)}</p>"
         "</article>"
     )
 
 
-def _render_day_card(day: DayArchive) -> str:
+def _render_day_card(
+    day: DayArchive,
+    *,
+    visible_feed: str | None = None,
+    link_prefix: str = "",
+) -> str:
     generated_label = (
         f"{day.generated_at.strftime('%Y-%m-%d %H:%M:%S')} ({day.timezone})"
     )
-    feed_names = "|" + "|".join(feed.name.lower() for feed in day.feeds) + "|"
-    feed_cards = "\n".join(_render_feed_card(feed) for feed in day.feeds)
+    feeds = (
+        [feed for feed in day.feeds if feed.name == visible_feed]
+        if visible_feed is not None
+        else list(day.feeds)
+    )
+    feed_names = "|" + "|".join(feed.name.lower() for feed in feeds) + "|"
+    feed_cards = "\n".join(
+        _render_feed_card(
+            feed,
+            link_prefix=link_prefix,
+            feed_page_link=visible_feed is None,
+        )
+        for feed in feeds
+    )
+    total_papers = sum(feed.count for feed in feeds)
     return (
         f'<article class="day-card" data-days-ago="{day.days_ago}" '
         f'data-search-text="{escape(day.search_text)}" '
@@ -717,13 +962,14 @@ def _render_day_card(day: DayArchive) -> str:
         "<div>"
         f'<h2 class="day-title">{escape(day.date)}</h2>'
         '<div class="day-meta">'
-        f"<span>命中 {day.total_papers} 篇</span>"
+        f"<span>命中 {total_papers} 篇</span>"
         f"<span>生成于 {escape(generated_label)}</span>"
         "</div>"
         "</div>"
         '<div class="hero-links">'
-        f'<a class="hero-link" href="{escape(day.markdown_href)}">Markdown</a>'
-        f'<a class="hero-link" href="{escape(day.json_href)}">JSON</a>'
+        f'<a class="hero-link" href="{escape(link_prefix + day.markdown_href)}">'
+        "Markdown</a>"
+        f'<a class="hero-link" href="{escape(link_prefix + day.json_href)}">JSON</a>'
         "</div>"
         "</header>"
         f'<div class="feed-stack">{feed_cards}</div>'
@@ -731,19 +977,30 @@ def _render_day_card(day: DayArchive) -> str:
     )
 
 
-def _render_feed_card(feed: FeedArchive) -> str:
+def _render_feed_card(
+    feed: FeedArchive,
+    *,
+    link_prefix: str,
+    feed_page_link: bool,
+) -> str:
     titles = "".join(
         "<li>"
-        f'<a href="{escape(item["href"])}" target="_blank" '
-        f'rel="noreferrer">{escape(item["title"])}</a>'
+        f'<a href="{escape(item.href)}" target="_blank" '
+        f'rel="noreferrer">{escape(item.title)}</a>'
         "</li>"
-        for item in feed.titles
+        for item in feed.papers[:5]
     )
     title_list = f'<ol class="paper-list">{titles}</ol>' if titles else ""
+    feed_href = escape(link_prefix + "feeds/" + feed.slug + ".html")
+    name_label = (
+        f'<a class="feed-name-link" href="{feed_href}">{escape(feed.name)}</a>'
+        if feed_page_link
+        else escape(feed.name)
+    )
     return (
         f'<section class="feed-card" data-feed-name="{escape(feed.name.lower())}">'
         '<div class="feed-head">'
-        f'<span class="feed-name">{escape(feed.name)}</span>'
+        f'<span class="feed-name">{name_label}</span>'
         f'<span class="feed-count">{feed.count} 篇</span>'
         "</div>"
         f'<p class="feed-summary">{escape(feed.summary)}</p>'
@@ -752,8 +1009,757 @@ def _render_feed_card(feed: FeedArchive) -> str:
     )
 
 
-def _render_empty_state() -> str:
-    return '<div class="empty">还没有可归档的 digest 输出。</div>'
+def _render_feed_overview_card(overview: FeedOverview, *, link_prefix: str) -> str:
+    feed_href = escape(link_prefix + "feeds/" + overview.slug + ".html")
+    return (
+        f'<a class="resource-card" href="{feed_href}">'
+        '<p class="resource-kicker">Feed</p>'
+        f'<h3 class="resource-title">{escape(overview.name)}</h3>'
+        f'<p class="resource-copy">{escape(overview.latest_summary)}</p>'
+        '<div class="resource-meta">'
+        f"<span>{overview.recent_7_papers} / 7d</span>"
+        f"<span>{overview.recent_30_papers} / 30d</span>"
+        f"<span>{overview.total_papers} / all</span>"
+        "</div>"
+        "</a>"
+    )
+
+
+def _render_keyword_overview_card(
+    overview: KeywordOverview,
+    *,
+    link_prefix: str,
+) -> str:
+    topic_href = escape(link_prefix + "topics/" + overview.slug + ".html")
+    return (
+        f'<a class="resource-card" href="{topic_href}">'
+        '<p class="resource-kicker">Topic</p>'
+        f'<h3 class="resource-title">{escape(overview.term)}</h3>'
+        f'<p class="resource-copy">{escape(overview.latest_summary)}</p>'
+        '<div class="resource-meta">'
+        f"<span>{overview.recent_7_matches} / 7d</span>"
+        f"<span>{overview.recent_30_matches} / 30d</span>"
+        f"<span>{overview.total_matches} / all</span>"
+        "</div>"
+        "</a>"
+    )
+
+
+def _render_chip_link(href: str, label: str) -> str:
+    return f'<a class="topic-chip" href="{escape(href)}">{escape(label)}</a>'
+
+
+def _render_trend_list(
+    daily_counts: list[CountPoint],
+    *,
+    limit: int = 14,
+    empty_label: str,
+) -> str:
+    selected = list(reversed(daily_counts[:limit]))
+    if not selected:
+        return _render_empty_note(empty_label)
+    max_count = max((item.count for item in selected), default=0)
+    rows = "".join(_render_trend_row(item, max_count=max_count) for item in selected)
+    return f'<div class="trend-list">{rows}</div>'
+
+
+def _render_trend_row(point: CountPoint, *, max_count: int) -> str:
+    width = 12 if max_count <= 0 else max(12, int(point.count / max_count * 100))
+    return (
+        '<div class="trend-row">'
+        f'<span class="trend-label">{escape(point.label)}</span>'
+        '<div class="trend-track">'
+        f'<span class="trend-bar" style="width: {width}%"></span>'
+        "</div>"
+        f'<span class="trend-count">{point.count}</span>'
+        "</div>"
+    )
+
+
+def _group_keyword_matches(
+    matches: list[KeywordMatch],
+) -> list[tuple[str, list[KeywordMatch]]]:
+    groups: list[tuple[str, list[KeywordMatch]]] = []
+    seen_dates: dict[str, list[KeywordMatch]] = {}
+    order: list[str] = []
+    for match in matches:
+        bucket = seen_dates.setdefault(match.date, [])
+        if match.date not in order:
+            order.append(match.date)
+        bucket.append(match)
+    for date in order:
+        groups.append((date, seen_dates[date]))
+    return groups
+
+
+def _render_keyword_match_group(date: str, matches: list[KeywordMatch]) -> str:
+    generated_label = matches[0].generated_label if matches else ""
+    items = "".join(_render_keyword_match_card(match) for match in matches)
+    return (
+        '<section class="match-day">'
+        '<div class="match-head">'
+        f'<h3 class="match-title">{escape(date)}</h3>'
+        f'<p class="match-meta">{escape(generated_label)}</p>'
+        "</div>"
+        f'<div class="match-list">{items}</div>'
+        "</section>"
+    )
+
+
+def _render_keyword_match_card(match: KeywordMatch) -> str:
+    summary = (
+        f'<p class="match-copy">{escape(_truncate(match.summary, 180))}</p>'
+        if match.summary
+        else ""
+    )
+    return (
+        '<article class="match-card">'
+        f'<span class="feed-pill">{escape(match.feed_name)}</span>'
+        f'<h4 class="match-card-title"><a href="{escape(match.href)}" '
+        f'target="_blank" rel="noreferrer">{escape(match.title)}</a></h4>'
+        f"{summary}"
+        "</article>"
+    )
+
+
+def _render_empty_state(label: str = "还没有可归档的 digest 输出。") -> str:
+    return f'<div class="empty">{escape(label)}</div>'
+
+
+def _render_empty_note(label: str) -> str:
+    return f'<p class="empty-note">{escape(label)}</p>'
+
+
+def _render_index_script() -> str:
+    return """
+<script>
+  const searchInput = document.getElementById("title-search");
+  const feedFilter = document.getElementById("feed-filter");
+  const emptyState = document.getElementById("empty-state");
+  const cards = Array.from(document.querySelectorAll(".day-card"));
+  const chips = Array.from(document.querySelectorAll(".filter-chip"));
+  let activeDays = "30";
+
+  function setActiveChip(value) {
+    activeDays = value;
+    for (const chip of chips) {
+      chip.setAttribute("aria-pressed", String(chip.dataset.days === value));
+    }
+    applyFilters();
+  }
+
+  function normalize(value) {
+    return value.trim().toLowerCase();
+  }
+
+  function applyFilters() {
+    const query = normalize(searchInput.value);
+    const activeFeed = normalize(feedFilter.value);
+    let visibleCount = 0;
+
+    for (const card of cards) {
+      const daysAgo = Number(card.dataset.daysAgo || "0");
+      const searchText = normalize(card.dataset.searchText || "");
+      const feedNames = normalize(card.dataset.feedNames || "");
+      const matchesDays = activeDays === "all" || daysAgo < Number(activeDays);
+      const matchesQuery = query === "" || searchText.includes(query);
+      const matchesFeed =
+        activeFeed === "" || feedNames.includes("|" + activeFeed + "|");
+      const visible = matchesDays && matchesQuery && matchesFeed;
+      card.classList.toggle("hidden", !visible);
+
+      for (const feedCard of card.querySelectorAll(".feed-card")) {
+        const feedName = normalize(feedCard.dataset.feedName || "");
+        const feedVisible = activeFeed === "" || feedName === activeFeed;
+        feedCard.classList.toggle("hidden", !feedVisible);
+      }
+
+      if (visible) {
+        visibleCount += 1;
+      }
+    }
+
+    emptyState.classList.toggle("hidden", visibleCount > 0);
+  }
+
+  searchInput.addEventListener("input", applyFilters);
+  feedFilter.addEventListener("change", applyFilters);
+  for (const chip of chips) {
+    chip.addEventListener("click", () => setActiveChip(chip.dataset.days || "all"));
+  }
+  applyFilters();
+</script>
+"""
+
+
+def _site_styles() -> str:
+    return """
+    :root {
+      --bg: #f4efe6;
+      --bg-accent: #e4dcc8;
+      --panel: rgba(255, 252, 246, 0.9);
+      --panel-strong: #fffaf1;
+      --text: #1f1a16;
+      --muted: #675e56;
+      --line: rgba(74, 56, 42, 0.18);
+      --brand: #9a3412;
+      --brand-soft: #f97316;
+      --shadow: 0 18px 40px rgba(86, 55, 25, 0.12);
+      --radius: 22px;
+      --max: 1180px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "IBM Plex Sans", "Segoe UI Variable", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(249, 115, 22, 0.18), transparent 30%),
+        radial-gradient(circle at top right, rgba(180, 83, 9, 0.12), transparent 24%),
+        linear-gradient(180deg, var(--bg) 0%, #f8f5ef 100%);
+    }
+
+    a {
+      color: inherit;
+    }
+
+    .shell {
+      width: min(calc(100vw - 32px), var(--max));
+      margin: 0 auto;
+      padding: 24px 0 64px;
+    }
+
+    .top-nav {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+
+    .nav-link,
+    .hero-link,
+    .filter-chip,
+    .topic-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.72);
+      font-size: 0.96rem;
+      text-decoration: none;
+    }
+
+    .nav-link.is-active {
+      background: linear-gradient(135deg, var(--brand), var(--brand-soft));
+      color: white;
+      border-color: transparent;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 32px;
+      border: 1px solid var(--line);
+      border-radius: calc(var(--radius) + 6px);
+      background:
+        linear-gradient(135deg, rgba(255, 250, 241, 0.98), rgba(243, 234, 215, 0.92));
+      box-shadow: var(--shadow);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -80px -120px auto;
+      width: 260px;
+      height: 260px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(249, 115, 22, 0.12), transparent 65%);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      margin: 0 0 12px;
+      font-size: 13px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--brand);
+    }
+
+    h1 {
+      margin: 0;
+      font-family: "Source Serif 4", Georgia, serif;
+      font-size: clamp(2.2rem, 5vw, 4.2rem);
+      line-height: 0.98;
+    }
+
+    .hero p {
+      max-width: 780px;
+      margin: 18px 0 0;
+      font-size: 1.03rem;
+      line-height: 1.7;
+      color: var(--muted);
+    }
+
+    .hero-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .section-grid,
+    .archive-grid,
+    .subscription-grid,
+    .match-grid {
+      display: grid;
+      gap: 18px;
+    }
+
+    .section-grid {
+      margin-top: 22px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+
+    .section-card,
+    .filter-panel,
+    .day-card {
+      margin-top: 24px;
+      padding: 22px;
+      border-radius: calc(var(--radius) + 2px);
+      border: 1px solid var(--line);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .section-head {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .section-title {
+      margin: 0;
+      font-family: "Source Serif 4", Georgia, serif;
+      font-size: 1.6rem;
+    }
+
+    .section-copy,
+    .block-copy,
+    .resource-copy,
+    .empty-note {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .section-block + .section-block {
+      margin-top: 22px;
+    }
+
+    .block-title {
+      margin: 0 0 8px;
+      font-size: 1rem;
+    }
+
+    .chip-cloud {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    .subscription-grid {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .resource-card {
+      display: grid;
+      gap: 10px;
+      padding: 18px;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.78);
+      text-decoration: none;
+      min-height: 180px;
+    }
+
+    .resource-card.spotlight {
+      background:
+        linear-gradient(
+          135deg,
+          rgba(154, 52, 18, 0.94),
+          rgba(249, 115, 22, 0.88)
+        );
+      color: white;
+      border-color: transparent;
+    }
+
+    .resource-kicker {
+      margin: 0;
+      font-size: 0.8rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--brand);
+    }
+
+    .resource-card.spotlight .resource-kicker,
+    .resource-card.spotlight .resource-copy {
+      color: rgba(255, 255, 255, 0.88);
+    }
+
+    .resource-title {
+      margin: 0;
+      font-size: 1.15rem;
+      line-height: 1.35;
+    }
+
+    .resource-meta {
+      margin-top: auto;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .resource-card.spotlight .resource-meta {
+      color: rgba(255, 255, 255, 0.88);
+    }
+
+    .metric {
+      padding: 18px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: rgba(255, 252, 246, 0.95);
+      box-shadow: var(--shadow);
+    }
+
+    .metric-label,
+    .metric-subtle,
+    .metric-meta {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .metric-value {
+      margin: 10px 0 6px;
+      font-size: 1.9rem;
+      font-weight: 700;
+    }
+
+    .filter-grid {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      align-items: end;
+    }
+
+    .field {
+      display: grid;
+      gap: 8px;
+    }
+
+    .field label {
+      font-size: 0.92rem;
+      color: var(--muted);
+    }
+
+    .field input,
+    .field select {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.86);
+      color: var(--text);
+      font: inherit;
+    }
+
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .filter-chip {
+      cursor: pointer;
+    }
+
+    .filter-chip[aria-pressed="true"] {
+      border-color: transparent;
+      background: linear-gradient(135deg, var(--brand), var(--brand-soft));
+      color: white;
+    }
+
+    .archive-grid {
+      margin-top: 28px;
+    }
+
+    .day-card {
+      background: var(--panel-strong);
+    }
+
+    .day-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .day-title {
+      margin: 0;
+      font-family: "Source Serif 4", Georgia, serif;
+      font-size: 1.8rem;
+    }
+
+    .day-meta {
+      margin-top: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .feed-stack {
+      display: grid;
+      gap: 14px;
+      margin-top: 22px;
+    }
+
+    .feed-card {
+      padding: 16px 18px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(244, 239, 230, 0.68);
+    }
+
+    .feed-head {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .feed-name {
+      font-size: 1.02rem;
+      font-weight: 700;
+    }
+
+    .feed-name-link {
+      text-decoration: none;
+      border-bottom: 1px dashed rgba(154, 52, 18, 0.4);
+    }
+
+    .feed-count {
+      color: var(--brand);
+      font-size: 0.92rem;
+    }
+
+    .feed-summary {
+      margin: 10px 0 0;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .paper-list {
+      margin: 12px 0 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+    }
+
+    .paper-list a,
+    .match-card-title a {
+      text-decoration: none;
+      border-bottom: 1px dashed rgba(154, 52, 18, 0.45);
+    }
+
+    .trend-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .trend-row {
+      display: grid;
+      grid-template-columns: 96px 1fr 36px;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .trend-label,
+    .trend-count {
+      font-size: 0.92rem;
+      color: var(--muted);
+    }
+
+    .trend-track {
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(154, 52, 18, 0.08);
+      overflow: hidden;
+    }
+
+    .trend-bar {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(135deg, var(--brand), var(--brand-soft));
+    }
+
+    .match-grid {
+      margin-top: 12px;
+    }
+
+    .match-day {
+      padding: 18px;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.78);
+    }
+
+    .match-head {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+
+    .match-title,
+    .match-card-title {
+      margin: 0;
+    }
+
+    .match-meta {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .match-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .match-card {
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(74, 56, 42, 0.12);
+      background: rgba(244, 239, 230, 0.58);
+    }
+
+    .match-copy {
+      margin: 10px 0 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .feed-pill {
+      display: inline-flex;
+      margin-bottom: 10px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(154, 52, 18, 0.1);
+      color: var(--brand);
+      font-size: 0.88rem;
+      font-weight: 600;
+    }
+
+    .empty {
+      padding: 28px;
+      text-align: center;
+      border-radius: calc(var(--radius) + 2px);
+      border: 1px dashed var(--line);
+      color: var(--muted);
+      background: rgba(255, 252, 246, 0.75);
+    }
+
+    .empty-note {
+      margin-top: 14px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 720px) {
+      .shell {
+        width: min(calc(100vw - 20px), var(--max));
+        padding-top: 18px;
+      }
+
+      .hero,
+      .section-card,
+      .filter-panel,
+      .day-card {
+        padding: 20px;
+      }
+
+      .day-title {
+        font-size: 1.45rem;
+      }
+
+      .trend-row {
+        grid-template-columns: 78px 1fr 32px;
+        gap: 8px;
+      }
+    }
+    """
+
+
+def _latest_label(day: DayArchive | None) -> str:
+    if day is None:
+        return "No digest runs yet"
+    return f"{day.generated_at.strftime('%Y-%m-%d %H:%M:%S')} ({day.timezone})"
+
+
+def _sum_counts(points: list[CountPoint], limit: int) -> int:
+    return sum(point.count for point in points[:limit])
+
+
+def _sum_active_days(points: list[CountPoint], limit: int) -> int:
+    return sum(1 for point in points[:limit] if point.count > 0)
+
+
+def _find_feed(day: DayArchive, name: str) -> FeedArchive | None:
+    for feed in day.feeds:
+        if feed.name == name:
+            return feed
+    return None
+
+
+def _normalize_keywords(keywords: Sequence[str]) -> list[str]:
+    seen: set[str] = set()
+    normalized: list[str] = []
+    for keyword in keywords:
+        stripped = keyword.strip()
+        key = stripped.lower()
+        if not stripped or key in seen:
+            continue
+        seen.add(key)
+        normalized.append(stripped)
+    return normalized
+
+
+def _normalize_search(value: str) -> str:
+    return " ".join(value.lower().split())
+
+
+def _slugify(value: str) -> str:
+    ascii_value = value.encode("ascii", "ignore").decode("ascii").lower()
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_value).strip("-")
+    if slug:
+        return slug
+    return "item-" + hashlib.sha1(value.encode("utf-8")).hexdigest()[:12]
 
 
 def _truncate(value: str, limit: int) -> str:

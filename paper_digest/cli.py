@@ -50,7 +50,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         state = load_state(config.state)
         digest = generate_digest(config, state=state)
         json_path, markdown_path = write_outputs(config, digest)
-        site_path = build_archive_site(config.output_dir)
+        site_path = build_archive_site(
+            config.output_dir,
+            tracked_keywords=_tracked_keywords(config),
+        )
         delivery_receipts = send_configured_deliveries(config, digest)
         save_state(config.state, state)
     except DeliveryError as exc:
@@ -80,6 +83,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         for receipt in delivery_receipts:
             print(receipt)
     return 0
+
+
+def _tracked_keywords(config: object) -> list[str]:
+    keywords: list[str] = []
+    seen: set[str] = set()
+    feeds = getattr(config, "feeds", [])
+    for feed in feeds:
+        for keyword in getattr(feed, "keywords", []):
+            stripped = keyword.strip()
+            normalized = stripped.lower()
+            if not stripped or normalized in seen:
+                continue
+            seen.add(normalized)
+            keywords.append(stripped)
+    return keywords
 
 
 if __name__ == "__main__":

@@ -60,19 +60,36 @@ class ArchiveSiteTests(unittest.TestCase):
             (output_dir / "latest.md").write_text("# latest\n", encoding="utf-8")
             (output_dir / "latest.json").write_text("{}", encoding="utf-8")
 
-            site_path = build_archive_site(output_dir)
+            site_path = build_archive_site(
+                output_dir,
+                tracked_keywords=["agent", "benchmark", "diffusion"],
+            )
 
             index_html = (site_path / "index.html").read_text(encoding="utf-8")
+            trends_html = (site_path / "trends.html").read_text(encoding="utf-8")
+            llm_html = (site_path / "feeds/llm.html").read_text(encoding="utf-8")
+            agent_html = (site_path / "topics/agent.html").read_text(encoding="utf-8")
             self.assertIn("研究日报归档页", index_html)
+            self.assertIn("订阅入口", index_html)
             self.assertIn("最近 7 天", index_html)
             self.assertIn("Paper Circle", index_html)
             self.assertIn("digests/2026-04-08/digest.md", index_html)
             self.assertIn("2026-04-08 23:59:44 (Asia/Shanghai)", index_html)
             self.assertIn('data-feed-names="|llm|vision|"', index_html)
+            self.assertIn("feeds/llm.html", index_html)
+            self.assertIn("topics/agent.html", index_html)
+            self.assertIn("趋势与订阅总览", trends_html)
+            self.assertIn("LLM 固定订阅页", llm_html)
+            self.assertIn("../trends.html", llm_html)
+            self.assertIn("关键词追踪：agent", agent_html)
+            self.assertIn("Agent Systems", agent_html)
             self.assertTrue((site_path / "latest.md").exists())
             self.assertTrue((site_path / "latest.json").exists())
             self.assertTrue((site_path / "digests/2026-04-08/digest.json").exists())
             self.assertTrue((site_path / "digests/2026-04-08/digest.md").exists())
+            self.assertTrue((site_path / "trends.html").exists())
+            self.assertTrue((site_path / "feeds/llm.html").exists())
+            self.assertTrue((site_path / "topics/agent.html").exists())
 
     def test_build_archive_site_uses_title_based_summary_without_key_points(
         self,
@@ -102,7 +119,7 @@ class ArchiveSiteTests(unittest.TestCase):
                 template="default",
             )
 
-            site_path = build_archive_site(output_dir)
+            site_path = build_archive_site(output_dir, tracked_keywords=["agent"])
 
             index_html = (site_path / "index.html").read_text(encoding="utf-8")
             self.assertIn(

@@ -254,6 +254,9 @@ The CLI also rebuilds `output/site/index.html` on every run. That static site:
 - shows daily hit counts and per-feed summaries
 - links to each day's Markdown and JSON
 - supports feed filtering, title keyword search, and recent `7d` / `30d` windows
+- emits fixed feed pages under `output/site/feeds/`
+- emits keyword tracking pages under `output/site/topics/` from configured feed keywords
+- emits a `output/site/trends.html` overview for feed and keyword subscription trends
 
 When GitHub Pages is enabled for the repository, the scheduled workflow uploads
 `output/site` and deploys it automatically after each successful digest run.

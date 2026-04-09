@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from paper_digest.cli import main
-from paper_digest.config import AppConfig, StateConfig
+from paper_digest.config import AppConfig, FeedConfig, StateConfig
 from paper_digest.delivery import DeliveryError
 from paper_digest.digest import DigestRun, FeedDigest
 from paper_digest.state import DigestState
@@ -46,7 +46,13 @@ class CliTests(unittest.TestCase):
                 lookback_hours=24,
                 output_dir=output_dir,
                 request_delay_seconds=0.0,
-                feeds=[],
+                feeds=[
+                    FeedConfig(
+                        name="LLM",
+                        categories=["cs.CL"],
+                        keywords=["agent", "reasoning", "agent"],
+                    )
+                ],
                 state=self._state_config(output_dir),
             )
             state = DigestState(seen_papers={})
@@ -70,7 +76,10 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         mock_generate_digest.assert_called_once_with(config, state=state)
-        mock_build_archive_site.assert_called_once_with(config.output_dir)
+        mock_build_archive_site.assert_called_once_with(
+            config.output_dir,
+            tracked_keywords=["agent", "reasoning"],
+        )
         mock_send_configured_deliveries.assert_called_once_with(config, digest)
         mock_save_state.assert_called_once_with(config.state, state)
 
