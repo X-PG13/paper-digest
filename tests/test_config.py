@@ -50,8 +50,31 @@ class LoadConfigTests(unittest.TestCase):
         self.assertEqual(config.request_timeout_seconds, 60)
         self.assertEqual(config.fetch_retry_attempts, 4)
         self.assertEqual(config.fetch_retry_backoff_seconds, 6.5)
+        self.assertIsNone(config.openalex_api_key_env)
         self.assertEqual(config.feeds[0].name, "LLM")
         self.assertTrue(config.state.enabled)
+
+    def test_load_config_reads_optional_openalex_api_key_env(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text(
+                textwrap.dedent(
+                    """
+                    [app]
+                    timezone = "UTC"
+                    openalex_api_key_env = "OPENALEX_API_KEY"
+
+                    [[feeds]]
+                    name = "LLM"
+                    categories = ["cs.AI"]
+                    """
+                ).strip(),
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        self.assertEqual(config.openalex_api_key_env, "OPENALEX_API_KEY")
 
     def test_invalid_timezone_raises_config_error(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -478,6 +501,27 @@ class LoadConfigTests(unittest.TestCase):
             with self.assertRaises(ConfigError):
                 load_config(config_path)
 
+    def test_openalex_feed_requires_queries(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text(
+                textwrap.dedent(
+                    """
+                    [app]
+                    timezone = "UTC"
+
+                    [[feeds]]
+                    name = "OpenAlex AI"
+                    source = "openalex"
+                    keywords = ["agent"]
+                    """
+                ).strip(),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(ConfigError):
+                load_config(config_path)
+
     def test_load_config_accepts_pubmed_feed(self) -> None:
         with TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "config.toml"
@@ -540,3 +584,37 @@ class LoadConfigTests(unittest.TestCase):
             ["large language model", "agent systems"],
         )
         self.assertEqual(config.feeds[0].types, ["Review"])
+
+    def test_load_config_accepts_openalex_feed(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text(
+                textwrap.dedent(
+                    """
+                    [app]
+                    timezone = "UTC"
+                    openalex_api_key_env = "OPENALEX_API_KEY"
+
+                    [[feeds]]
+                    name = "OpenAlex AI"
+                    source = "openalex"
+                    queries = ["large language model", "agent systems"]
+                    types = ["article", "preprint"]
+                    keywords = ["agent"]
+                    exclude_keywords = ["survey"]
+                    max_results = 25
+                    max_items = 5
+                    """
+                ).strip(),
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        self.assertEqual(config.openalex_api_key_env, "OPENALEX_API_KEY")
+        self.assertEqual(config.feeds[0].source, "openalex")
+        self.assertEqual(
+            config.feeds[0].queries,
+            ["large language model", "agent systems"],
+        )
+        self.assertEqual(config.feeds[0].types, ["article", "preprint"])

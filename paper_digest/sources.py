@@ -7,6 +7,7 @@ from datetime import datetime
 from .arxiv_client import Paper, fetch_latest_papers
 from .config import FeedConfig
 from .crossref_client import fetch_latest_crossref_papers
+from .openalex_client import fetch_latest_openalex_papers
 from .pubmed_client import fetch_latest_pubmed_papers
 from .semantic_scholar_client import fetch_latest_semantic_scholar_papers
 
@@ -21,6 +22,7 @@ def fetch_feed_papers(
     retry_attempts: int,
     retry_backoff_seconds: float,
     contact_email: str | None,
+    openalex_api_key: str | None,
 ) -> list[Paper]:
     """Fetch papers for a feed from its configured source."""
 
@@ -64,5 +66,17 @@ def fetch_feed_papers(
             retry_attempts=retry_attempts,
             retry_backoff_seconds=retry_backoff_seconds,
             contact_email=contact_email,
+        )
+    if feed.source == "openalex":
+        return fetch_latest_openalex_papers(
+            feed,
+            now=now,
+            lookback_hours=lookback_hours,
+            request_delay_seconds=request_delay_seconds,
+            request_timeout_seconds=request_timeout_seconds,
+            retry_attempts=retry_attempts,
+            retry_backoff_seconds=retry_backoff_seconds,
+            contact_email=contact_email,
+            api_key=openalex_api_key,
         )
     raise ValueError(f"unsupported feed source: {feed.source}")
