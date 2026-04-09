@@ -319,6 +319,10 @@ To use it, create these GitHub repository secrets:
 - `OPENAI_API_KEY`: needed when `[analysis] enabled = true`
 - `PAPER_DIGEST_SMTP_PASSWORD`: only needed when email delivery is enabled
 
+For manual validation runs, `workflow_dispatch` also accepts an optional
+`config_toml_override` input. When you provide it, that run uses the temporary
+config instead of `PAPER_DIGEST_CONFIG_TOML`.
+
 The workflow restores and saves `.paper-digest-state/` through the GitHub
 Actions cache so deduplication survives across runs.
 
@@ -326,6 +330,15 @@ It also restores and saves `output/` history through the GitHub Actions cache.
 That keeps dated digest folders alive across runs, so feed pages, keyword pages,
 trend views, and RSS subscriptions can reflect accumulated history instead of
 only the latest execution.
+
+Temporary manual runs with `config_toml_override` are intentionally isolated:
+
+- they skip digest state cache restore and save
+- they skip archive history cache restore and save
+- they skip GitHub Pages deployment
+
+That makes them safe for validating new feeds or delivery channels without
+polluting the formal archive, dedup state, or live Pages site.
 
 For repositories that added archive caching after the project was already
 running, there is also a manual backfill workflow at
