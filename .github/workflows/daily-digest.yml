@@ -42,6 +42,17 @@ jobs:
           restore-keys: |
             paper-digest-state-
 
+      - name: Restore archive history cache
+        id: archive-restore
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            output
+            !output/site
+          key: paper-digest-output-${{ github.run_id }}
+          restore-keys: |
+            paper-digest-output-
+
       - name: Materialize config
         env:
           PAPER_DIGEST_CONFIG_TOML: ${{ secrets.PAPER_DIGEST_CONFIG_TOML }}
@@ -97,6 +108,15 @@ jobs:
         with:
           path: .paper-digest-state
           key: paper-digest-state-${{ github.run_id }}
+
+      - name: Save archive history cache
+        if: success() && hashFiles('output/**') != ''
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            output
+            !output/site
+          key: paper-digest-output-${{ github.run_id }}
 
   deploy-pages:
     if: github.ref == 'refs/heads/main'
