@@ -10,6 +10,7 @@ from paper_digest.config import (
     AppConfig,
     EmailConfig,
     FeishuWebhookConfig,
+    SlackWebhookConfig,
     StateConfig,
     WeComWebhookConfig,
 )
@@ -125,12 +126,14 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(messages, [])
 
     @patch("paper_digest.delivery.send_wecom_message")
+    @patch("paper_digest.delivery.send_slack_message")
     @patch("paper_digest.delivery.send_feishu_message")
     @patch("paper_digest.delivery.send_email_message")
     def test_send_configured_deliveries_uses_legacy_email_and_webhooks(
         self,
         mock_send_email_message,
         mock_send_feishu_message,
+        mock_send_slack_message,
         mock_send_wecom_message,
     ) -> None:
         digest = build_digest()
@@ -158,6 +161,12 @@ class DeliveryTests(unittest.TestCase):
                     skip_if_empty=True,
                     target="digest",
                 ),
+                SlackWebhookConfig(
+                    webhook_url="https://hooks.slack.com/services/T000/B000/secret",
+                    title_prefix="[Slack]",
+                    skip_if_empty=True,
+                    target="digest",
+                ),
             ],
             email=EmailConfig(
                 smtp_host="smtp.example.com",
@@ -178,4 +187,5 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(mock_send_email_message.call_count, 1)
         self.assertEqual(mock_send_feishu_message.call_count, 1)
         self.assertEqual(mock_send_wecom_message.call_count, 1)
-        self.assertEqual(len(receipts), 3)
+        self.assertEqual(mock_send_slack_message.call_count, 1)
+        self.assertEqual(len(receipts), 4)

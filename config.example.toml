@@ -134,6 +134,14 @@ max_items = 10
 # skip_if_empty = true
 # target = "per_feed"
 
+# Example Slack webhook delivery:
+# [[deliveries]]
+# type = "slack_webhook"
+# webhook_url = "https://hooks.slack.com/services/T000/B000/your-secret"
+# title_prefix = "[Paper Digest]"
+# skip_if_empty = true
+# target = "per_feed"
+
 # Legacy email configuration is still supported:
 # [email]
 # enabled = false
