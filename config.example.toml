@@ -161,6 +161,15 @@ max_items = 10
 # skip_if_empty = true
 # target = "per_feed"
 
+# Example Telegram bot delivery:
+# [[deliveries]]
+# type = "telegram_bot"
+# bot_token = "123456:telegram-bot-token"
+# chat_id = "-1001234567890"
+# title_prefix = "[Paper Digest]"
+# skip_if_empty = true
+# target = "per_feed"
+
 # Legacy email configuration is still supported:
 # [email]
 # enabled = false

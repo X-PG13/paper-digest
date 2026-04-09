@@ -122,6 +122,12 @@ scale as new paper sources and output channels are added.
 - Normalizes rendered digest markdown into Discord embed payloads while keeping
   fan-out and delivery receipts aligned with the existing webhook adapters.
 
+### `paper_digest.telegram_delivery`
+
+- Sends digest notifications to Telegram chats via the Bot API.
+- Normalizes rendered digest markdown into Telegram HTML messages while keeping
+  fan-out and delivery receipts aligned with the existing delivery layer.
+
 ### `paper_digest.state`
 
 - Persists the set of already-seen papers.
@@ -146,7 +152,7 @@ The next clean extension points are:
 1. Add a new source client module such as `openalex_client.py`.
 2. Normalize foreign payloads into the existing `Paper` model, or extract a
    source-agnostic protocol if the model starts diverging.
-3. Add output adapters for Telegram or other destinations without putting
+3. Add output adapters for Matrix or other destinations without putting
    transport code into the CLI.
 4. Add more analysis providers behind the existing analysis interface rather
    than coupling the service layer to a single LLM vendor.

@@ -11,6 +11,7 @@ from .config import (
     EmailConfig,
     FeishuWebhookConfig,
     SlackWebhookConfig,
+    TelegramBotConfig,
     WeComWebhookConfig,
 )
 from .digest import (
@@ -25,6 +26,7 @@ from .discord_delivery import DiscordDeliveryError, send_discord_message
 from .email_delivery import EmailDeliveryError, send_email_message
 from .feishu_delivery import FeishuDeliveryError, send_feishu_message
 from .slack_delivery import SlackDeliveryError, send_slack_message
+from .telegram_delivery import TelegramDeliveryError, send_telegram_message
 from .wecom_delivery import WeComDeliveryError, send_wecom_message
 
 
@@ -92,6 +94,7 @@ def send_configured_deliveries(config: AppConfig, digest: DigestRun) -> list[str
             FeishuDeliveryError,
             WeComDeliveryError,
             SlackDeliveryError,
+            TelegramDeliveryError,
         ) as exc:
             errors.append(str(exc))
 
@@ -232,11 +235,19 @@ def _send_messages(
             )
         return receipts
 
-    assert isinstance(delivery, DiscordWebhookConfig)
+    if isinstance(delivery, DiscordWebhookConfig):
+        for message in messages:
+            send_discord_message(delivery, title=message.title, body=message.body)
+            receipts.append(
+                _build_receipt("Discord webhook", delivery.webhook_url, message)
+            )
+        return receipts
+
+    assert isinstance(delivery, TelegramBotConfig)
     for message in messages:
-        send_discord_message(delivery, title=message.title, body=message.body)
+        send_telegram_message(delivery, title=message.title, body=message.body)
         receipts.append(
-            _build_receipt("Discord webhook", delivery.webhook_url, message)
+            _build_receipt("Telegram bot", delivery.chat_id, message)
         )
     return receipts
 

@@ -187,6 +187,14 @@ class LoadConfigTests(unittest.TestCase):
                     title_prefix = "[Discord]"
                     skip_if_empty = false
                     target = "digest"
+
+                    [[deliveries]]
+                    type = "telegram_bot"
+                    bot_token = "123456:telegram-token"
+                    chat_id = "-1001234567890"
+                    title_prefix = "[Telegram]"
+                    skip_if_empty = true
+                    target = "per_feed"
                     """
                 ).strip(),
                 encoding="utf-8",
@@ -194,12 +202,13 @@ class LoadConfigTests(unittest.TestCase):
 
             config = load_config(config_path)
 
-        self.assertEqual(len(config.deliveries), 5)
+        self.assertEqual(len(config.deliveries), 6)
         self.assertEqual(config.deliveries[0].target, "per_feed")
         self.assertEqual(config.deliveries[1].target, "digest")
         self.assertEqual(config.deliveries[2].target, "digest")
         self.assertEqual(config.deliveries[3].target, "per_feed")
         self.assertEqual(config.deliveries[4].target, "digest")
+        self.assertEqual(config.deliveries[5].target, "per_feed")
 
     def test_load_config_reads_analysis_settings(self) -> None:
         with TemporaryDirectory() as temp_dir:
