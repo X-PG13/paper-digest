@@ -8,6 +8,7 @@ import re
 import shutil
 from dataclasses import dataclass
 from datetime import datetime
+from email.utils import format_datetime
 from html import escape
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -83,6 +84,7 @@ class FeedOverview:
 @dataclass(slots=True, frozen=True)
 class KeywordMatch:
     date: str
+    generated_at: datetime
     generated_label: str
     days_ago: int
     feed_name: str
@@ -102,6 +104,15 @@ class KeywordOverview:
     latest_summary: str
     daily_counts: list[CountPoint]
     matches: list[KeywordMatch]
+
+
+@dataclass(slots=True, frozen=True)
+class SubscriptionItem:
+    title: str
+    link: str
+    description: str
+    guid: str
+    published_at: datetime
 
 
 def build_archive_site(
@@ -140,10 +151,18 @@ def build_archive_site(
             _render_feed_page(overview, archives, keyword_overviews),
             encoding="utf-8",
         )
+        feeds_root.joinpath(f"{overview.slug}.xml").write_text(
+            _render_feed_rss(overview, archives),
+            encoding="utf-8",
+        )
 
     for keyword_overview in keyword_overviews:
         topics_root.joinpath(f"{keyword_overview.slug}.html").write_text(
             _render_keyword_page(keyword_overview),
+            encoding="utf-8",
+        )
+        topics_root.joinpath(f"{keyword_overview.slug}.xml").write_text(
+            _render_keyword_rss(keyword_overview),
             encoding="utf-8",
         )
     return site_root
@@ -368,6 +387,7 @@ def _build_keyword_overviews(
                         matches.append(
                             KeywordMatch(
                                 date=day.date,
+                                generated_at=day.generated_at,
                                 generated_label=generated_label,
                                 days_ago=day.days_ago,
                                 feed_name=feed.name,
@@ -646,11 +666,13 @@ def _render_feed_page(
                 ("../index.html", "返回归档首页"),
                 ("../trends.html", "查看趋势总览"),
                 ("../latest.md", "最新 Markdown"),
+                (f"{overview.slug}.xml", "订阅 RSS"),
             ]
         ),
         content=content,
         nav_current="feeds",
         link_prefix="../",
+        rss_href=f"{overview.slug}.xml",
     )
 
 
@@ -711,11 +733,13 @@ def _render_keyword_page(overview: KeywordOverview) -> str:
                 ("../index.html", "返回归档首页"),
                 ("../trends.html", "查看趋势总览"),
                 ("../latest.json", "最新 JSON"),
+                (f"{overview.slug}.xml", "订阅 RSS"),
             ]
         ),
         content=content,
         nav_current="topics",
         link_prefix="../",
+        rss_href=f"{overview.slug}.xml",
     )
 
 
@@ -729,14 +753,22 @@ def _render_page(
     content: str,
     nav_current: str,
     link_prefix: str = "",
+    rss_href: str | None = None,
     extra_script: str = "",
 ) -> str:
+    rss_link = ""
+    if rss_href is not None:
+        rss_link = (
+            '<link rel="alternate" type="application/rss+xml" '
+            f'title="{escape(page_title)} RSS" href="{escape(rss_href)}">'
+        )
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{escape(page_title)}</title>
+  {rss_link}
   <style>{_site_styles()}</style>
 </head>
 <body>
@@ -754,6 +786,106 @@ def _render_page(
 </body>
 </html>
 """
+
+
+def _render_feed_rss(overview: FeedOverview, archives: list[DayArchive]) -> str:
+    items = _build_feed_subscription_items(overview, archives)
+    return _render_rss(
+        title=f"{overview.name} Feed Archive",
+        link=f"{overview.slug}.html",
+        description=f"{overview.name} 的长期订阅 RSS，汇总最近命中的论文和归档。",
+        items=items,
+    )
+
+
+def _render_keyword_rss(overview: KeywordOverview) -> str:
+    items = _build_keyword_subscription_items(overview)
+    return _render_rss(
+        title=f"{overview.term} Topic Archive",
+        link=f"{overview.slug}.html",
+        description=f"关键词 {overview.term} 的长期追踪 RSS，汇总历史命中文献。",
+        items=items,
+    )
+
+
+def _build_feed_subscription_items(
+    overview: FeedOverview,
+    archives: list[DayArchive],
+) -> list[SubscriptionItem]:
+    items: list[SubscriptionItem] = []
+    for day in archives:
+        feed = _find_feed(day, overview.name)
+        if feed is None or not feed.papers:
+            continue
+        for paper in feed.papers:
+            items.append(
+                SubscriptionItem(
+                    title=paper.title,
+                    link=paper.href,
+                    description=_truncate(
+                        f"{paper.summary or feed.summary} 归档日期：{day.date}。", 500
+                    ),
+                    guid=f"{paper.href}#{day.date}#{overview.slug}",
+                    published_at=day.generated_at,
+                )
+            )
+    return items[:50]
+
+
+def _build_keyword_subscription_items(
+    overview: KeywordOverview,
+) -> list[SubscriptionItem]:
+    items: list[SubscriptionItem] = []
+    for match in overview.matches[:50]:
+        items.append(
+            SubscriptionItem(
+                title=match.title,
+                link=match.href,
+                description=_truncate(
+                    f"{match.summary} 来源分组：{match.feed_name}。"
+                    f"归档日期：{match.date}。",
+                    500,
+                ),
+                guid=f"{match.href}#{match.date}#{overview.slug}",
+                published_at=match.generated_at,
+            )
+        )
+    return items
+
+
+def _render_rss(
+    *,
+    title: str,
+    link: str,
+    description: str,
+    items: list[SubscriptionItem],
+) -> str:
+    rendered_items = "\n".join(_render_rss_item(item) for item in items)
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<rss version="2.0">\n'
+        "<channel>\n"
+        f"<title>{escape(title)}</title>\n"
+        f"<link>{escape(link)}</link>\n"
+        f"<description>{escape(description)}</description>\n"
+        "<language>zh-CN</language>\n"
+        f"<lastBuildDate>{format_datetime(datetime.now().astimezone())}</lastBuildDate>\n"
+        f"{rendered_items}\n"
+        "</channel>\n"
+        "</rss>\n"
+    )
+
+
+def _render_rss_item(item: SubscriptionItem) -> str:
+    return (
+        "<item>\n"
+        f"<title>{escape(item.title)}</title>\n"
+        f"<link>{escape(item.link)}</link>\n"
+        f"<guid>{escape(item.guid)}</guid>\n"
+        f"<pubDate>{format_datetime(item.published_at)}</pubDate>\n"
+        f"<description>{escape(item.description)}</description>\n"
+        "</item>"
+    )
 
 
 def _render_nav(current: str, link_prefix: str) -> str:

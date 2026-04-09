@@ -15,7 +15,7 @@ The current scope is intentionally narrow:
 - Optionally enrich selected papers with structured LLM analysis.
 - Generate machine-readable `JSON` and human-readable `Markdown`.
 - Build a static archive site with search, feed subscriptions, topic tracking,
-  and trend views.
+  trend views, and RSS subscription feeds.
 - Persist state to avoid repeating already-sent papers.
 - Optionally deliver the digest through SMTP email, Feishu webhooks, or WeCom
   webhooks.
@@ -268,7 +268,9 @@ The CLI also rebuilds `output/site/index.html` on every run. That static site:
 - links to each day's Markdown and JSON
 - supports feed filtering, title keyword search, and recent `7d` / `30d` windows
 - emits fixed feed pages under `output/site/feeds/`
+- emits feed RSS files under `output/site/feeds/*.xml`
 - emits keyword tracking pages under `output/site/topics/` from configured feed keywords
+- emits keyword RSS files under `output/site/topics/*.xml`
 - emits a `output/site/trends.html` overview for feed and keyword subscription trends
 
 When GitHub Pages is enabled for the repository, the scheduled workflow uploads
