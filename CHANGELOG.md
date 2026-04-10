@@ -25,6 +25,10 @@ Versioning.
 - A feedback management CLI now supports `set`, `clear`, and `list`, and the
   archive site now exposes copyable canonical-id / feedback command helpers
   plus a weekly review page for starred and follow-up papers.
+- The scheduled `Daily Digest` workflow now supports feedback-state sync via
+  `PAPER_DIGEST_FEEDBACK_JSON` or `workflow_dispatch`'s
+  `feedback_json_override`, so online Pages can reflect local reading-list
+  decisions.
 - The manual `Daily Digest` workflow now accepts a temporary `config.toml`
   override input and isolates those validation runs from caches and Pages
   deployment.
