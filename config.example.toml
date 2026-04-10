@@ -38,6 +38,18 @@ ignore_penalty = 120
 # Hide ignored papers from digest output by default.
 hide_ignored = true
 
+[notify]
+# Keep notifications focused on feedback-triggered papers only.
+feedback_only = false
+# Include papers that you starred within the current lookback window.
+include_new_starred = true
+# Include follow-up papers that resurfaced in today's source scan.
+include_follow_up_resurfaced = true
+# Include starred papers that newly enter the momentum view.
+include_starred_momentum = true
+# Maximum number of Focus items to render into notifications.
+max_focus_items = 5
+
 [digest]
 # Rendering style for Markdown, email, and Feishu output.
 template = "default"

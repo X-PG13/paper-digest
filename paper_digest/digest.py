@@ -12,6 +12,7 @@ from .arxiv_client import Paper
 from .config import (
     AppConfig,
     DigestTemplate,
+    FeedbackStatus,
     FeedConfig,
     RankingConfig,
     RankingWeights,
@@ -38,12 +39,53 @@ class TopicDigest:
 
 
 @dataclass(slots=True)
+class FocusItem:
+    canonical_id: str
+    title: str
+    abstract_url: str
+    summary: str
+    source_label: str
+    feedback_status: FeedbackStatus
+    reasons: list[str]
+    feed_names: list[str] = field(default_factory=list)
+    relevance_score: int = 0
+    active_days: int = 1
+    active_feeds: int = 1
+    appearance_count: int = 1
+    first_seen: datetime | None = None
+    last_seen: datetime | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "canonical_id": self.canonical_id,
+            "title": self.title,
+            "abstract_url": self.abstract_url,
+            "summary": self.summary,
+            "source_label": self.source_label,
+            "feedback_status": self.feedback_status,
+            "reasons": list(self.reasons),
+            "feed_names": list(self.feed_names),
+            "relevance_score": self.relevance_score,
+            "active_days": self.active_days,
+            "active_feeds": self.active_feeds,
+            "appearance_count": self.appearance_count,
+            "first_seen": (
+                self.first_seen.isoformat() if self.first_seen is not None else None
+            ),
+            "last_seen": (
+                self.last_seen.isoformat() if self.last_seen is not None else None
+            ),
+        }
+
+
+@dataclass(slots=True)
 class DigestRun:
     generated_at: datetime
     timezone: str
     lookback_hours: int
     feeds: list[FeedDigest]
     highlights: list[str] = field(default_factory=list)
+    focus_items: list[FocusItem] = field(default_factory=list)
     topic_sections: list[TopicDigest] = field(default_factory=list)
     template: DigestTemplate = "default"
     default_sort_by: SortMode = "hybrid"
@@ -69,6 +111,7 @@ class DigestRun:
                 ],
             },
             "highlights": list(self.highlights),
+            "focus_items": [item.to_dict() for item in self.focus_items],
             "topic_sections": [
                 {
                     "name": topic.name,
@@ -158,6 +201,18 @@ def finalize_digest_scoring(digest: DigestRun, *, ranking: RankingConfig) -> Non
 
 
 def render_markdown(digest: DigestRun) -> str:
+    return render_notification_markdown(digest, feedback_only=False)
+
+
+def render_notification_markdown(
+    digest: DigestRun,
+    *,
+    feedback_only: bool,
+) -> str:
+    if feedback_only:
+        if digest.template == "zh_daily_brief":
+            return _render_zh_focus_only_brief(digest)
+        return _render_default_focus_only_markdown(digest)
     if digest.template == "zh_daily_brief":
         return _render_zh_daily_brief(digest)
     return _render_default_markdown(digest)
@@ -183,6 +238,11 @@ def _render_default_markdown(digest: DigestRun) -> str:
         lines.append("## Today's Highlights")
         lines.append("")
         lines.extend(f"- {highlight}" for highlight in digest.highlights)
+        lines.append("")
+
+    focus_lines = _render_focus_lines(digest, language="en")
+    if focus_lines:
+        lines.extend(focus_lines)
         lines.append("")
 
     for feed in digest.feeds:
@@ -260,6 +320,11 @@ def _render_zh_daily_brief(digest: DigestRun) -> str:
         lines.append("## 今日重点")
         lines.append("")
         lines.extend(f"- {highlight}" for highlight in digest.highlights)
+        lines.append("")
+
+    focus_lines = _render_focus_lines(digest, language="zh")
+    if focus_lines:
+        lines.extend(focus_lines)
         lines.append("")
 
     if digest.topic_sections:
@@ -342,6 +407,182 @@ def _render_zh_daily_brief(digest: DigestRun) -> str:
             lines.append("")
 
     return "\n".join(lines).strip() + "\n"
+
+
+def _render_default_focus_only_markdown(digest: DigestRun) -> str:
+    local_tz = ZoneInfo(digest.timezone)
+    generated_at = digest.generated_at.astimezone(local_tz).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+    lines = [
+        "# Daily Paper Focus",
+        "",
+        f"- Generated at: {generated_at} ({digest.timezone})",
+        f"- Lookback window: last {digest.lookback_hours} hours",
+        f"- Focus summary: {summarize_focus_items(digest)}",
+        "",
+    ]
+    focus_lines = _render_focus_lines(digest, language="en")
+    if focus_lines:
+        lines.extend(focus_lines)
+    else:
+        lines.extend(
+            [
+                "## Focus",
+                "",
+                "No feedback-triggered papers for this run.",
+            ]
+        )
+    return "\n".join(lines).strip() + "\n"
+
+
+def _render_zh_focus_only_brief(digest: DigestRun) -> str:
+    local_tz = ZoneInfo(digest.timezone)
+    generated_at = digest.generated_at.astimezone(local_tz).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+    lines = [
+        "# 每日关注清单",
+        "",
+        f"- 生成时间：{generated_at} ({digest.timezone})",
+        f"- 检索窗口：最近 {digest.lookback_hours} 小时",
+        f"- Focus 概览：{summarize_focus_items(digest)}",
+        "",
+    ]
+    focus_lines = _render_focus_lines(digest, language="zh")
+    if focus_lines:
+        lines.extend(focus_lines)
+    else:
+        lines.extend(
+            [
+                "## Focus 区块",
+                "",
+                "本次没有触发反馈驱动的关注论文。",
+            ]
+        )
+    return "\n".join(lines).strip() + "\n"
+
+
+def _render_focus_lines(digest: DigestRun, *, language: str) -> list[str]:
+    if not digest.focus_items:
+        return []
+
+    local_tz = ZoneInfo(digest.timezone)
+    heading = "## Focus" if language == "en" else "## Focus 区块"
+    lines = [heading, ""]
+    for index, item in enumerate(digest.focus_items, start=1):
+        lines.append(f"{index}. [{item.title}]({item.abstract_url})")
+        if language == "en":
+            lines.append(
+                "   - Feedback: "
+                + (feedback_label(item.feedback_status) or item.feedback_status)
+            )
+            lines.append(
+                "   - Why it was pushed: "
+                + "; ".join(
+                    _focus_reason_label(reason, language=language)
+                    for reason in item.reasons
+                )
+            )
+            if item.feed_names:
+                lines.append("   - Feeds: " + ", ".join(item.feed_names))
+            lines.append(
+                "   - Coverage: "
+                f"{item.active_days} active days / {item.active_feeds} feeds / "
+                f"{item.appearance_count} appearances"
+            )
+            if item.first_seen is not None and item.last_seen is not None:
+                first_seen = item.first_seen.astimezone(local_tz).strftime(
+                    "%Y-%m-%d %H:%M"
+                )
+                last_seen = item.last_seen.astimezone(local_tz).strftime(
+                    "%Y-%m-%d %H:%M"
+                )
+                seen_window = (
+                    f"{first_seen} -> "
+                    f"{last_seen}"
+                )
+                lines.append(
+                    "   - Seen Window: "
+                    f"{seen_window}"
+                )
+            lines.append(f"   - Source: {item.source_label}")
+            if item.relevance_score:
+                lines.append(f"   - Relevance: {item.relevance_score}")
+            lines.append(f"   - Summary: {item.summary}")
+        else:
+            lines.append(
+                "   - 反馈状态："
+                + (feedback_label_zh(item.feedback_status) or item.feedback_status)
+            )
+            lines.append(
+                "   - 推送原因："
+                + "；".join(
+                    _focus_reason_label(reason, language=language)
+                    for reason in item.reasons
+                )
+            )
+            if item.feed_names:
+                lines.append("   - 覆盖分组：" + "、".join(item.feed_names))
+            lines.append(
+                "   - 覆盖跨度："
+                f"{item.active_days} 天 / {item.active_feeds} 个 feed / "
+                f"{item.appearance_count} 次命中"
+            )
+            if item.first_seen is not None and item.last_seen is not None:
+                first_seen = item.first_seen.astimezone(local_tz).strftime(
+                    "%Y-%m-%d %H:%M"
+                )
+                last_seen = item.last_seen.astimezone(local_tz).strftime(
+                    "%Y-%m-%d %H:%M"
+                )
+                seen_window = (
+                    f"{first_seen} -> "
+                    f"{last_seen}"
+                )
+                lines.append(
+                    "   - 历史窗口："
+                    f"{seen_window}"
+                )
+            lines.append(f"   - 来源：{item.source_label}")
+            if item.relevance_score:
+                lines.append(f"   - 相关性分数：{item.relevance_score}")
+            lines.append(f"   - 摘要：{item.summary}")
+        lines.append("")
+    return lines
+
+
+def _focus_reason_label(reason: str, *, language: str) -> str:
+    labels = {
+        "new_starred": {
+            "en": "newly starred within the current lookback window",
+            "zh": "最近刚标星",
+        },
+        "follow_up_resurfaced": {
+            "en": "follow-up paper resurfaced in today's source scan",
+            "zh": "待跟进论文今天再次出现",
+        },
+        "starred_momentum": {
+            "en": "starred paper entered momentum",
+            "zh": "已标星论文进入持续升温",
+        },
+    }
+    return labels.get(reason, {}).get(language, reason)
+
+
+def summarize_focus_items(digest: DigestRun) -> str:
+    if not digest.focus_items:
+        return "Focus=0"
+    starred = sum(1 for item in digest.focus_items if item.feedback_status == "star")
+    follow_up = sum(
+        1 for item in digest.focus_items if item.feedback_status == "follow_up"
+    )
+    parts = [f"Focus={len(digest.focus_items)}"]
+    if starred:
+        parts.append(f"star={starred}")
+    if follow_up:
+        parts.append(f"follow_up={follow_up}")
+    return ", ".join(parts)
 
 
 def write_outputs(config: AppConfig, digest: DigestRun) -> tuple[Path, Path]:

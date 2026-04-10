@@ -18,6 +18,7 @@ from paper_digest.config import (
     RankingWeights,
     StateConfig,
 )
+from paper_digest.digest import DigestRun, FeedDigest, write_outputs
 from paper_digest.feedback import FeedbackEntry, FeedbackState
 from paper_digest.service import generate_digest
 from paper_digest.state import DigestState
@@ -724,3 +725,127 @@ class GenerateDigestTests(unittest.TestCase):
             "published_at (newest first; relevance is auxiliary)",
         )
         self.assertEqual(digest.ranking_weights["multi_source_weight"], 12)
+
+    @patch("paper_digest.service.fetch_feed_papers")
+    def test_generate_digest_builds_feedback_focus_items(
+        self,
+        mock_fetch_feed_papers,
+    ) -> None:
+        now = datetime(2026, 4, 9, 9, 30, tzinfo=ZoneInfo("UTC"))
+        llm_feed = FeedConfig(
+            name="LLM",
+            categories=["cs.AI"],
+            keywords=["agent"],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+        )
+        pubmed_feed = FeedConfig(
+            name="PubMed AI",
+            source="pubmed",
+            queries=["large language model"],
+            keywords=["language model"],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+        )
+        starred_paper = Paper(
+            title="Paper Circle",
+            summary="Research discovery framework for agent systems.",
+            authors=["Alice"],
+            categories=["cs.AI"],
+            paper_id="http://arxiv.org/abs/2604.06170v1",
+            abstract_url="https://arxiv.org/abs/2604.06170v1",
+            pdf_url="https://arxiv.org/pdf/2604.06170v1",
+            published_at=datetime(2026, 4, 9, 0, 30, tzinfo=ZoneInfo("UTC")),
+            updated_at=datetime(2026, 4, 9, 0, 30, tzinfo=ZoneInfo("UTC")),
+        )
+        follow_up_paper = Paper(
+            title="ClinicRealm language model benchmark",
+            summary="Clinical prediction benchmark for large language models.",
+            authors=["Bob"],
+            categories=["Journal Article"],
+            paper_id="pubmed:41951858",
+            abstract_url="https://pubmed.ncbi.nlm.nih.gov/41951858/",
+            pdf_url=None,
+            published_at=datetime(2026, 4, 9, 1, 30, tzinfo=ZoneInfo("UTC")),
+            updated_at=datetime(2026, 4, 9, 1, 30, tzinfo=ZoneInfo("UTC")),
+            source="pubmed",
+        )
+        follow_up_canonical_id = follow_up_paper.canonical_id()
+        mock_fetch_feed_papers.side_effect = [[starred_paper], [follow_up_paper]]
+
+        with TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "output"
+            history_config = AppConfig(
+                timezone="UTC",
+                lookback_hours=24,
+                output_dir=output_dir,
+                request_delay_seconds=0.0,
+                feeds=[llm_feed],
+                state=StateConfig(
+                    enabled=True,
+                    path=Path(temp_dir) / "history-state.json",
+                    retention_days=90,
+                ),
+            )
+            history_digest = DigestRun(
+                generated_at=datetime(2026, 4, 8, 9, 30, tzinfo=ZoneInfo("UTC")),
+                timezone="UTC",
+                lookback_hours=24,
+                feeds=[FeedDigest(name="LLM", papers=[starred_paper])],
+            )
+            write_outputs(history_config, history_digest)
+
+            config = AppConfig(
+                timezone="UTC",
+                lookback_hours=24,
+                output_dir=output_dir,
+                request_delay_seconds=0.0,
+                feeds=[llm_feed, pubmed_feed],
+                state=StateConfig(
+                    enabled=True,
+                    path=Path(temp_dir) / "state.json",
+                    retention_days=90,
+                ),
+            )
+            state = DigestState(
+                seen_papers={
+                    "PubMed AI": {
+                        follow_up_canonical_id: "2026-04-08T09:30:00+00:00",
+                    }
+                }
+            )
+            feedback_state = FeedbackState(
+                papers={
+                    "arxiv:2604.06170": FeedbackEntry(
+                        status="star",
+                        updated_at=datetime(2026, 4, 9, 8, 0, tzinfo=ZoneInfo("UTC")),
+                    ),
+                    follow_up_canonical_id: FeedbackEntry(
+                        status="follow_up",
+                        updated_at=datetime(2026, 4, 8, 8, 0, tzinfo=ZoneInfo("UTC")),
+                    ),
+                }
+            )
+
+            digest = generate_digest(
+                config,
+                now=now,
+                state=state,
+                feedback_state=feedback_state,
+            )
+
+        self.assertEqual(len(digest.focus_items), 2)
+        focus_by_id = {item.canonical_id: item for item in digest.focus_items}
+        self.assertEqual(
+            focus_by_id["arxiv:2604.06170"].reasons,
+            ["new_starred", "starred_momentum"],
+        )
+        self.assertIn("LLM", focus_by_id["arxiv:2604.06170"].feed_names)
+        self.assertEqual(
+            focus_by_id[follow_up_canonical_id].reasons,
+            ["follow_up_resurfaced"],
+        )
+        self.assertIn("PubMed AI", focus_by_id[follow_up_canonical_id].feed_names)
+        self.assertEqual(len(digest.feeds[1].papers), 0)

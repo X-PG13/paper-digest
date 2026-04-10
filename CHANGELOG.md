@@ -29,6 +29,9 @@ Versioning.
   `PAPER_DIGEST_FEEDBACK_JSON` or `workflow_dispatch`'s
   `feedback_json_override`, so online Pages can reflect local reading-list
   decisions.
+- Notifications now support a feedback-driven `Focus` block with configurable
+  `[notify]` rules for newly starred papers, resurfaced follow-up papers, and
+  starred papers that newly enter the momentum view.
 - The manual `Daily Digest` workflow now accepts a temporary `config.toml`
   override input and isolates those validation runs from caches and Pages
   deployment.

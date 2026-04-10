@@ -18,10 +18,13 @@ from paper_digest.config import (
 from paper_digest.digest import (
     DigestRun,
     FeedDigest,
+    FocusItem,
     TopicDigest,
     filter_papers,
     render_markdown,
+    render_notification_markdown,
     summarize_digest,
+    summarize_focus_items,
     write_outputs,
 )
 
@@ -212,6 +215,96 @@ class DigestTests(unittest.TestCase):
         markdown = render_markdown(digest)
 
         self.assertIn("Feedback: follow_up", markdown)
+
+    def test_render_markdown_includes_focus_section(self) -> None:
+        digest = DigestRun(
+            generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
+            timezone="UTC",
+            lookback_hours=24,
+            feeds=[FeedDigest(name="LLM", papers=[])],
+            focus_items=[
+                FocusItem(
+                    canonical_id="arxiv:2604.06170",
+                    title="Paper Circle",
+                    abstract_url="https://arxiv.org/abs/2604.06170v1",
+                    summary="Multi-agent research discovery framework.",
+                    source_label="arxiv",
+                    feedback_status="star",
+                    reasons=["new_starred", "starred_momentum"],
+                    feed_names=["LLM"],
+                    relevance_score=80,
+                    active_days=2,
+                    active_feeds=1,
+                    appearance_count=2,
+                    first_seen=datetime(2026, 4, 8, 9, 0, tzinfo=UTC),
+                    last_seen=datetime(2026, 4, 9, 9, 0, tzinfo=UTC),
+                )
+            ],
+        )
+
+        markdown = render_markdown(digest)
+
+        self.assertIn("## Focus", markdown)
+        self.assertIn("Why it was pushed: newly starred", markdown)
+        self.assertIn("Coverage: 2 active days / 1 feeds / 2 appearances", markdown)
+
+    def test_render_notification_markdown_supports_feedback_only(self) -> None:
+        digest = DigestRun(
+            generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
+            timezone="Asia/Shanghai",
+            lookback_hours=24,
+            feeds=[FeedDigest(name="LLM", papers=[])],
+            focus_items=[
+                FocusItem(
+                    canonical_id="pubmed:41951858",
+                    title="ClinicRealm",
+                    abstract_url="https://pubmed.ncbi.nlm.nih.gov/41951858/",
+                    summary="Clinical prediction benchmark.",
+                    source_label="PubMed",
+                    feedback_status="follow_up",
+                    reasons=["follow_up_resurfaced"],
+                    feed_names=["PubMed AI"],
+                )
+            ],
+            template="zh_daily_brief",
+        )
+
+        markdown = render_notification_markdown(digest, feedback_only=True)
+
+        self.assertIn("# 每日关注清单", markdown)
+        self.assertIn("## Focus 区块", markdown)
+        self.assertIn("推送原因：待跟进论文今天再次出现", markdown)
+        self.assertNotIn("## 论文速览", markdown)
+
+    def test_summarize_focus_items_reports_counts(self) -> None:
+        digest = DigestRun(
+            generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
+            timezone="UTC",
+            lookback_hours=24,
+            feeds=[],
+            focus_items=[
+                FocusItem(
+                    canonical_id="a",
+                    title="A",
+                    abstract_url="https://example.com/a",
+                    summary="A",
+                    source_label="arxiv",
+                    feedback_status="star",
+                    reasons=["new_starred"],
+                ),
+                FocusItem(
+                    canonical_id="b",
+                    title="B",
+                    abstract_url="https://example.com/b",
+                    summary="B",
+                    source_label="PubMed",
+                    feedback_status="follow_up",
+                    reasons=["follow_up_resurfaced"],
+                ),
+            ],
+        )
+
+        self.assertEqual(summarize_focus_items(digest), "Focus=2, star=1, follow_up=1")
 
     def test_render_markdown_supports_zh_daily_brief_template(self) -> None:
         analyzed_paper = build_paper(

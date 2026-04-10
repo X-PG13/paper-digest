@@ -104,6 +104,7 @@ Field reference:
   key on manual or scheduled runs.
 - `state`: Persistent history used for deduplication across runs.
 - `feedback`: Local per-paper feedback state keyed by `canonical_id`.
+- `notify`: Feedback-driven notification focus rules.
 - `source`: `arxiv`, `crossref`, `pubmed`, `semantic_scholar`, or `openalex`.
 - `categories`: arXiv categories such as `cs.AI`, `cs.CL`, or `cs.CV`.
 - `queries`: Required for `crossref`, `pubmed`, `semantic_scholar`, and
@@ -206,6 +207,26 @@ hide_ignored = true
   that aggregates starred and follow-up papers.
 - The archive site also exposes `output/site/weekly-review.html`, which groups
   starred and follow-up papers into weekly review buckets.
+
+Notification focus:
+
+```toml
+[notify]
+feedback_only = false
+include_new_starred = true
+include_follow_up_resurfaced = true
+include_starred_momentum = true
+max_focus_items = 5
+```
+
+- Notification outputs now include a dedicated `Focus` block when a paper was
+  newly starred, a `follow_up` paper resurfaced in the current scan, or a
+  starred paper newly entered the momentum view.
+- `feedback_only = true` turns webhook or email notifications into a
+  feedback-driven briefing that only pushes the Focus block.
+- Focus items explain why they were pushed, preserve the paper's
+  `star` / `follow_up` status, and surface coverage context such as active days,
+  feed span, and appearance count.
 
 Example feedback file:
 
