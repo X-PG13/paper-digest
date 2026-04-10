@@ -241,6 +241,7 @@ def build_topic_sections(
     candidate_pairs = _normalize_topic_candidates(topic_candidates)
     topic_counts = _build_topic_frequency_index(digest, candidate_pairs)
     buckets: dict[str, TopicDigest] = {}
+    topic_scores: dict[str, int] = {}
     for feed in digest.feeds:
         for paper in feed.papers:
             paper.topics = _extract_paper_topics(
@@ -273,10 +274,19 @@ def build_topic_sections(
                 )
                 if point not in bucket.key_points and len(bucket.key_points) < 2:
                     bucket.key_points.append(point)
+                topic_scores[topic_name] = max(
+                    topic_scores.get(topic_name, 0),
+                    paper.relevance_score,
+                )
 
     return sorted(
         buckets.values(),
-        key=lambda topic: (-topic.paper_count, -len(topic.feed_names), topic.name),
+        key=lambda topic: (
+            -topic.paper_count,
+            -topic_scores.get(topic.name, 0),
+            -len(topic.feed_names),
+            topic.name,
+        ),
     )[:max_items]
 
 

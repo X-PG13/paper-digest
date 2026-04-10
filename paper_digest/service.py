@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from .analysis import apply_digest_briefing, enrich_digest_with_analysis
 from .arxiv_client import Paper
 from .config import AppConfig
-from .digest import DigestRun, FeedDigest, filter_papers
+from .digest import DigestRun, FeedDigest, filter_papers, finalize_digest_scoring
 from .sources import fetch_feed_papers
 from .state import DigestState, dedupe_papers, load_state, save_state
 
@@ -87,6 +87,7 @@ def generate_digest(
         feeds=feeds,
         template=config.digest.template,
     )
+    finalize_digest_scoring(digest)
     if config.analysis is not None:
         enrich_digest_with_analysis(
             config.analysis,

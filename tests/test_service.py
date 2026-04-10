@@ -261,6 +261,7 @@ class GenerateDigestTests(unittest.TestCase):
             merged_paper.source_variants,
             ["arxiv", "openalex"],
         )
+        self.assertIn("seen in 2 sources", merged_paper.match_reasons)
         self.assertEqual(
             merged_paper.summary,
             "Longer and more complete summary for the same paper.",
@@ -268,6 +269,7 @@ class GenerateDigestTests(unittest.TestCase):
         self.assertEqual(merged_paper.pdf_url, "https://arxiv.org/pdf/2604.00001v1")
         self.assertEqual(merged_paper.authors, ["Alice", "Bob"])
         self.assertEqual(merged_paper.canonical_id(), "doi:10.5555/example")
+        self.assertGreater(merged_paper.relevance_score, 80)
 
     @patch("paper_digest.service.save_state")
     @patch("paper_digest.service.fetch_feed_papers")
