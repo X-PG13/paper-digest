@@ -15,6 +15,7 @@ from .config import ConfigError, load_config
 from .crossref_client import CrossrefClientError
 from .delivery import DeliveryError, send_configured_deliveries
 from .digest import summarize_digest, write_outputs
+from .feedback import load_feedback
 from .openalex_client import OpenAlexClientError
 from .pubmed_client import PubMedClientError
 from .semantic_scholar_client import SemanticScholarClientError
@@ -53,11 +54,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         config = load_config(args.config)
         state = load_state(config.state)
-        digest = generate_digest(config, state=state)
+        feedback_state = load_feedback(config.feedback)
+        digest = generate_digest(config, state=state, feedback_state=feedback_state)
         json_path, markdown_path = write_outputs(config, digest)
         site_path = build_archive_site(
             config.output_dir,
             tracked_keywords=_tracked_keywords(config),
+            feedback_state=feedback_state,
         )
         delivery_receipts = send_configured_deliveries(config, digest)
         save_state(config.state, state)

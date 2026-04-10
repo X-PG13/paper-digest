@@ -24,6 +24,20 @@ path = ".paper-digest-state/state.json"
 # Drop old state entries after this many days.
 retention_days = 90
 
+[feedback]
+# Local per-paper feedback state keyed by canonical_id.
+enabled = true
+# This file is safe to keep local and out of git.
+path = ".paper-digest-state/feedback.json"
+# Boost applied when a paper is explicitly starred.
+star_boost = 80
+# Smaller boost for papers marked as follow-up.
+follow_up_boost = 35
+# Penalty applied when a paper is marked ignore but still kept visible.
+ignore_penalty = 120
+# Hide ignored papers from digest output by default.
+hide_ignored = true
+
 [digest]
 # Rendering style for Markdown, email, and Feishu output.
 template = "default"

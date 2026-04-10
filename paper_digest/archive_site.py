@@ -11,7 +11,10 @@ from datetime import datetime
 from email.utils import format_datetime
 from html import escape
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
+
+from .config import FeedbackStatus
+from .feedback import FeedbackState, feedback_label_zh
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -44,6 +47,7 @@ class PaperArchive:
     topics: list[str]
     published_at: datetime
     updated_at: datetime
+    feedback_status: FeedbackStatus | None
     search_text: str
 
 
@@ -166,6 +170,8 @@ class PaperDetail:
     active_days: int
     active_feeds: int
     appearance_count: int
+    feedback_status: FeedbackStatus | None
+    feedback_updated_at: datetime | None
     related_papers: list[RelatedPaper]
 
 
@@ -173,6 +179,7 @@ def build_archive_site(
     output_dir: Path,
     *,
     tracked_keywords: Sequence[str] = (),
+    feedback_state: FeedbackState | None = None,
 ) -> Path:
     """Build a static multi-page archive under ``output_dir / 'site'``."""
 
@@ -191,7 +198,11 @@ def build_archive_site(
     archives = _load_archives(output_dir, digests_root)
     feed_overviews = _build_feed_overviews(archives)
     keyword_overviews = _build_keyword_overviews(archives, tracked_keywords)
-    paper_details = _build_paper_details(archives, tracked_keywords)
+    paper_details = _build_paper_details(
+        archives,
+        tracked_keywords,
+        feedback_state=feedback_state,
+    )
 
     _copy_latest_files(output_dir, site_root)
     site_root.joinpath("index.html").write_text(
@@ -204,6 +215,10 @@ def build_archive_site(
     )
     site_root.joinpath("momentum.html").write_text(
         _render_momentum_page(paper_details),
+        encoding="utf-8",
+    )
+    site_root.joinpath("reading-list.html").write_text(
+        _render_reading_list_page(paper_details),
         encoding="utf-8",
     )
 
@@ -447,6 +462,9 @@ def _parse_papers(
                 topics=_normalize_string_list(raw_paper.get("topics", [])),
                 published_at=published_at,
                 updated_at=updated_at,
+                feedback_status=_optional_feedback_status(
+                    raw_paper.get("feedback_status")
+                ),
                 search_text=_normalize_search(
                     " ".join(
                         [
@@ -586,6 +604,8 @@ def _build_keyword_overviews(
 def _build_paper_details(
     archives: list[DayArchive],
     tracked_keywords: Sequence[str],
+    *,
+    feedback_state: FeedbackState | None,
 ) -> list[PaperDetail]:
     occurrences_by_id: dict[
         str,
@@ -639,6 +659,15 @@ def _build_paper_details(
             active_days=len({day.date for day, _, _ in occurrences}),
             active_feeds=len({feed.name for _, feed, _ in occurrences}),
             appearance_count=len(occurrences),
+            feedback_status=_resolve_feedback_status(
+                canonical_id,
+                representative.feedback_status,
+                feedback_state,
+            ),
+            feedback_updated_at=_resolve_feedback_updated_at(
+                canonical_id,
+                feedback_state,
+            ),
             related_papers=[],
         )
 
@@ -657,6 +686,8 @@ def _build_paper_details(
             active_days=detail.active_days,
             active_feeds=detail.active_feeds,
             appearance_count=detail.appearance_count,
+            feedback_status=detail.feedback_status,
+            feedback_updated_at=detail.feedback_updated_at,
             related_papers=related,
         )
 
@@ -1031,11 +1062,18 @@ def _build_rising_papers(paper_details: list[PaperDetail]) -> list[PaperDetail]:
     )
 
 
-def _render_rising_paper_card(detail: PaperDetail, *, link_prefix: str) -> str:
+def _render_rising_paper_card(
+    detail: PaperDetail,
+    *,
+    link_prefix: str,
+    kicker: str = "Momentum",
+) -> str:
     detail_link = escape(link_prefix + detail.paper.detail_href)
+    status_badge = _render_feedback_badge(detail.feedback_status)
     return (
         f'<a class="resource-card" href="{detail_link}">'
-        '<p class="resource-kicker">Momentum</p>'
+        f'<p class="resource-kicker">{escape(kicker)}</p>'
+        f"{status_badge}"
         f'<h3 class="resource-title">{escape(detail.paper.title)}</h3>'
         f'<p class="resource-copy">{escape(_truncate(detail.paper.summary, 220))}</p>'
         '<div class="resource-meta">'
@@ -1102,11 +1140,93 @@ def _render_momentum_page(paper_details: list[PaperDetail]) -> str:
             [
                 ("index.html", "返回归档首页"),
                 ("trends.html", "查看趋势总览"),
+                ("reading-list.html", "阅读清单"),
                 ("latest.md", "最新 Markdown"),
             ]
         ),
         content=content,
         nav_current="momentum",
+    )
+
+
+def _build_reading_list(paper_details: list[PaperDetail]) -> list[PaperDetail]:
+    reading_list = [
+        detail
+        for detail in paper_details
+        if detail.feedback_status in {"star", "follow_up"}
+    ]
+    priority = {"star": 0, "follow_up": 1}
+    return sorted(
+        reading_list,
+        key=lambda detail: (
+            priority[detail.feedback_status or "follow_up"],
+            -(detail.feedback_updated_at or detail.last_seen).timestamp(),
+            -detail.paper.relevance_score,
+            detail.paper.title.lower(),
+        ),
+    )
+
+
+def _render_reading_list_page(paper_details: list[PaperDetail]) -> str:
+    reading_list = _build_reading_list(paper_details)
+    cards = "\n".join(
+        _render_rising_paper_card(
+            item,
+            link_prefix="",
+            kicker="Reading List",
+        )
+        for item in reading_list
+    ) or _render_empty_state("当前还没有标星或待跟进的论文。")
+    stats = [
+        ArchiveStats(
+            "标星论文",
+            sum(1 for item in reading_list if item.feedback_status == "star"),
+            "篇",
+            sum(1 for item in reading_list if item.feedback_status == "follow_up"),
+            "篇待跟进",
+        ),
+        ArchiveStats(
+            "跨天复现",
+            sum(1 for item in reading_list if item.active_days > 1),
+            "篇论文",
+            max((item.active_days for item in reading_list), default=0),
+            "个最大活跃日期",
+        ),
+        ArchiveStats(
+            "跨 Feed 复现",
+            sum(1 for item in reading_list if item.active_feeds > 1),
+            "篇论文",
+            max((item.active_feeds for item in reading_list), default=0),
+            "个最大 feed 覆盖",
+        ),
+    ]
+    content = (
+        '<section class="section-grid">'
+        + "".join(_render_stats_card(item) for item in stats)
+        + "</section>"
+        + _render_section(
+            "阅读清单",
+            "把你明确标星或待跟进的论文抽出来，作为长期阅读和复盘入口。",
+            f'<div class="subscription-grid">{cards}</div>',
+        )
+    )
+    return _render_page(
+        page_title="Paper Digest Reading List",
+        eyebrow="Feedback View",
+        heading="阅读清单",
+        description=(
+            "这里汇总你按 canonical_id 标记为 star 或 follow_up 的论文，"
+            "方便建立自己的长期研究观察列表。"
+        ),
+        hero_links=_render_hero_links(
+            [
+                ("index.html", "返回归档首页"),
+                ("trends.html", "查看趋势总览"),
+                ("momentum.html", "持续升温论文"),
+            ]
+        ),
+        content=content,
+        nav_current="reading_list",
     )
 
 
@@ -1194,6 +1314,10 @@ def _render_paper_page(detail: PaperDetail) -> str:
                     ),
                 )
                 + _render_meta_block(
+                    "反馈状态",
+                    feedback_label_zh(detail.feedback_status) or "未设置",
+                )
+                + _render_meta_block(
                     "命中原因",
                     paper.reason_summary or "未记录",
                 )
@@ -1226,6 +1350,7 @@ def _render_paper_page(detail: PaperDetail) -> str:
                 ("../index.html", "返回归档首页"),
                 ("../trends.html", "查看趋势总览"),
                 ("../momentum.html", "持续升温论文"),
+                ("../reading-list.html", "阅读清单"),
                 (paper.href, "打开当前主来源"),
                 (
                     paper.pdf_url,
@@ -1395,6 +1520,7 @@ def _render_nav(current: str, link_prefix: str) -> str:
         ("home", f"{link_prefix}index.html", "归档首页"),
         ("trends", f"{link_prefix}trends.html", "趋势总览"),
         ("momentum", f"{link_prefix}momentum.html", "持续升温"),
+        ("reading_list", f"{link_prefix}reading-list.html", "阅读清单"),
         ("papers", f"{link_prefix}index.html", "论文详情"),
     ]
     return (
@@ -1461,12 +1587,22 @@ def _render_subscription_panel(
         "</p>"
         "</a>"
     )
+    reading_card = (
+        '<a class="resource-card" href="reading-list.html">'
+        '<p class="resource-kicker">Reading List</p>'
+        '<h3 class="resource-title">阅读清单</h3>'
+        "<p class=\"resource-copy\">"
+        "把你标星或待跟进的论文单独收口，形成长期个人研究清单。"
+        "</p>"
+        "</a>"
+    )
     return _render_section(
         "订阅入口",
         "把站点从“按天翻”升级成“按主题长期追”。固定页更适合每天回看同一类研究信号。",
         '<div class="subscription-grid">'
         + trends_card
         + momentum_card
+        + reading_card
         + feed_cards
         + "</div>"
         + _render_section_block(
@@ -1872,6 +2008,13 @@ def _render_meta_block(label: str, value: str) -> str:
         f'<p class="resource-copy">{escape(value)}</p>'
         "</article>"
     )
+
+
+def _render_feedback_badge(status: FeedbackStatus | None) -> str:
+    label = feedback_label_zh(status)
+    if label is None:
+        return ""
+    return f'<span class="feed-pill">{escape(label)}</span>'
 
 
 def _render_empty_state(label: str = "还没有可归档的 digest 输出。") -> str:
@@ -2665,6 +2808,16 @@ def _optional_clean_string(value: object) -> str | None:
     return cleaned or None
 
 
+def _optional_feedback_status(value: object) -> FeedbackStatus | None:
+    cleaned = _optional_clean_string(value)
+    if cleaned is None:
+        return None
+    normalized = cleaned.lower()
+    if normalized not in {"star", "follow_up", "ignore"}:
+        return None
+    return cast(FeedbackStatus, normalized)
+
+
 def _normalize_string_list(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -2717,6 +2870,30 @@ def _normalize_source_url_map(
             f"https://openalex.org/{paper_id.removeprefix('openalex:')}",
         )
     return normalized
+
+
+def _resolve_feedback_status(
+    canonical_id: str,
+    archived_status: FeedbackStatus | None,
+    feedback_state: FeedbackState | None,
+) -> FeedbackStatus | None:
+    if feedback_state is not None:
+        entry = feedback_state.papers.get(canonical_id)
+        if entry is not None:
+            return entry.status
+    return archived_status
+
+
+def _resolve_feedback_updated_at(
+    canonical_id: str,
+    feedback_state: FeedbackState | None,
+) -> datetime | None:
+    if feedback_state is None:
+        return None
+    entry = feedback_state.papers.get(canonical_id)
+    if entry is None:
+        return None
+    return entry.updated_at
 
 
 def _canonical_id_from_payload(

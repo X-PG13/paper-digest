@@ -27,6 +27,7 @@ AnalysisProvider = Literal["openai"]
 AnalysisReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
 DigestTemplate = Literal["default", "zh_daily_brief"]
 SortMode = Literal["relevance", "published_at", "hybrid"]
+FeedbackStatus = Literal["star", "follow_up", "ignore"]
 
 
 @dataclass(slots=True, frozen=True)
@@ -117,6 +118,16 @@ class StateConfig:
 
 
 @dataclass(slots=True, frozen=True)
+class FeedbackConfig:
+    enabled: bool
+    path: Path
+    star_boost: int = 80
+    follow_up_boost: int = 35
+    ignore_penalty: int = 120
+    hide_ignored: bool = True
+
+
+@dataclass(slots=True, frozen=True)
 class DigestConfig:
     template: DigestTemplate = "default"
     top_highlights: int = 3
@@ -154,6 +165,13 @@ class AnalysisConfig:
     reasoning_effort: AnalysisReasoningEffort
 
 
+def _default_feedback_config() -> FeedbackConfig:
+    return FeedbackConfig(
+        enabled=True,
+        path=Path(".paper-digest-state/feedback.json"),
+    )
+
+
 @dataclass(slots=True, frozen=True)
 class AppConfig:
     timezone: str
@@ -162,6 +180,7 @@ class AppConfig:
     request_delay_seconds: float
     feeds: list[FeedConfig]
     state: StateConfig
+    feedback: FeedbackConfig = field(default_factory=_default_feedback_config)
     request_timeout_seconds: int = 60
     fetch_retry_attempts: int = 4
     fetch_retry_backoff_seconds: float = 10.0
@@ -224,6 +243,7 @@ def load_config(path: str | Path) -> AppConfig:
         for index, raw_feed in enumerate(feeds_section, start=1)
     ]
     state = _load_state(raw.get("state"), config_path)
+    feedback = _load_feedback(raw.get("feedback"), config_path)
     digest = _load_digest(raw.get("digest"), raw.get("analysis"))
     ranking = _load_ranking(raw.get("ranking"))
     analysis = _load_analysis(raw.get("analysis"))
@@ -237,6 +257,7 @@ def load_config(path: str | Path) -> AppConfig:
         request_delay_seconds=request_delay_seconds,
         feeds=feeds,
         state=state,
+        feedback=feedback,
         request_timeout_seconds=request_timeout_seconds,
         fetch_retry_attempts=fetch_retry_attempts,
         fetch_retry_backoff_seconds=fetch_retry_backoff_seconds,
@@ -313,6 +334,36 @@ def _load_state(value: Any, config_path: Path) -> StateConfig:
         retention_days=_positive_int(
             state.get("retention_days", 90),
             "state.retention_days",
+        ),
+    )
+
+
+def _load_feedback(value: Any, config_path: Path) -> FeedbackConfig:
+    if value is None:
+        value = {}
+
+    feedback = _as_table(value, "feedback")
+    return FeedbackConfig(
+        enabled=_bool(feedback.get("enabled", True), "feedback.enabled"),
+        path=_resolve_output_dir(
+            config_path,
+            feedback.get("path", ".paper-digest-state/feedback.json"),
+        ),
+        star_boost=_non_negative_int(
+            feedback.get("star_boost", 80),
+            "feedback.star_boost",
+        ),
+        follow_up_boost=_non_negative_int(
+            feedback.get("follow_up_boost", 35),
+            "feedback.follow_up_boost",
+        ),
+        ignore_penalty=_non_negative_int(
+            feedback.get("ignore_penalty", 120),
+            "feedback.ignore_penalty",
+        ),
+        hide_ignored=_bool(
+            feedback.get("hide_ignored", True),
+            "feedback.hide_ignored",
         ),
     )
 

@@ -67,6 +67,13 @@ scale as new paper sources and output channels are added.
   as the Chinese daily-brief layout.
 - Contains formatting-specific helpers rather than network logic.
 
+### `paper_digest.feedback`
+
+- Loads a local per-paper feedback map keyed by canonical paper identity.
+- Applies `star`, `follow_up`, and `ignore` signals before final digest
+  ranking.
+- Keeps user feedback policy out of the source clients and renderers.
+
 ### `paper_digest.archive_site`
 
 - Scans historical `output/YYYY-MM-DD/digest.json` files.
@@ -80,6 +87,8 @@ scale as new paper sources and output channels are added.
   current upstream source URL.
 - Tracks first-seen, last-seen, active-day, and active-feed signals so the site
   can highlight papers that keep resurfacing across runs.
+- Builds a dedicated reading-list view from local feedback signals so starred
+  and follow-up papers stay visible as a personal research queue.
 - Copies dated Markdown and JSON files into a Pages-friendly output tree.
 
 ### `paper_digest.archive_backfill`
@@ -151,6 +160,8 @@ scale as new paper sources and output channels are added.
 - Keeps the CLI thin.
 - Provides a stable place for future business rules.
 - Supports deferred state persistence so failed deliveries do not drop papers.
+- Applies local feedback signals before cross-run deduplication and final
+  scoring.
 
 ### `paper_digest.cli`
 

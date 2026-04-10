@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from urllib.parse import urlencode
 from urllib.request import Request
 
-from .config import FeedConfig
+from .config import FeedbackStatus, FeedConfig
 from .network import fetch_bytes_with_retry
 
 ARXIV_API_URL = "https://export.arxiv.org/api/query"
@@ -62,6 +62,7 @@ class Paper:
     base_relevance_score: int = 0
     relevance_score: int = 0
     match_reasons: list[str] = field(default_factory=list)
+    feedback_status: FeedbackStatus | None = None
 
     def __post_init__(self) -> None:
         self.doi = (
@@ -152,6 +153,7 @@ class Paper:
             other.base_relevance_score,
         )
         self.relevance_score = max(self.relevance_score, other.relevance_score)
+        self.feedback_status = preferred.feedback_status or secondary.feedback_status
         self.match_reasons = _merge_unique_strings(
             [*self.match_reasons, *other.match_reasons]
         )

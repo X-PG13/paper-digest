@@ -11,6 +11,7 @@ from paper_digest.cli import main
 from paper_digest.config import AppConfig, FeedConfig, StateConfig
 from paper_digest.delivery import DeliveryError
 from paper_digest.digest import DigestRun, FeedDigest
+from paper_digest.feedback import FeedbackState
 from paper_digest.state import DigestState
 
 
@@ -27,12 +28,14 @@ class CliTests(unittest.TestCase):
     @patch("paper_digest.cli.build_archive_site")
     @patch("paper_digest.cli.write_outputs")
     @patch("paper_digest.cli.generate_digest")
+    @patch("paper_digest.cli.load_feedback")
     @patch("paper_digest.cli.load_state")
     @patch("paper_digest.cli.load_config")
     def test_main_returns_zero_on_success(
         self,
         mock_load_config,
         mock_load_state,
+        mock_load_feedback,
         mock_generate_digest,
         mock_write_outputs,
         mock_build_archive_site,
@@ -56,6 +59,7 @@ class CliTests(unittest.TestCase):
                 state=self._state_config(output_dir),
             )
             state = DigestState(seen_papers={})
+            feedback_state = FeedbackState(papers={})
             digest = DigestRun(
                 generated_at=datetime(2026, 4, 8, 10, 0, tzinfo=UTC),
                 timezone="UTC",
@@ -64,6 +68,7 @@ class CliTests(unittest.TestCase):
             )
             mock_load_config.return_value = config
             mock_load_state.return_value = state
+            mock_load_feedback.return_value = feedback_state
             mock_generate_digest.return_value = digest
             mock_write_outputs.return_value = (
                 output_dir / "digest.json",
@@ -75,10 +80,15 @@ class CliTests(unittest.TestCase):
             exit_code = main(["--config", "config.toml", "--quiet"])
 
         self.assertEqual(exit_code, 0)
-        mock_generate_digest.assert_called_once_with(config, state=state)
+        mock_generate_digest.assert_called_once_with(
+            config,
+            state=state,
+            feedback_state=feedback_state,
+        )
         mock_build_archive_site.assert_called_once_with(
             config.output_dir,
             tracked_keywords=["agent", "reasoning"],
+            feedback_state=feedback_state,
         )
         mock_send_configured_deliveries.assert_called_once_with(config, digest)
         mock_save_state.assert_called_once_with(config.state, state)
@@ -95,12 +105,14 @@ class CliTests(unittest.TestCase):
     @patch("paper_digest.cli.build_archive_site")
     @patch("paper_digest.cli.write_outputs")
     @patch("paper_digest.cli.generate_digest")
+    @patch("paper_digest.cli.load_feedback")
     @patch("paper_digest.cli.load_state")
     @patch("paper_digest.cli.load_config")
     def test_main_returns_nonzero_on_delivery_failure_and_preserves_artifacts(
         self,
         mock_load_config,
         mock_load_state,
+        mock_load_feedback,
         mock_generate_digest,
         mock_write_outputs,
         mock_build_archive_site,
@@ -118,6 +130,7 @@ class CliTests(unittest.TestCase):
                 state=self._state_config(output_dir),
             )
             state = DigestState(seen_papers={})
+            feedback_state = FeedbackState(papers={})
             digest = DigestRun(
                 generated_at=datetime(2026, 4, 8, 10, 0, tzinfo=UTC),
                 timezone="UTC",
@@ -128,6 +141,7 @@ class CliTests(unittest.TestCase):
             markdown_path = output_dir / "digest.md"
             mock_load_config.return_value = config
             mock_load_state.return_value = state
+            mock_load_feedback.return_value = feedback_state
             mock_generate_digest.return_value = digest
             mock_write_outputs.return_value = (json_path, markdown_path)
             mock_build_archive_site.return_value = output_dir / "site"

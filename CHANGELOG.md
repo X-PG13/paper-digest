@@ -19,6 +19,9 @@ Versioning.
 - Canonical paper detail pages now expose first-seen / last-seen history, and
   the archive site includes a dedicated rising-paper view for papers that keep
   resurfacing across multiple dates or feeds.
+- Local feedback state now supports `star`, `follow_up`, and `ignore` paper
+  statuses keyed by canonical id, with ranking effects plus a dedicated
+  reading-list archive page for starred and follow-up papers.
 - The manual `Daily Digest` workflow now accepts a temporary `config.toml`
   override input and isolates those validation runs from caches and Pages
   deployment.
