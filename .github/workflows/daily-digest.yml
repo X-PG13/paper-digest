@@ -11,6 +11,12 @@ on:
           the workflow skips cache restore/save and Pages deployment.
         required: false
         type: string
+      feedback_json_override:
+        description: >-
+          Optional feedback.json content to materialize before this run. When set,
+          it overrides any cached feedback state for this execution.
+        required: false
+        type: string
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -76,6 +82,26 @@ jobs:
             exit 1
           fi
           printf '%s\n' "$PAPER_DIGEST_CONFIG_TOML" > config.toml
+
+      - name: Materialize feedback state
+        env:
+          PAPER_DIGEST_FEEDBACK_JSON: ${{ secrets.PAPER_DIGEST_FEEDBACK_JSON }}
+          PAPER_DIGEST_FEEDBACK_JSON_OVERRIDE: ${{ github.event.inputs.feedback_json_override }}
+        run: |
+          mkdir -p .paper-digest-state
+          if [ -n "$PAPER_DIGEST_FEEDBACK_JSON_OVERRIDE" ]; then
+            printf '%s\n' "$PAPER_DIGEST_FEEDBACK_JSON_OVERRIDE" > .paper-digest-state/feedback.json
+            exit 0
+          fi
+          if [ -n "$PAPER_DIGEST_FEEDBACK_JSON" ]; then
+            printf '%s\n' "$PAPER_DIGEST_FEEDBACK_JSON" > .paper-digest-state/feedback.json
+            exit 0
+          fi
+          if [ -f .paper-digest-state/feedback.json ]; then
+            echo "Using cached feedback state."
+            exit 0
+          fi
+          echo "No feedback state payload provided for this run."
 
       - name: Run digest
         env:

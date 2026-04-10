@@ -410,6 +410,8 @@ The default schedule is `5 0 * * *`, which means:
 To use it, create these GitHub repository secrets:
 
 - `PAPER_DIGEST_CONFIG_TOML`: your full `config.toml` content
+- `PAPER_DIGEST_FEEDBACK_JSON`: optional local `feedback.json` content used to
+  seed `.paper-digest-state/feedback.json` before each run
 - `OPENAI_API_KEY`: needed when `[analysis] enabled = true`
 - `OPENALEX_API_KEY`: optional, only needed when an OpenAlex feed sets
   `app.openalex_api_key_env = "OPENALEX_API_KEY"`
@@ -419,8 +421,20 @@ For manual validation runs, `workflow_dispatch` also accepts an optional
 `config_toml_override` input. When you provide it, that run uses the temporary
 config instead of `PAPER_DIGEST_CONFIG_TOML`.
 
+The same workflow also accepts an optional `feedback_json_override` input.
+When you provide it, that run materializes the given JSON into
+`.paper-digest-state/feedback.json` before digest generation. This is useful
+for syncing a local reading-list state into GitHub Actions without hand-editing
+repository secrets first.
+
 The workflow restores and saves `.paper-digest-state/` through the GitHub
 Actions cache so deduplication and local feedback state survive across runs.
+
+Feedback-state precedence for scheduled and manual runs is:
+
+1. `feedback_json_override`
+2. `PAPER_DIGEST_FEEDBACK_JSON`
+3. cached `.paper-digest-state/feedback.json`
 
 It also restores and saves `output/` history through the GitHub Actions cache.
 That keeps dated digest folders alive across runs, so feed pages, keyword pages,
