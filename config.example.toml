@@ -32,6 +32,26 @@ top_highlights = 3
 # Number of per-feed "本组速览" lines to render before the paper list.
 feed_key_points = 3
 
+[ranking]
+# Default ordering for every feed unless a feed overrides it.
+sort_by = "hybrid"
+# Weight used when a keyword matches the paper title.
+title_match_weight = 40
+# Weight used when a keyword only matches the abstract summary.
+summary_match_weight = 18
+# Bonus for papers with a DOI.
+doi_weight = 12
+# Bonus for papers with a direct PDF link.
+pdf_weight = 8
+# Bonus for richer abstracts.
+rich_summary_weight = 6
+# Bonus for papers with both authors and categories populated.
+metadata_weight = 4
+# Bonus per additional merged source beyond the first.
+multi_source_weight = 10
+# Maximum freshness bonus inside the lookback window.
+freshness_weight_cap = 24
+
 [analysis]
 # Optional LLM-powered digest enhancement. Leave disabled until you have an API key.
 enabled = false
@@ -61,6 +81,8 @@ reasoning_effort = "minimal"
 name = "LLM"
 # Supported sources: arxiv, crossref, pubmed, semantic_scholar, openalex
 source = "arxiv"
+# Optional per-feed override: relevance, published_at, or hybrid.
+# sort_by = "relevance"
 # arXiv categories: https://arxiv.org/category_taxonomy
 categories = ["cs.AI", "cs.CL", "cs.LG"]
 # Keep a paper if any keyword matches its title or abstract.

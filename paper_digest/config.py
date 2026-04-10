@@ -26,6 +26,7 @@ DeliveryType = Literal[
 AnalysisProvider = Literal["openai"]
 AnalysisReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
 DigestTemplate = Literal["default", "zh_daily_brief"]
+SortMode = Literal["relevance", "published_at", "hybrid"]
 
 
 @dataclass(slots=True, frozen=True)
@@ -39,6 +40,7 @@ class FeedConfig:
     exclude_keywords: list[str] = field(default_factory=list)
     max_results: int = 100
     max_items: int = 20
+    sort_by: SortMode | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -122,6 +124,24 @@ class DigestConfig:
 
 
 @dataclass(slots=True, frozen=True)
+class RankingWeights:
+    title_match_weight: int = 40
+    summary_match_weight: int = 18
+    doi_weight: int = 12
+    pdf_weight: int = 8
+    rich_summary_weight: int = 6
+    metadata_weight: int = 4
+    multi_source_weight: int = 10
+    freshness_weight_cap: int = 24
+
+
+@dataclass(slots=True, frozen=True)
+class RankingConfig:
+    sort_by: SortMode = "hybrid"
+    weights: RankingWeights = field(default_factory=RankingWeights)
+
+
+@dataclass(slots=True, frozen=True)
 class AnalysisConfig:
     provider: AnalysisProvider
     model: str
@@ -147,6 +167,7 @@ class AppConfig:
     fetch_retry_backoff_seconds: float = 10.0
     openalex_api_key_env: str | None = None
     digest: DigestConfig = field(default_factory=DigestConfig)
+    ranking: RankingConfig = field(default_factory=RankingConfig)
     analysis: AnalysisConfig | None = None
     deliveries: list[DeliveryConfig] = field(default_factory=list)
     email: EmailConfig | None = None
@@ -204,6 +225,7 @@ def load_config(path: str | Path) -> AppConfig:
     ]
     state = _load_state(raw.get("state"), config_path)
     digest = _load_digest(raw.get("digest"), raw.get("analysis"))
+    ranking = _load_ranking(raw.get("ranking"))
     analysis = _load_analysis(raw.get("analysis"))
     deliveries = _load_deliveries(raw.get("deliveries"))
     email = _load_email(raw.get("email"))
@@ -223,6 +245,7 @@ def load_config(path: str | Path) -> AppConfig:
             "app.openalex_api_key_env",
         ),
         digest=digest,
+        ranking=ranking,
         analysis=analysis,
         deliveries=deliveries,
         email=email,
@@ -266,6 +289,7 @@ def _load_feed(raw_feed: Any, index: int) -> FeedConfig:
             feed.get("max_items", 20),
             f"feeds[{index}].max_items",
         ),
+        sort_by=_optional_sort_mode(feed.get("sort_by"), f"feeds[{index}].sort_by"),
     )
 
 
@@ -371,6 +395,50 @@ def _load_analysis(value: Any) -> AnalysisConfig | None:
         reasoning_effort=_analysis_reasoning_effort(
             analysis.get("reasoning_effort", "minimal"),
             "analysis.reasoning_effort",
+        ),
+    )
+
+
+def _load_ranking(value: Any) -> RankingConfig:
+    if value is None:
+        return RankingConfig()
+
+    ranking = _as_table(value, "ranking")
+    return RankingConfig(
+        sort_by=_sort_mode(ranking.get("sort_by", "hybrid"), "ranking.sort_by"),
+        weights=RankingWeights(
+            title_match_weight=_non_negative_int(
+                ranking.get("title_match_weight", 40),
+                "ranking.title_match_weight",
+            ),
+            summary_match_weight=_non_negative_int(
+                ranking.get("summary_match_weight", 18),
+                "ranking.summary_match_weight",
+            ),
+            doi_weight=_non_negative_int(
+                ranking.get("doi_weight", 12),
+                "ranking.doi_weight",
+            ),
+            pdf_weight=_non_negative_int(
+                ranking.get("pdf_weight", 8),
+                "ranking.pdf_weight",
+            ),
+            rich_summary_weight=_non_negative_int(
+                ranking.get("rich_summary_weight", 6),
+                "ranking.rich_summary_weight",
+            ),
+            metadata_weight=_non_negative_int(
+                ranking.get("metadata_weight", 4),
+                "ranking.metadata_weight",
+            ),
+            multi_source_weight=_non_negative_int(
+                ranking.get("multi_source_weight", 10),
+                "ranking.multi_source_weight",
+            ),
+            freshness_weight_cap=_non_negative_int(
+                ranking.get("freshness_weight_cap", 24),
+                "ranking.freshness_weight_cap",
+            ),
         ),
     )
 
@@ -753,6 +821,30 @@ def _digest_template(value: Any, field_name: str) -> DigestTemplate:
     return "zh_daily_brief"
 
 
+def _sort_mode(value: Any, field_name: str) -> SortMode:
+    if not isinstance(value, str):
+        raise ConfigError(
+            f"{field_name} must be 'relevance', 'published_at', or 'hybrid'"
+        )
+
+    normalized = value.strip().lower()
+    if normalized not in {"relevance", "published_at", "hybrid"}:
+        raise ConfigError(
+            f"{field_name} must be 'relevance', 'published_at', or 'hybrid'"
+        )
+    if normalized == "relevance":
+        return "relevance"
+    if normalized == "published_at":
+        return "published_at"
+    return "hybrid"
+
+
+def _optional_sort_mode(value: Any, field_name: str) -> SortMode | None:
+    if value is None:
+        return None
+    return _sort_mode(value, field_name)
+
+
 def _positive_int(value: Any, field_name: str) -> int:
     try:
         parsed = int(value)
@@ -760,6 +852,16 @@ def _positive_int(value: Any, field_name: str) -> int:
         raise ConfigError(f"{field_name} must be a positive integer") from exc
     if parsed <= 0:
         raise ConfigError(f"{field_name} must be a positive integer")
+    return parsed
+
+
+def _non_negative_int(value: Any, field_name: str) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ConfigError(f"{field_name} must be a non-negative integer") from exc
+    if parsed < 0:
+        raise ConfigError(f"{field_name} must be a non-negative integer")
     return parsed
 
 

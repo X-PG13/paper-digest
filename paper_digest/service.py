@@ -60,6 +60,7 @@ def generate_digest(
             feed,
             now=now_utc,
             lookback_hours=config.lookback_hours,
+            ranking=config.ranking,
         )
         filtered = dedupe_papers(
             managed_state,
@@ -78,7 +79,13 @@ def generate_digest(
                 continue
             existing.merge_duplicate(paper)
         feed_papers.sort(key=lambda item: item.published_at, reverse=True)
-        feeds.append(FeedDigest(name=feed.name, papers=feed_papers))
+        feeds.append(
+            FeedDigest(
+                name=feed.name,
+                papers=feed_papers,
+                sort_by=feed.sort_by or config.ranking.sort_by,
+            )
+        )
 
     digest = DigestRun(
         generated_at=local_now,
@@ -87,7 +94,7 @@ def generate_digest(
         feeds=feeds,
         template=config.digest.template,
     )
-    finalize_digest_scoring(digest)
+    finalize_digest_scoring(digest, ranking=config.ranking)
     if config.analysis is not None:
         enrich_digest_with_analysis(
             config.analysis,

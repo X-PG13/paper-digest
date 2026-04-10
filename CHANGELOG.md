@@ -7,6 +7,9 @@ Versioning.
 
 ## [Unreleased]
 
+- Ranking is now configurable via a dedicated `[ranking]` section plus optional
+  per-feed `sort_by` overrides, and digests expose the active sorting mode in
+  Markdown and JSON output.
 - Papers now carry a canonical identity, relevance score, and match reasons so
   the digest can deduplicate across sources, keep richer merged records, and
   explain why each paper surfaced.

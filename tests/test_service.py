@@ -13,6 +13,8 @@ from paper_digest.config import (
     AppConfig,
     DigestConfig,
     FeedConfig,
+    RankingConfig,
+    RankingWeights,
     StateConfig,
 )
 from paper_digest.service import generate_digest
@@ -444,3 +446,60 @@ class GenerateDigestTests(unittest.TestCase):
             ["《Agent systems》〔评测 / 方法〕：A benchmark for agent evaluation."],
         )
         self.assertEqual(digest.topic_sections[0].name, "Agent")
+
+    @patch("paper_digest.service.fetch_feed_papers")
+    def test_generate_digest_applies_configured_sorting_summary(
+        self,
+        mock_fetch_feed_papers,
+    ) -> None:
+        now = datetime(2026, 4, 8, 9, 30, tzinfo=ZoneInfo("UTC"))
+        feed = FeedConfig(
+            name="LLM",
+            categories=["cs.AI"],
+            keywords=["agent"],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+            sort_by="published_at",
+        )
+        mock_fetch_feed_papers.return_value = [
+            Paper(
+                title="Agent systems",
+                summary="Agent summary",
+                authors=["Alice"],
+                categories=["cs.AI"],
+                paper_id="http://arxiv.org/abs/2604.00001v1",
+                abstract_url="https://arxiv.org/abs/2604.00001v1",
+                pdf_url="https://arxiv.org/pdf/2604.00001v1",
+                published_at=datetime(2026, 4, 8, 0, 30, tzinfo=ZoneInfo("UTC")),
+                updated_at=datetime(2026, 4, 8, 0, 30, tzinfo=ZoneInfo("UTC")),
+            )
+        ]
+
+        with TemporaryDirectory() as temp_dir:
+            config = AppConfig(
+                timezone="UTC",
+                lookback_hours=24,
+                output_dir=Path(temp_dir) / "output",
+                request_delay_seconds=0.0,
+                feeds=[feed],
+                state=StateConfig(
+                    enabled=True,
+                    path=Path(temp_dir) / "state.json",
+                    retention_days=90,
+                ),
+                ranking=RankingConfig(
+                    sort_by="hybrid",
+                    weights=RankingWeights(multi_source_weight=12),
+                ),
+            )
+
+            digest = generate_digest(config, now=now)
+
+        self.assertEqual(digest.default_sort_by, "hybrid")
+        self.assertEqual(digest.feeds[0].sort_by, "published_at")
+        self.assertEqual(
+            digest.sort_summary,
+            "published_at (newest first; relevance is auxiliary)",
+        )
+        self.assertEqual(digest.ranking_weights["multi_source_weight"], 12)

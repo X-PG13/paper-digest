@@ -7,7 +7,14 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from paper_digest.arxiv_client import Paper, PaperAnalysis
-from paper_digest.config import AnalysisConfig, AppConfig, FeedConfig, StateConfig
+from paper_digest.config import (
+    AnalysisConfig,
+    AppConfig,
+    FeedConfig,
+    RankingConfig,
+    RankingWeights,
+    StateConfig,
+)
 from paper_digest.digest import (
     DigestRun,
     FeedDigest,
@@ -90,7 +97,13 @@ class DigestTests(unittest.TestCase):
             ),
         ]
 
-        filtered = filter_papers(papers, feed, now=now, lookback_hours=24)
+        filtered = filter_papers(
+            papers,
+            feed,
+            now=now,
+            lookback_hours=24,
+            ranking=RankingConfig(),
+        )
 
         self.assertEqual([paper.title for paper in filtered], ["Useful agent paper"])
 
@@ -120,6 +133,7 @@ class DigestTests(unittest.TestCase):
         self.assertIn("Unknown authors", markdown)
         self.assertIn("Reasoning paper", markdown)
         self.assertIn("Published", markdown)
+        self.assertIn("Sorting: hybrid", markdown)
 
     def test_render_markdown_includes_highlights_and_structured_analysis(self) -> None:
         analyzed_paper = build_paper(
@@ -234,6 +248,7 @@ class DigestTests(unittest.TestCase):
         self.assertIn("## 主题聚焦", markdown)
         self.assertIn("### 多模态推理", markdown)
         self.assertIn("## LLM 观察", markdown)
+        self.assertIn("排序策略：hybrid", markdown)
         self.assertIn("### 本组速览", markdown)
         self.assertIn("### 论文速览", markdown)
         self.assertIn("标签：评测 / 应用", markdown)
@@ -281,7 +296,13 @@ class DigestTests(unittest.TestCase):
             build_paper(title="Second", summary="x", hours_ago=2),
         ]
 
-        filtered = filter_papers(papers, feed, now=now, lookback_hours=24)
+        filtered = filter_papers(
+            papers,
+            feed,
+            now=now,
+            lookback_hours=24,
+            ranking=RankingConfig(),
+        )
 
         self.assertEqual([paper.title for paper in filtered], ["First", "Second"])
 
@@ -311,7 +332,13 @@ class DigestTests(unittest.TestCase):
             ),
         ]
 
-        filtered = filter_papers(papers, feed, now=now, lookback_hours=24)
+        filtered = filter_papers(
+            papers,
+            feed,
+            now=now,
+            lookback_hours=24,
+            ranking=RankingConfig(),
+        )
 
         self.assertEqual(
             [paper.title for paper in filtered],
@@ -323,6 +350,50 @@ class DigestTests(unittest.TestCase):
         self.assertIn("has DOI", filtered[0].match_reasons)
         self.assertIn("has PDF", filtered[0].match_reasons)
         self.assertIn("has complete metadata", filtered[0].match_reasons)
+
+    def test_filter_papers_respects_published_at_sort_mode(self) -> None:
+        feed = FeedConfig(
+            name="LLM",
+            categories=["cs.AI"],
+            keywords=["agent"],
+            exclude_keywords=[],
+            max_results=50,
+            max_items=5,
+            sort_by="published_at",
+        )
+        now = datetime(2026, 4, 8, 12, 0, tzinfo=UTC)
+        papers = [
+            build_paper(
+                title="Older but richer",
+                summary="An agent paper with more metadata and a longer abstract.",
+                hours_ago=8,
+                authors=["Alice", "Bob"],
+                doi="10.5555/example",
+            ),
+            build_paper(
+                title="Newest hit",
+                summary="Agent summary.",
+                hours_ago=1,
+                authors=["Alice"],
+                pdf_url=None,
+            ),
+        ]
+
+        filtered = filter_papers(
+            papers,
+            feed,
+            now=now,
+            lookback_hours=24,
+            ranking=RankingConfig(
+                sort_by="hybrid",
+                weights=RankingWeights(title_match_weight=50),
+            ),
+        )
+
+        self.assertEqual(
+            [paper.title for paper in filtered],
+            ["Newest hit", "Older but richer"],
+        )
 
     def test_render_markdown_includes_empty_feed_message(self) -> None:
         digest = DigestRun(
@@ -390,6 +461,7 @@ class DigestTests(unittest.TestCase):
             self.assertTrue((config.output_dir / "latest.json").exists())
             self.assertTrue((config.output_dir / "latest.md").exists())
             self.assertIn("Digest title", markdown_path.read_text(encoding="utf-8"))
+            self.assertIn("sorting", payload)
             paper_payload = payload["feeds"][0]["papers"][0]
             self.assertIn("relevance_score", paper_payload)
             self.assertIn("match_reasons", paper_payload)
