@@ -24,6 +24,13 @@ def build_paper(
     summary: str,
     hours_ago: int,
     authors: list[str] | None = None,
+    paper_id: str = "http://arxiv.org/abs/2604.00001v1",
+    abstract_url: str = "https://arxiv.org/abs/2604.00001v1",
+    pdf_url: str | None = "https://arxiv.org/pdf/2604.00001v1",
+    source: str = "arxiv",
+    doi: str | None = None,
+    arxiv_id: str | None = None,
+    source_variants: list[str] | None = None,
 ) -> Paper:
     now = datetime(2026, 4, 8, 12, 0, tzinfo=UTC)
     published_at = now - timedelta(hours=hours_ago)
@@ -32,11 +39,15 @@ def build_paper(
         summary=summary,
         authors=authors or [],
         categories=["cs.AI"],
-        paper_id="http://arxiv.org/abs/2604.00001v1",
-        abstract_url="https://arxiv.org/abs/2604.00001v1",
-        pdf_url="https://arxiv.org/pdf/2604.00001v1",
+        paper_id=paper_id,
+        abstract_url=abstract_url,
+        pdf_url=pdf_url,
         published_at=published_at,
         updated_at=published_at,
+        source=source,
+        doi=doi,
+        arxiv_id=arxiv_id,
+        source_variants=source_variants or [],
     )
 
 
@@ -134,6 +145,27 @@ class DigestTests(unittest.TestCase):
             "Limitations: Abstract-only analysis may miss setup details.", markdown
         )
 
+    def test_render_markdown_shows_merged_source_variants(self) -> None:
+        merged_paper = build_paper(
+            title="Reasoning paper",
+            summary="Reasoning summary.",
+            hours_ago=1,
+            authors=["Alice"],
+            source="semantic_scholar",
+            doi="10.5555/example",
+            source_variants=["arxiv", "semantic_scholar", "openalex"],
+        )
+        digest = DigestRun(
+            generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
+            timezone="UTC",
+            lookback_hours=24,
+            feeds=[FeedDigest(name="LLM", papers=[merged_paper])],
+        )
+
+        markdown = render_markdown(digest)
+
+        self.assertIn("Source: arxiv / semantic_scholar / openalex", markdown)
+
     def test_render_markdown_supports_zh_daily_brief_template(self) -> None:
         analyzed_paper = build_paper(
             title="多模态推理论文",
@@ -196,6 +228,28 @@ class DigestTests(unittest.TestCase):
         self.assertIn("主要贡献：统一了评测设置；给出了更稳定的对比结果", markdown)
         self.assertIn("适合谁看：关注多模态评测和应用落地的研究者。", markdown)
         self.assertIn("潜在局限：仅基于摘要，实验细节仍需阅读全文确认。", markdown)
+
+    def test_render_zh_daily_brief_shows_merged_source_variants(self) -> None:
+        paper = build_paper(
+            title="多源论文",
+            summary="原始摘要。",
+            hours_ago=1,
+            authors=["Alice"],
+            source="openalex",
+            doi="10.5555/example",
+            source_variants=["arxiv", "semantic_scholar", "openalex"],
+        )
+        digest = DigestRun(
+            generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
+            timezone="UTC",
+            lookback_hours=24,
+            feeds=[FeedDigest(name="LLM", papers=[paper])],
+            template="zh_daily_brief",
+        )
+
+        markdown = render_markdown(digest)
+
+        self.assertIn("来源：arxiv / semantic_scholar / openalex", markdown)
 
     def test_filter_papers_without_keywords_sorts_and_limits(self) -> None:
         feed = FeedConfig(

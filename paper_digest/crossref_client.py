@@ -117,6 +117,7 @@ def parse_crossref_item(item: dict[str, object]) -> Paper:
         updated_at=indexed_at,
         source="crossref",
         date_label="Indexed",
+        doi=doi,
     )
 
 

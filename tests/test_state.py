@@ -10,9 +10,15 @@ from paper_digest.config import StateConfig
 from paper_digest.state import DigestState, dedupe_papers, load_state, save_state
 
 
-def build_paper(paper_id: str) -> Paper:
+def build_paper(
+    paper_id: str,
+    *,
+    title: str = "Title",
+    doi: str | None = None,
+    arxiv_id: str | None = None,
+) -> Paper:
     return Paper(
-        title="Title",
+        title=title,
         summary="Summary",
         authors=["Alice"],
         categories=["cs.AI"],
@@ -21,28 +27,77 @@ def build_paper(paper_id: str) -> Paper:
         pdf_url=None,
         published_at=datetime(2026, 4, 8, 9, 0, tzinfo=UTC),
         updated_at=datetime(2026, 4, 8, 9, 0, tzinfo=UTC),
+        doi=doi,
+        arxiv_id=arxiv_id,
     )
 
 
 class StateTests(unittest.TestCase):
     def test_dedupe_papers_filters_seen_and_duplicates_in_run(self) -> None:
         state = DigestState(
-            seen_papers={"LLM": {"paper-1": "2026-04-07T00:00:00+00:00"}}
+            seen_papers={"LLM": {"title:paper one": "2026-04-07T00:00:00+00:00"}}
         )
 
         papers = dedupe_papers(
             state,
             feed_name="LLM",
             papers=[
-                build_paper("paper-1"),
-                build_paper("paper-2"),
-                build_paper("paper-2"),
+                build_paper("paper-1", title="Paper One"),
+                build_paper("paper-2", title="Paper Two"),
+                build_paper("paper-2", title="Paper Two"),
             ],
             now=datetime(2026, 4, 8, 9, 0, tzinfo=UTC),
             retention_days=90,
         )
 
         self.assertEqual([paper.paper_id for paper in papers], ["paper-2"])
+
+    def test_dedupe_papers_uses_canonical_identity(self) -> None:
+        state = DigestState(seen_papers={})
+
+        papers = dedupe_papers(
+            state,
+            feed_name="LLM",
+            papers=[
+                build_paper(
+                    "https://doi.org/10.5555/example",
+                    doi="10.5555/example",
+                    title="Shared paper",
+                ),
+                build_paper(
+                    "https://openalex.org/W123",
+                    doi="10.5555/example",
+                    title="Shared paper",
+                ),
+                build_paper(
+                    "http://arxiv.org/abs/2604.00001v1",
+                    arxiv_id="2604.00001",
+                    title="Arxiv paper",
+                ),
+                build_paper(
+                    "https://arxiv.org/abs/2604.00001",
+                    arxiv_id="2604.00001",
+                    title="Arxiv paper",
+                ),
+            ],
+            now=datetime(2026, 4, 8, 9, 0, tzinfo=UTC),
+            retention_days=90,
+        )
+
+        self.assertEqual(
+            [paper.paper_id for paper in papers],
+            [
+                "https://doi.org/10.5555/example",
+                "http://arxiv.org/abs/2604.00001v1",
+            ],
+        )
+        self.assertEqual(
+            state.seen_papers["LLM"],
+            {
+                "doi:10.5555/example": "2026-04-08T09:00:00+00:00",
+                "arxiv:2604.00001": "2026-04-08T09:00:00+00:00",
+            },
+        )
 
     def test_save_and_load_state_round_trip(self) -> None:
         with TemporaryDirectory() as temp_dir:

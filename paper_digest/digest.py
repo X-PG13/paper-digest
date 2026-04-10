@@ -136,7 +136,7 @@ def _render_default_markdown(digest: DigestRun) -> str:
             lines.append(f"{index}. [{paper.title}]({paper.abstract_url})")
             lines.append(f"   - {paper.date_label}: {published}")
             lines.append(f"   - Authors: {authors}")
-            lines.append(f"   - Source: {paper.source}")
+            lines.append(f"   - Source: {paper.source_label()}")
             lines.append(f"   - Categories: {', '.join(paper.categories)}")
             if paper.pdf_url:
                 lines.append(f"   - PDF: {paper.pdf_url}")
@@ -226,7 +226,7 @@ def _render_zh_daily_brief(digest: DigestRun) -> str:
             lines.append(f"{index}. [{paper.title}]({paper.abstract_url})")
             lines.append(f"   - {paper.date_label}：{published}")
             lines.append(f"   - 作者：{authors}")
-            lines.append(f"   - 来源：{paper.source}")
+            lines.append(f"   - 来源：{paper.source_label()}")
             lines.append(f"   - 分类：{', '.join(paper.categories)}")
             if paper.tags:
                 lines.append(f"   - 标签：{' / '.join(paper.tags)}")

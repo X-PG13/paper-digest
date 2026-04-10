@@ -56,11 +56,11 @@ def dedupe_papers(
     seen_at = now.isoformat()
 
     for paper in papers:
-        paper_id = paper.paper_id
-        if paper_id in seen_in_run or paper_id in seen_for_feed:
+        paper_key = paper.canonical_id()
+        if paper_key in seen_in_run or paper_key in seen_for_feed:
             continue
-        seen_in_run.add(paper_id)
-        seen_for_feed[paper_id] = seen_at
+        seen_in_run.add(paper_key)
+        seen_for_feed[paper_key] = seen_at
         new_papers.append(paper)
 
     return new_papers
