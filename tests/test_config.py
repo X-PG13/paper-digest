@@ -708,3 +708,35 @@ class LoadConfigTests(unittest.TestCase):
             ["large language model", "agent systems"],
         )
         self.assertEqual(config.feeds[0].types, ["article", "preprint"])
+
+    def test_load_config_reads_notify_settings(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text(
+                textwrap.dedent(
+                    """
+                    [app]
+                    timezone = "UTC"
+
+                    [[feeds]]
+                    name = "LLM"
+                    categories = ["cs.AI"]
+
+                    [notify]
+                    feedback_only = true
+                    include_new_starred = false
+                    include_follow_up_resurfaced = true
+                    include_starred_momentum = false
+                    max_focus_items = 7
+                    """
+                ).strip(),
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        self.assertTrue(config.notify.feedback_only)
+        self.assertFalse(config.notify.include_new_starred)
+        self.assertTrue(config.notify.include_follow_up_resurfaced)
+        self.assertFalse(config.notify.include_starred_momentum)
+        self.assertEqual(config.notify.max_focus_items, 7)

@@ -11,6 +11,7 @@ from paper_digest.config import (
     DiscordWebhookConfig,
     EmailConfig,
     FeishuWebhookConfig,
+    NotifyConfig,
     SlackWebhookConfig,
     StateConfig,
     TelegramBotConfig,
@@ -20,7 +21,7 @@ from paper_digest.delivery import (
     build_notification_messages,
     send_configured_deliveries,
 )
-from paper_digest.digest import DigestRun, FeedDigest, TopicDigest
+from paper_digest.digest import DigestRun, FeedDigest, FocusItem, TopicDigest
 
 
 def build_digest() -> DigestRun:
@@ -127,6 +128,41 @@ class DeliveryTests(unittest.TestCase):
 
         self.assertEqual(messages, [])
 
+    def test_build_notification_messages_supports_feedback_only_focus_digest(
+        self,
+    ) -> None:
+        delivery = FeishuWebhookConfig(
+            webhook_url="https://open.feishu.cn/example",
+            title_prefix="[Robot]",
+            skip_if_empty=True,
+            target="digest",
+        )
+        digest = DigestRun(
+            generated_at=datetime(2026, 4, 8, 10, 0, tzinfo=UTC),
+            timezone="UTC",
+            lookback_hours=24,
+            feeds=[FeedDigest(name="LLM", papers=[])],
+            focus_items=[
+                FocusItem(
+                    canonical_id="arxiv:2604.06170",
+                    title="Paper Circle",
+                    abstract_url="https://arxiv.org/abs/2604.06170v1",
+                    summary="Framework summary",
+                    source_label="arxiv",
+                    feedback_status="star",
+                    reasons=["new_starred"],
+                    feed_names=["LLM"],
+                )
+            ],
+        )
+
+        messages = build_notification_messages(delivery, digest, feedback_only=True)
+
+        self.assertEqual(len(messages), 1)
+        self.assertIn("Focus=1, star=1", messages[0].title)
+        self.assertIn("# Daily Paper Focus", messages[0].body)
+        self.assertIn("Why it was pushed", messages[0].body)
+
     @patch("paper_digest.delivery.send_wecom_message")
     @patch("paper_digest.delivery.send_slack_message")
     @patch("paper_digest.delivery.send_discord_message")
@@ -213,3 +249,59 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(mock_send_discord_message.call_count, 1)
         self.assertEqual(mock_send_telegram_message.call_count, 1)
         self.assertEqual(len(receipts), 6)
+
+    @patch("paper_digest.delivery.send_feishu_message")
+    def test_send_configured_deliveries_uses_feedback_only_mode(
+        self,
+        mock_send_feishu_message,
+    ) -> None:
+        digest = DigestRun(
+            generated_at=datetime(2026, 4, 8, 10, 0, tzinfo=UTC),
+            timezone="UTC",
+            lookback_hours=24,
+            feeds=[FeedDigest(name="LLM", papers=[])],
+            focus_items=[
+                FocusItem(
+                    canonical_id="pubmed:41951858",
+                    title="ClinicRealm",
+                    abstract_url="https://pubmed.ncbi.nlm.nih.gov/41951858/",
+                    summary="Clinical prediction benchmark.",
+                    source_label="PubMed",
+                    feedback_status="follow_up",
+                    reasons=["follow_up_resurfaced"],
+                    feed_names=["PubMed AI"],
+                )
+            ],
+        )
+        config = AppConfig(
+            timezone="UTC",
+            lookback_hours=24,
+            output_dir=Path("output"),
+            request_delay_seconds=0.0,
+            feeds=[],
+            state=StateConfig(
+                enabled=True,
+                path=Path("state.json"),
+                retention_days=90,
+            ),
+            notify=NotifyConfig(feedback_only=True),
+            deliveries=[
+                FeishuWebhookConfig(
+                    webhook_url="https://open.feishu.cn/example",
+                    title_prefix="[Robot]",
+                    skip_if_empty=True,
+                    target="digest",
+                )
+            ],
+        )
+
+        receipts = send_configured_deliveries(config, digest)
+
+        self.assertEqual(mock_send_feishu_message.call_count, 1)
+        self.assertEqual(
+            receipts,
+            [
+                "Feishu webhook sent to https://open.feishu.cn/example "
+                "(Focus=1, follow_up=1)"
+            ],
+        )

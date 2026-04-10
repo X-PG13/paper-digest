@@ -128,6 +128,15 @@ class FeedbackConfig:
 
 
 @dataclass(slots=True, frozen=True)
+class NotifyConfig:
+    feedback_only: bool = False
+    include_new_starred: bool = True
+    include_follow_up_resurfaced: bool = True
+    include_starred_momentum: bool = True
+    max_focus_items: int = 5
+
+
+@dataclass(slots=True, frozen=True)
 class DigestConfig:
     template: DigestTemplate = "default"
     top_highlights: int = 3
@@ -181,6 +190,7 @@ class AppConfig:
     feeds: list[FeedConfig]
     state: StateConfig
     feedback: FeedbackConfig = field(default_factory=_default_feedback_config)
+    notify: NotifyConfig = field(default_factory=NotifyConfig)
     request_timeout_seconds: int = 60
     fetch_retry_attempts: int = 4
     fetch_retry_backoff_seconds: float = 10.0
@@ -244,6 +254,7 @@ def load_config(path: str | Path) -> AppConfig:
     ]
     state = _load_state(raw.get("state"), config_path)
     feedback = _load_feedback(raw.get("feedback"), config_path)
+    notify = _load_notify(raw.get("notify"))
     digest = _load_digest(raw.get("digest"), raw.get("analysis"))
     ranking = _load_ranking(raw.get("ranking"))
     analysis = _load_analysis(raw.get("analysis"))
@@ -258,6 +269,7 @@ def load_config(path: str | Path) -> AppConfig:
         feeds=feeds,
         state=state,
         feedback=feedback,
+        notify=notify,
         request_timeout_seconds=request_timeout_seconds,
         fetch_retry_attempts=fetch_retry_attempts,
         fetch_retry_backoff_seconds=fetch_retry_backoff_seconds,
@@ -364,6 +376,35 @@ def _load_feedback(value: Any, config_path: Path) -> FeedbackConfig:
         hide_ignored=_bool(
             feedback.get("hide_ignored", True),
             "feedback.hide_ignored",
+        ),
+    )
+
+
+def _load_notify(value: Any) -> NotifyConfig:
+    if value is None:
+        return NotifyConfig()
+
+    notify = _as_table(value, "notify")
+    return NotifyConfig(
+        feedback_only=_bool(
+            notify.get("feedback_only", False),
+            "notify.feedback_only",
+        ),
+        include_new_starred=_bool(
+            notify.get("include_new_starred", True),
+            "notify.include_new_starred",
+        ),
+        include_follow_up_resurfaced=_bool(
+            notify.get("include_follow_up_resurfaced", True),
+            "notify.include_follow_up_resurfaced",
+        ),
+        include_starred_momentum=_bool(
+            notify.get("include_starred_momentum", True),
+            "notify.include_starred_momentum",
+        ),
+        max_focus_items=_positive_int(
+            notify.get("max_focus_items", 5),
+            "notify.max_focus_items",
         ),
     )
 

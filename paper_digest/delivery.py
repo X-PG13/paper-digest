@@ -17,10 +17,12 @@ from .config import (
 from .digest import (
     DigestRun,
     FeedDigest,
+    FocusItem,
     TopicDigest,
     digest_has_papers,
-    render_markdown,
+    render_notification_markdown,
     summarize_digest,
+    summarize_focus_items,
 )
 from .discord_delivery import DiscordDeliveryError, send_discord_message
 from .email_delivery import EmailDeliveryError, send_email_message
@@ -56,6 +58,8 @@ def configured_deliveries(
 def build_notification_messages(
     delivery: DeliveryConfig,
     digest: DigestRun,
+    *,
+    feedback_only: bool = False,
 ) -> list[NotificationMessage]:
     """Build delivery messages according to channel policy."""
 
@@ -65,14 +69,22 @@ def build_notification_messages(
                 delivery,
                 _single_feed_digest(digest, feed),
                 feed.name,
+                feedback_only=feedback_only,
             )
             for feed in digest.feeds
-            if feed.papers or not _skip_if_empty(delivery)
+            if _digest_has_notification_content(
+                _single_feed_digest(digest, feed),
+                feedback_only=feedback_only,
+            )
+            or not _skip_if_empty(delivery)
         ]
 
-    if _skip_if_empty(delivery) and not digest_has_papers(digest):
+    if _skip_if_empty(delivery) and not _digest_has_notification_content(
+        digest,
+        feedback_only=feedback_only,
+    ):
         return []
-    return [_build_notification_message(delivery, digest)]
+    return [_build_notification_message(delivery, digest, feedback_only=feedback_only)]
 
 
 def send_configured_deliveries(config: AppConfig, digest: DigestRun) -> list[str]:
@@ -82,7 +94,11 @@ def send_configured_deliveries(config: AppConfig, digest: DigestRun) -> list[str
     receipts: list[str] = []
 
     for delivery in configured_deliveries(config):
-        messages = build_notification_messages(delivery, digest)
+        messages = build_notification_messages(
+            delivery,
+            digest,
+            feedback_only=config.notify.feedback_only,
+        )
         if not messages:
             continue
 
@@ -107,11 +123,14 @@ def _build_notification_message(
     delivery: DeliveryConfig,
     digest: DigestRun,
     feed_name: str | None = None,
+    *,
+    feedback_only: bool = False,
 ) -> NotificationMessage:
+    summary = _notification_summary(digest, feedback_only=feedback_only)
     return NotificationMessage(
-        title=_build_title(delivery, digest),
-        body=render_markdown(digest),
-        summary=summarize_digest(digest),
+        title=_build_title(delivery, digest, summary=summary),
+        body=render_notification_markdown(digest, feedback_only=feedback_only),
+        summary=summary,
         feed_name=feed_name,
     )
 
@@ -119,10 +138,12 @@ def _build_notification_message(
 def _build_title(
     delivery: DeliveryConfig,
     digest: DigestRun,
+    *,
+    summary: str,
 ) -> str:
     date_label = digest.generated_at.strftime("%Y-%m-%d")
     prefix = _title_prefix(delivery).strip()
-    return f"{prefix} {date_label} | {summarize_digest(digest)}".strip()
+    return f"{prefix} {date_label} | {summary}".strip()
 
 
 def _single_feed_digest(digest: DigestRun, feed: FeedDigest) -> DigestRun:
@@ -143,8 +164,12 @@ def _single_feed_digest(digest: DigestRun, feed: FeedDigest) -> DigestRun:
             )
         ],
         highlights=highlights,
+        focus_items=_filter_focus_items_for_feed(digest.focus_items, feed.name),
         topic_sections=topic_sections,
         template=digest.template,
+        default_sort_by=digest.default_sort_by,
+        sort_summary=digest.sort_summary,
+        ranking_weights=dict(digest.ranking_weights),
     )
 
 
@@ -180,6 +205,13 @@ def _filter_highlights_for_feed(highlights: list[str], feed_name: str) -> list[s
     return [highlight for highlight in highlights if highlight.startswith(prefixes)]
 
 
+def _filter_focus_items_for_feed(
+    focus_items: list[FocusItem],
+    feed_name: str,
+) -> list[FocusItem]:
+    return [item for item in focus_items if feed_name in item.feed_names]
+
+
 def _format_topic_highlight(topic: TopicDigest) -> str:
     title_label = "、".join(f"《{title}》" for title in topic.paper_titles[:2])
     return (
@@ -197,6 +229,26 @@ def _format_topic_key_point(paper: object) -> str:
     summary_line = analysis.conclusion if analysis is not None else summary
     tag_label = f"〔{' / '.join(tags)}〕" if tags else ""
     return f"《{title}》{tag_label}：{summary_line}"
+
+
+def _notification_summary(digest: DigestRun, *, feedback_only: bool) -> str:
+    focus_summary = summarize_focus_items(digest)
+    digest_summary = summarize_digest(digest)
+    if feedback_only:
+        return focus_summary
+    if digest.focus_items:
+        return f"{digest_summary} | {focus_summary}"
+    return digest_summary
+
+
+def _digest_has_notification_content(
+    digest: DigestRun,
+    *,
+    feedback_only: bool,
+) -> bool:
+    if feedback_only:
+        return bool(digest.focus_items)
+    return digest_has_papers(digest) or bool(digest.focus_items)
 
 
 def _send_messages(
