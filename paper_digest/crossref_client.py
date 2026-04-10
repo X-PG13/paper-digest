@@ -118,6 +118,10 @@ def parse_crossref_item(item: dict[str, object]) -> Paper:
         source="crossref",
         date_label="Indexed",
         doi=doi,
+        source_urls={
+            "crossref": abstract_url,
+            "doi": f"https://doi.org/{doi}",
+        },
     )
 
 

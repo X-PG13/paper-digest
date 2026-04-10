@@ -58,6 +58,7 @@ class Paper:
     doi: str | None = None
     arxiv_id: str | None = None
     source_variants: list[str] = field(default_factory=list)
+    source_urls: dict[str, str] = field(default_factory=dict)
     base_relevance_score: int = 0
     relevance_score: int = 0
     match_reasons: list[str] = field(default_factory=list)
@@ -80,6 +81,14 @@ class Paper:
         self.topics = _merge_unique_strings(self.topics)
         self.source_variants = _merge_unique_strings(
             [*self.source_variants, self.source]
+        )
+        self.source_urls = _normalize_source_urls(
+            self.source_urls,
+            source=self.source,
+            paper_id=self.paper_id,
+            abstract_url=self.abstract_url,
+            doi=self.doi,
+            arxiv_id=self.arxiv_id,
         )
         if self.relevance_score < self.base_relevance_score:
             self.relevance_score = self.base_relevance_score
@@ -133,6 +142,10 @@ class Paper:
         self.topics = _merge_unique_strings([*preferred.topics, *secondary.topics])
         self.source_variants = _merge_unique_strings(
             [*self.source_variants, *other.source_variants]
+        )
+        self.source_urls = _merge_source_urls(
+            preferred.source_urls,
+            secondary.source_urls,
         )
         self.base_relevance_score = max(
             self.base_relevance_score,
@@ -246,6 +259,7 @@ def parse_entry(entry: ET.Element) -> Paper:
         date_label="Published",
         doi=doi or None,
         arxiv_id=_extract_arxiv_identifier(paper_id),
+        source_urls={"arxiv": abstract_url},
     )
 
 
@@ -307,6 +321,54 @@ def _merge_unique_strings(values: Iterable[str]) -> list[str]:
             continue
         seen.add(key)
         merged.append(normalized)
+    return merged
+
+
+def _normalize_source_urls(
+    values: dict[str, str],
+    *,
+    source: str,
+    paper_id: str,
+    abstract_url: str,
+    doi: str | None,
+    arxiv_id: str | None,
+) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+    for key, value in values.items():
+        key_name = key.strip().lower()
+        url = value.strip()
+        if not key_name or not url:
+            continue
+        normalized[key_name] = url
+
+    if source.strip() and abstract_url.strip():
+        normalized.setdefault(source.strip().lower(), abstract_url.strip())
+    if doi is not None:
+        normalized.setdefault("doi", f"https://doi.org/{doi}")
+    if arxiv_id is not None:
+        normalized.setdefault("arxiv", f"https://arxiv.org/abs/{arxiv_id}")
+    if source == "pubmed" and paper_id.startswith("pubmed:"):
+        normalized.setdefault(
+            "pubmed",
+            f"https://pubmed.ncbi.nlm.nih.gov/{paper_id.removeprefix('pubmed:')}/",
+        )
+    if source == "openalex" and paper_id.startswith("openalex:"):
+        normalized.setdefault(
+            "openalex",
+            f"https://openalex.org/{paper_id.removeprefix('openalex:')}",
+        )
+    return normalized
+
+
+def _merge_source_urls(*mappings: dict[str, str]) -> dict[str, str]:
+    merged: dict[str, str] = {}
+    for mapping in mappings:
+        for key, value in mapping.items():
+            normalized_key = key.strip().lower()
+            normalized_value = value.strip()
+            if not normalized_key or not normalized_value:
+                continue
+            merged.setdefault(normalized_key, normalized_value)
     return merged
 
 

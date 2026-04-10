@@ -118,6 +118,7 @@ def parse_openalex_work(item: dict[str, object]) -> Paper | None:
         source="openalex",
         date_label="Published",
         doi=_string(item.get("doi")),
+        source_urls={"openalex": work_id},
     )
 
 

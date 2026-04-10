@@ -168,6 +168,14 @@ def parse_pubmed_article(article: ET.Element) -> Paper:
         source="pubmed",
         date_label="Entered",
         doi=doi,
+        source_urls={
+            "pubmed": abstract_url,
+            **(
+                {"doi": f"https://doi.org/{doi}"}
+                if doi is not None
+                else {}
+            ),
+        },
     )
 
 

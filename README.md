@@ -15,7 +15,7 @@ The current scope is intentionally narrow:
 - Optionally enrich selected papers with structured LLM analysis.
 - Generate machine-readable `JSON` and human-readable `Markdown`.
 - Build a static archive site with search, feed subscriptions, topic tracking,
-  trend views, and RSS subscription feeds.
+  canonical paper detail pages, trend views, and RSS subscription feeds.
 - Persist state to avoid repeating already-sent papers.
 - Optionally deliver the digest through SMTP email, Feishu webhooks, WeCom
   webhooks, Slack incoming webhooks, Discord incoming webhooks, or Telegram bots.
@@ -417,6 +417,8 @@ The CLI also rebuilds `output/site/index.html` on every run. That static site:
 - shows daily hit counts and per-feed summaries
 - links to each day's Markdown and JSON
 - supports feed filtering, title keyword search, and recent `7d` / `30d` windows
+- emits canonical paper detail pages under `output/site/papers/` with merged
+  source links, match reasons, and lightweight related-paper suggestions
 - emits fixed feed pages under `output/site/feeds/`
 - emits feed RSS files under `output/site/feeds/*.xml`
 - emits keyword tracking pages under `output/site/topics/` from configured feed keywords
