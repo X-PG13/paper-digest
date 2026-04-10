@@ -15,7 +15,14 @@ from .config import ConfigError, load_config
 from .crossref_client import CrossrefClientError
 from .delivery import DeliveryError, send_configured_deliveries
 from .digest import summarize_digest, write_outputs
-from .feedback import load_feedback
+from .feedback import (
+    clear_feedback_status,
+    list_feedback_entries,
+    load_feedback,
+    load_feedback_file,
+    save_feedback,
+    set_feedback_status,
+)
 from .openalex_client import OpenAlexClientError
 from .pubmed_client import PubMedClientError
 from .semantic_scholar_client import SemanticScholarClientError
@@ -24,6 +31,10 @@ from .state import load_state, save_state
 
 
 def build_parser() -> ArgumentParser:
+    return build_digest_parser()
+
+
+def build_digest_parser() -> ArgumentParser:
     parser = ArgumentParser(
         description="Generate a daily paper digest from supported literature sources."
     )
@@ -45,8 +56,55 @@ def build_parser() -> ArgumentParser:
     return parser
 
 
+def build_feedback_parser() -> ArgumentParser:
+    common = ArgumentParser(add_help=False)
+    common.add_argument(
+        "--config",
+        default="config.toml",
+        help="Path to the TOML configuration file.",
+    )
+    parser = ArgumentParser(
+        description="Manage local paper feedback state keyed by canonical_id.",
+        parents=[common],
+    )
+    subparsers = parser.add_subparsers(dest="feedback_command", required=True)
+
+    set_parser = subparsers.add_parser(
+        "set",
+        help="Set a feedback status.",
+        parents=[common],
+    )
+    set_parser.add_argument("canonical_id", help="Canonical paper identifier.")
+    set_parser.add_argument(
+        "status",
+        choices=["star", "follow_up", "ignore"],
+        help="Feedback status to store.",
+    )
+
+    clear_parser = subparsers.add_parser(
+        "clear",
+        help="Remove a feedback status.",
+        parents=[common],
+    )
+    clear_parser.add_argument("canonical_id", help="Canonical paper identifier.")
+
+    subparsers.add_parser(
+        "list",
+        help="List configured feedback entries.",
+        parents=[common],
+    )
+    return parser
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    args_list = list(argv) if argv is not None else sys.argv[1:]
+    if args_list and args_list[0] == "feedback":
+        return _main_feedback(args_list[1:])
+    return _main_digest(args_list)
+
+
+def _main_digest(argv: Sequence[str]) -> int:
+    args = build_digest_parser().parse_args(argv)
     json_path: Path | None = None
     markdown_path: Path | None = None
     site_path: Path | None = None
@@ -94,6 +152,56 @@ def main(argv: Sequence[str] | None = None) -> int:
         for receipt in delivery_receipts:
             print(receipt)
     return 0
+
+
+def _main_feedback(argv: Sequence[str]) -> int:
+    args = build_feedback_parser().parse_args(argv)
+    try:
+        config = load_config(args.config)
+        feedback_state = load_feedback_file(config.feedback.path)
+        feedback_path = Path(config.feedback.path).resolve()
+        if args.feedback_command == "set":
+            entry = set_feedback_status(
+                feedback_state,
+                canonical_id=args.canonical_id,
+                status=args.status,
+            )
+            save_feedback(config.feedback, feedback_state)
+            updated_at = (
+                entry.updated_at.isoformat() if entry.updated_at is not None else "n/a"
+            )
+            print(
+                f"Set {args.canonical_id.strip()} -> {entry.status} "
+                f"at {updated_at} in {feedback_path}"
+            )
+            return 0
+        if args.feedback_command == "clear":
+            removed = clear_feedback_status(
+                feedback_state,
+                canonical_id=args.canonical_id,
+            )
+            save_feedback(config.feedback, feedback_state)
+            if removed:
+                print(f"Cleared {args.canonical_id.strip()} from {feedback_path}")
+            else:
+                print(f"No entry for {args.canonical_id.strip()} in {feedback_path}")
+            return 0
+
+        entries = list_feedback_entries(feedback_state)
+        if not entries:
+            print(f"No feedback entries found in {feedback_path}")
+            return 0
+        for canonical_id, entry in entries:
+            updated_at = (
+                entry.updated_at.isoformat()
+                if entry.updated_at is not None
+                else "n/a"
+            )
+            print(f"{entry.status}\t{canonical_id}\t{updated_at}")
+        return 0
+    except ConfigError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
 
 
 def _tracked_keywords(config: object) -> list[str]:

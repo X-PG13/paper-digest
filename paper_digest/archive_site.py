@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from .config import FeedbackStatus
-from .feedback import FeedbackState, feedback_label_zh
+from .feedback import FeedbackState, feedback_command_snippet, feedback_label_zh
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -175,6 +175,13 @@ class PaperDetail:
     related_papers: list[RelatedPaper]
 
 
+@dataclass(slots=True, frozen=True)
+class WeeklyReviewSection:
+    label: str
+    description: str
+    items: list[PaperDetail]
+
+
 def build_archive_site(
     output_dir: Path,
     *,
@@ -215,6 +222,10 @@ def build_archive_site(
     )
     site_root.joinpath("momentum.html").write_text(
         _render_momentum_page(paper_details),
+        encoding="utf-8",
+    )
+    site_root.joinpath("weekly-review.html").write_text(
+        _render_weekly_review_page(paper_details),
         encoding="utf-8",
     )
     site_root.joinpath("reading-list.html").write_text(
@@ -763,7 +774,7 @@ def _render_index(
             "汇总每天生成的 digest.json 和 digest.md，支持按 feed 过滤、"
             "按标题关键词搜索，"
             "并提供固定 feed 页面、关键词长期追踪页、持续升温视图，"
-            "以及最近 7 天 / 30 天趋势页。"
+            "阅读清单、周度回顾，以及最近 7 天 / 30 天趋势页。"
         ),
         hero_links=_render_hero_links(
             [
@@ -771,6 +782,7 @@ def _render_index(
                 ("latest.json", "查看最新 JSON"),
                 ("trends.html", "查看趋势总览"),
                 ("momentum.html", "持续升温论文"),
+                ("weekly-review.html", "周度回顾"),
                 (None, f"最近构建：{latest_label}"),
             ]
         ),
@@ -794,6 +806,7 @@ def _render_trends_page(
         for item in keyword_overviews
     ) or _render_empty_note("当前没有配置可追踪的关键词。")
     rising_papers = _build_rising_papers(paper_details)
+    reading_list = _build_reading_list(paper_details)
     rising_cards = "\n".join(
         _render_rising_paper_card(item, link_prefix="")
         for item in rising_papers[:6]
@@ -827,6 +840,13 @@ def _render_trends_page(
             sum(item.active_days for item in rising_papers),
             "个累计活跃日期",
         ),
+        ArchiveStats(
+            "阅读清单",
+            len(reading_list),
+            "篇已标记论文",
+            sum(1 for item in reading_list if item.feedback_status == "star"),
+            "篇标星",
+        ),
     ]
     content = (
         '<section class="section-grid">'
@@ -848,6 +868,7 @@ def _render_trends_page(
             f'<div class="subscription-grid">{rising_cards}</div>'
             '<div class="chip-cloud">'
             '<a class="topic-chip" href="momentum.html">查看完整持续升温视图</a>'
+            '<a class="topic-chip" href="weekly-review.html">查看周度回顾</a>'
             "</div>",
         )
     )
@@ -865,6 +886,7 @@ def _render_trends_page(
                 ("latest.md", "最新 Markdown"),
                 ("latest.json", "最新 JSON"),
                 ("momentum.html", "持续升温论文"),
+                ("weekly-review.html", "周度回顾"),
             ]
         ),
         content=content,
@@ -1140,6 +1162,7 @@ def _render_momentum_page(paper_details: list[PaperDetail]) -> str:
             [
                 ("index.html", "返回归档首页"),
                 ("trends.html", "查看趋势总览"),
+                ("weekly-review.html", "周度回顾"),
                 ("reading-list.html", "阅读清单"),
                 ("latest.md", "最新 Markdown"),
             ]
@@ -1165,6 +1188,32 @@ def _build_reading_list(paper_details: list[PaperDetail]) -> list[PaperDetail]:
             detail.paper.title.lower(),
         ),
     )
+
+
+def _build_weekly_review_sections(
+    paper_details: list[PaperDetail],
+) -> list[WeeklyReviewSection]:
+    grouped: dict[tuple[int, int], list[PaperDetail]] = {}
+    for detail in _build_reading_list(paper_details):
+        anchor = detail.feedback_updated_at or detail.last_seen
+        iso_year, iso_week, _ = anchor.isocalendar()
+        grouped.setdefault((iso_year, iso_week), []).append(detail)
+
+    sections: list[WeeklyReviewSection] = []
+    for (iso_year, iso_week), items in sorted(grouped.items(), reverse=True):
+        starred = sum(1 for item in items if item.feedback_status == "star")
+        follow_up = sum(1 for item in items if item.feedback_status == "follow_up")
+        sections.append(
+            WeeklyReviewSection(
+                label=f"{iso_year} W{iso_week:02d}",
+                description=(
+                    f"本周共 {len(items)} 篇已标记论文，"
+                    f"其中 {starred} 篇标星，{follow_up} 篇待跟进。"
+                ),
+                items=items,
+            )
+        )
+    return sections
 
 
 def _render_reading_list_page(paper_details: list[PaperDetail]) -> str:
@@ -1223,10 +1272,89 @@ def _render_reading_list_page(paper_details: list[PaperDetail]) -> str:
                 ("index.html", "返回归档首页"),
                 ("trends.html", "查看趋势总览"),
                 ("momentum.html", "持续升温论文"),
+                ("weekly-review.html", "周度回顾"),
             ]
         ),
         content=content,
         nav_current="reading_list",
+    )
+
+
+def _render_weekly_review_page(paper_details: list[PaperDetail]) -> str:
+    reading_list = _build_reading_list(paper_details)
+    sections = _build_weekly_review_sections(paper_details)
+    weekly_blocks = (
+        "".join(
+            _render_section_block(
+                section.label,
+                section.description,
+                '<div class="subscription-grid">'
+                + "\n".join(
+                    _render_rising_paper_card(
+                        item,
+                        link_prefix="",
+                        kicker="Weekly Review",
+                    )
+                    for item in section.items
+                )
+                + "</div>",
+            )
+            for section in sections
+        )
+        if sections
+        else _render_empty_state("当前还没有可汇总进周度回顾的论文。")
+    )
+    stats = [
+        ArchiveStats(
+            "活跃周数",
+            len(sections),
+            "个反馈周",
+            len(reading_list),
+            "篇已标记论文",
+        ),
+        ArchiveStats(
+            "标星论文",
+            sum(1 for item in reading_list if item.feedback_status == "star"),
+            "篇",
+            sum(1 for item in reading_list if item.feedback_status == "follow_up"),
+            "篇待跟进",
+        ),
+        ArchiveStats(
+            "跨天复现",
+            sum(1 for item in reading_list if item.active_days > 1),
+            "篇论文",
+            max((item.active_days for item in reading_list), default=0),
+            "个最大活跃日期",
+        ),
+    ]
+    content = (
+        '<section class="section-grid">'
+        + "".join(_render_stats_card(item) for item in stats)
+        + "</section>"
+        + _render_section(
+            "周度回顾",
+            "按周收口你已经标星或待跟进的论文，适合做周会前的快速回看。",
+            weekly_blocks,
+        )
+    )
+    return _render_page(
+        page_title="Paper Digest Weekly Review",
+        eyebrow="Feedback Review",
+        heading="周度回顾",
+        description=(
+            "把 star 和 follow_up 的论文按周整理出来，"
+            "帮助你把日级阅读清单沉淀成更稳定的研究复盘入口。"
+        ),
+        hero_links=_render_hero_links(
+            [
+                ("index.html", "返回归档首页"),
+                ("trends.html", "查看趋势总览"),
+                ("reading-list.html", "阅读清单"),
+                ("momentum.html", "持续升温论文"),
+            ]
+        ),
+        content=content,
+        nav_current="weekly_review",
     )
 
 
@@ -1325,6 +1453,11 @@ def _render_paper_page(detail: PaperDetail) -> str:
             ),
         )
         + _render_section(
+            "反馈操作",
+            "复制规范主键或本地 CLI 命令，把这篇论文快速加入个人反馈状态文件。",
+            _render_feedback_actions(detail),
+        )
+        + _render_section(
             "来源与外链",
             "优先展示这篇论文在各来源上的规范化入口，再补当前摘要页和 PDF。",
             source_links,
@@ -1351,6 +1484,7 @@ def _render_paper_page(detail: PaperDetail) -> str:
                 ("../trends.html", "查看趋势总览"),
                 ("../momentum.html", "持续升温论文"),
                 ("../reading-list.html", "阅读清单"),
+                ("../weekly-review.html", "周度回顾"),
                 (paper.href, "打开当前主来源"),
                 (
                     paper.pdf_url,
@@ -1363,6 +1497,7 @@ def _render_paper_page(detail: PaperDetail) -> str:
         content=content,
         nav_current="papers",
         link_prefix="../",
+        extra_script=_render_copy_script(),
     )
 
 
@@ -1408,6 +1543,54 @@ def _render_page(
   {extra_script}
 </body>
 </html>
+"""
+
+
+def _render_feedback_actions(detail: PaperDetail) -> str:
+    canonical_id = detail.paper.canonical_id
+    buttons = [
+        ("复制 canonical_id", canonical_id),
+        ("复制标星命令", feedback_command_snippet(canonical_id, "star")),
+        (
+            "复制待跟进命令",
+            feedback_command_snippet(canonical_id, "follow_up"),
+        ),
+        ("复制忽略命令", feedback_command_snippet(canonical_id, "ignore")),
+    ]
+    return (
+        '<div class="chip-cloud">'
+        + "".join(
+            (
+                '<button class="topic-chip copy-chip" type="button" '
+                f'data-copy-text="{escape(payload)}" '
+                f'data-copy-label="{escape(label)}">{escape(label)}</button>'
+            )
+            for label, payload in buttons
+        )
+        + "</div>"
+    )
+
+
+def _render_copy_script() -> str:
+    return """
+<script>
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-copy-text]");
+    if (!button) {
+      return;
+    }
+    const label = button.dataset.copyLabel || button.textContent;
+    try {
+      await navigator.clipboard.writeText(button.dataset.copyText || "");
+      button.textContent = "已复制";
+    } catch (error) {
+      button.textContent = "复制失败";
+    }
+    window.setTimeout(() => {
+      button.textContent = label;
+    }, 1200);
+  });
+</script>
 """
 
 
@@ -1520,6 +1703,7 @@ def _render_nav(current: str, link_prefix: str) -> str:
         ("home", f"{link_prefix}index.html", "归档首页"),
         ("trends", f"{link_prefix}trends.html", "趋势总览"),
         ("momentum", f"{link_prefix}momentum.html", "持续升温"),
+        ("weekly_review", f"{link_prefix}weekly-review.html", "周度回顾"),
         ("reading_list", f"{link_prefix}reading-list.html", "阅读清单"),
         ("papers", f"{link_prefix}index.html", "论文详情"),
     ]
@@ -1587,6 +1771,15 @@ def _render_subscription_panel(
         "</p>"
         "</a>"
     )
+    weekly_review_card = (
+        '<a class="resource-card" href="weekly-review.html">'
+        '<p class="resource-kicker">Weekly Review</p>'
+        '<h3 class="resource-title">周度回顾</h3>'
+        "<p class=\"resource-copy\">"
+        "把标星和待跟进论文按周收口，适合做周会前的集中回看。"
+        "</p>"
+        "</a>"
+    )
     reading_card = (
         '<a class="resource-card" href="reading-list.html">'
         '<p class="resource-kicker">Reading List</p>'
@@ -1602,6 +1795,7 @@ def _render_subscription_panel(
         '<div class="subscription-grid">'
         + trends_card
         + momentum_card
+        + weekly_review_card
         + reading_card
         + feed_cards
         + "</div>"
@@ -2268,6 +2462,13 @@ def _site_styles() -> str:
       background: rgba(255, 255, 255, 0.72);
       font-size: 0.96rem;
       text-decoration: none;
+    }
+
+    button.topic-chip,
+    button.copy-chip {
+      cursor: pointer;
+      font: inherit;
+      color: inherit;
     }
 
     .nav-link.is-active {

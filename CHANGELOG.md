@@ -22,6 +22,9 @@ Versioning.
 - Local feedback state now supports `star`, `follow_up`, and `ignore` paper
   statuses keyed by canonical id, with ranking effects plus a dedicated
   reading-list archive page for starred and follow-up papers.
+- A feedback management CLI now supports `set`, `clear`, and `list`, and the
+  archive site now exposes copyable canonical-id / feedback command helpers
+  plus a weekly review page for starred and follow-up papers.
 - The manual `Daily Digest` workflow now accepts a temporary `config.toml`
   override input and isolates those validation runs from caches and Pages
   deployment.

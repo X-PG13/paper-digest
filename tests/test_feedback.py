@@ -12,7 +12,11 @@ from paper_digest.feedback import (
     FeedbackEntry,
     FeedbackState,
     apply_feedback_to_papers,
+    clear_feedback_status,
+    list_feedback_entries,
     load_feedback,
+    save_feedback_file,
+    set_feedback_status,
 )
 
 
@@ -134,3 +138,49 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(adjusted[0].feedback_status, "ignore")
         self.assertEqual(adjusted[0].base_relevance_score, 15)
         self.assertIn("feedback: ignored", adjusted[0].match_reasons)
+
+    def test_set_and_clear_feedback_status_round_trip(self) -> None:
+        state = FeedbackState(papers={})
+
+        entry = set_feedback_status(
+            state,
+            canonical_id=" DOI:10.5555/Example ",
+            status="star",
+            updated_at=datetime.fromisoformat("2026-04-10T09:00:00+00:00"),
+        )
+
+        self.assertEqual(entry.status, "star")
+        self.assertIn("doi:10.5555/example", state.papers)
+        self.assertTrue(
+            clear_feedback_status(
+                state,
+                canonical_id="doi:10.5555/example",
+            )
+        )
+        self.assertFalse(state.papers)
+
+    def test_save_feedback_file_preserves_entries(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "feedback.json"
+            state = FeedbackState(
+                papers={
+                    "doi:10.5555/example": FeedbackEntry(
+                        status="follow_up",
+                        updated_at=datetime.fromisoformat(
+                            "2026-04-10T09:15:00+08:00"
+                        ),
+                    )
+                }
+            )
+
+            save_feedback_file(path, state)
+            loaded = load_feedback(
+                FeedbackConfig(
+                    enabled=True,
+                    path=path,
+                )
+            )
+
+        self.assertEqual(loaded.papers["doi:10.5555/example"].status, "follow_up")
+        listed = list_feedback_entries(loaded)
+        self.assertEqual(listed[0][0], "doi:10.5555/example")
