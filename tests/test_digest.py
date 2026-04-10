@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -31,6 +32,9 @@ def build_paper(
     doi: str | None = None,
     arxiv_id: str | None = None,
     source_variants: list[str] | None = None,
+    base_relevance_score: int = 0,
+    relevance_score: int = 0,
+    match_reasons: list[str] | None = None,
 ) -> Paper:
     now = datetime(2026, 4, 8, 12, 0, tzinfo=UTC)
     published_at = now - timedelta(hours=hours_ago)
@@ -48,6 +52,9 @@ def build_paper(
         doi=doi,
         arxiv_id=arxiv_id,
         source_variants=source_variants or [],
+        base_relevance_score=base_relevance_score,
+        relevance_score=relevance_score,
+        match_reasons=match_reasons or [],
     )
 
 
@@ -154,6 +161,8 @@ class DigestTests(unittest.TestCase):
             source="semantic_scholar",
             doi="10.5555/example",
             source_variants=["arxiv", "semantic_scholar", "openalex"],
+            relevance_score=92,
+            match_reasons=['title matched "reasoning"', "seen in 3 sources"],
         )
         digest = DigestRun(
             generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
@@ -165,6 +174,11 @@ class DigestTests(unittest.TestCase):
         markdown = render_markdown(digest)
 
         self.assertIn("Source: arxiv / semantic_scholar / openalex", markdown)
+        self.assertIn("Relevance: 92", markdown)
+        self.assertIn(
+            'Match Reasons: title matched "reasoning"; seen in 3 sources',
+            markdown,
+        )
 
     def test_render_markdown_supports_zh_daily_brief_template(self) -> None:
         analyzed_paper = build_paper(
@@ -271,6 +285,45 @@ class DigestTests(unittest.TestCase):
 
         self.assertEqual([paper.title for paper in filtered], ["First", "Second"])
 
+    def test_filter_papers_scores_and_orders_by_relevance(self) -> None:
+        feed = FeedConfig(
+            name="LLM",
+            categories=["cs.AI"],
+            keywords=["agent", "benchmark"],
+            exclude_keywords=[],
+            max_results=50,
+            max_items=5,
+        )
+        now = datetime(2026, 4, 8, 12, 0, tzinfo=UTC)
+        papers = [
+            build_paper(
+                title="Fresh paper",
+                summary="An agent benchmark appears only in the summary.",
+                hours_ago=1,
+                authors=["Alice"],
+            ),
+            build_paper(
+                title="Agent benchmark",
+                summary="Compact abstract.",
+                hours_ago=3,
+                authors=["Alice", "Bob"],
+                doi="10.5555/example",
+            ),
+        ]
+
+        filtered = filter_papers(papers, feed, now=now, lookback_hours=24)
+
+        self.assertEqual(
+            [paper.title for paper in filtered],
+            ["Agent benchmark", "Fresh paper"],
+        )
+        self.assertGreater(filtered[0].relevance_score, filtered[1].relevance_score)
+        self.assertIn('title matched "agent"', filtered[0].match_reasons)
+        self.assertIn('title matched "benchmark"', filtered[0].match_reasons)
+        self.assertIn("has DOI", filtered[0].match_reasons)
+        self.assertIn("has PDF", filtered[0].match_reasons)
+        self.assertIn("has complete metadata", filtered[0].match_reasons)
+
     def test_render_markdown_includes_empty_feed_message(self) -> None:
         digest = DigestRun(
             generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
@@ -321,6 +374,8 @@ class DigestTests(unittest.TestCase):
                                 title="Digest title",
                                 summary="Body",
                                 hours_ago=1,
+                                relevance_score=88,
+                                match_reasons=['title matched "digest"', "has PDF"],
                             )
                         ],
                     )
@@ -328,12 +383,17 @@ class DigestTests(unittest.TestCase):
             )
 
             json_path, markdown_path = write_outputs(config, digest)
+            payload = json.loads(json_path.read_text(encoding="utf-8"))
 
             self.assertTrue(json_path.exists())
             self.assertTrue(markdown_path.exists())
             self.assertTrue((config.output_dir / "latest.json").exists())
             self.assertTrue((config.output_dir / "latest.md").exists())
             self.assertIn("Digest title", markdown_path.read_text(encoding="utf-8"))
+            paper_payload = payload["feeds"][0]["papers"][0]
+            self.assertIn("relevance_score", paper_payload)
+            self.assertIn("match_reasons", paper_payload)
+            self.assertNotIn("base_relevance_score", paper_payload)
 
     def test_summarize_digest_reports_counts(self) -> None:
         digest = DigestRun(

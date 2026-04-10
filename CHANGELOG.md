@@ -7,6 +7,9 @@ Versioning.
 
 ## [Unreleased]
 
+- Papers now carry a canonical identity, relevance score, and match reasons so
+  the digest can deduplicate across sources, keep richer merged records, and
+  explain why each paper surfaced.
 - The manual `Daily Digest` workflow now accepts a temporary `config.toml`
   override input and isolates those validation runs from caches and Pages
   deployment.

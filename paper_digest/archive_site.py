@@ -26,6 +26,8 @@ class PaperArchive:
     title: str
     href: str
     summary: str
+    relevance_score: int
+    reason_summary: str
     search_text: str
 
 
@@ -297,15 +299,32 @@ def _parse_papers(raw_papers: list[object]) -> list[PaperArchive]:
         title = raw_paper.get("title")
         abstract_url = raw_paper.get("abstract_url")
         summary = raw_paper.get("summary", "")
+        relevance_score = raw_paper.get("relevance_score", 0)
+        raw_match_reasons = raw_paper.get("match_reasons", [])
         if not isinstance(title, str) or not isinstance(abstract_url, str):
             continue
         normalized_summary = summary.strip() if isinstance(summary, str) else ""
+        normalized_score = (
+            relevance_score if isinstance(relevance_score, int) else 0
+        )
+        reason_summary = ""
+        if isinstance(raw_match_reasons, list):
+            reasons = [
+                item.strip()
+                for item in raw_match_reasons
+                if isinstance(item, str) and item.strip()
+            ]
+            reason_summary = "；".join(reasons[:3])
         papers.append(
             PaperArchive(
                 title=title.strip(),
                 href=abstract_url,
                 summary=normalized_summary,
-                search_text=_normalize_search(f"{title} {normalized_summary}"),
+                relevance_score=normalized_score,
+                reason_summary=reason_summary,
+                search_text=_normalize_search(
+                    f"{title} {normalized_summary} {reason_summary}"
+                ),
             )
         )
     return papers
@@ -1116,10 +1135,26 @@ def _render_feed_card(
     feed_page_link: bool,
 ) -> str:
     titles = "".join(
-        "<li>"
-        f'<a href="{escape(item.href)}" target="_blank" '
-        f'rel="noreferrer">{escape(item.title)}</a>'
-        "</li>"
+        (
+            "<li>"
+            f'<a href="{escape(item.href)}" target="_blank" '
+            f'rel="noreferrer">{escape(item.title)}</a>'
+            + (
+                (
+                    '<span class="paper-inline-meta">'
+                    f" · Score {item.relevance_score}</span>"
+                )
+                if item.relevance_score > 0
+                else ""
+            )
+            + (
+                f'<div class="paper-inline-reason">'
+                f'{escape(_truncate(item.reason_summary, 120))}</div>'
+                if item.reason_summary
+                else ""
+            )
+            + "</li>"
+        )
         for item in feed.papers[:5]
     )
     title_list = f'<ol class="paper-list">{titles}</ol>' if titles else ""

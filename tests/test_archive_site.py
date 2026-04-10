@@ -24,6 +24,11 @@ class ArchiveSiteTests(unittest.TestCase):
                             {
                                 "title": "Paper Circle",
                                 "abstract_url": "https://arxiv.org/abs/2604.06170v1",
+                                "relevance_score": 91,
+                                "match_reasons": [
+                                    'title matched "agent"',
+                                    "seen in 3 sources",
+                                ],
                             }
                         ],
                     },
@@ -85,6 +90,8 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn('type="application/rss+xml"', llm_html)
             self.assertIn("订阅 RSS", llm_html)
             self.assertIn("../trends.html", llm_html)
+            self.assertIn("Score 91", llm_html)
+            self.assertIn('title matched &quot;agent&quot;', llm_html)
             self.assertIn("关键词追踪：agent", agent_html)
             self.assertIn('type="application/rss+xml"', agent_html)
             self.assertIn("Agent Systems", agent_html)
@@ -175,6 +182,8 @@ class ArchiveSiteTests(unittest.TestCase):
                             "source": "arxiv",
                             "date_label": "Published",
                             "analysis": None,
+                            "relevance_score": paper.get("relevance_score", 0),
+                            "match_reasons": paper.get("match_reasons", []),
                         }
                         for paper in feed["papers"]
                     ],

@@ -58,6 +58,9 @@ class Paper:
     doi: str | None = None
     arxiv_id: str | None = None
     source_variants: list[str] = field(default_factory=list)
+    base_relevance_score: int = 0
+    relevance_score: int = 0
+    match_reasons: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         self.doi = (
@@ -78,9 +81,13 @@ class Paper:
         self.source_variants = _merge_unique_strings(
             [*self.source_variants, self.source]
         )
+        if self.relevance_score < self.base_relevance_score:
+            self.relevance_score = self.base_relevance_score
+        self.match_reasons = _merge_unique_strings(self.match_reasons)
 
     def to_dict(self) -> dict[str, object]:
         data = asdict(self)
+        data.pop("base_relevance_score", None)
         data["published_at"] = self.published_at.isoformat()
         data["updated_at"] = self.updated_at.isoformat()
         data["canonical_id"] = self.canonical_id()
@@ -95,6 +102,10 @@ class Paper:
 
     def source_label(self) -> str:
         return " / ".join(self.source_variants)
+
+    def match_reason_label(self, *, limit: int | None = None) -> str:
+        reasons = self.match_reasons if limit is None else self.match_reasons[:limit]
+        return "; ".join(reasons)
 
     def merge_duplicate(self, other: Paper) -> None:
         preferred = (
@@ -122,6 +133,14 @@ class Paper:
         self.topics = _merge_unique_strings([*preferred.topics, *secondary.topics])
         self.source_variants = _merge_unique_strings(
             [*self.source_variants, *other.source_variants]
+        )
+        self.base_relevance_score = max(
+            self.base_relevance_score,
+            other.base_relevance_score,
+        )
+        self.relevance_score = max(self.relevance_score, other.relevance_score)
+        self.match_reasons = _merge_unique_strings(
+            [*self.match_reasons, *other.match_reasons]
         )
 
 

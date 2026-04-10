@@ -11,6 +11,15 @@ from zoneinfo import ZoneInfo
 from .arxiv_client import Paper
 from .config import AppConfig, DigestTemplate, FeedConfig
 
+_TITLE_MATCH_SCORE = 40
+_SUMMARY_MATCH_SCORE = 18
+_DOI_SCORE = 12
+_PDF_SCORE = 8
+_RICH_SUMMARY_SCORE = 6
+_METADATA_SCORE = 4
+_SOURCE_VARIANT_SCORE = 10
+_FRESHNESS_SCORE_CAP = 24
+
 
 @dataclass(slots=True)
 class FeedDigest:
@@ -79,14 +88,45 @@ def filter_papers(
     for paper in papers:
         if paper.published_at < cutoff:
             continue
-        if feed.keywords and not _matches_any_keyword(paper, feed.keywords):
+        title_hits = _keyword_hits(paper.title, feed.keywords)
+        summary_hits = [
+            keyword
+            for keyword in _keyword_hits(paper.summary, feed.keywords)
+            if keyword.casefold() not in {item.casefold() for item in title_hits}
+        ]
+        if feed.keywords and not (title_hits or summary_hits):
             continue
         if feed.exclude_keywords and _matches_any_keyword(paper, feed.exclude_keywords):
             continue
+        paper.match_reasons = _build_match_reasons(
+            paper,
+            title_hits=title_hits,
+            summary_hits=summary_hits,
+        )
+        paper.base_relevance_score = _compute_relevance_score(
+            paper,
+            title_hits=title_hits,
+            summary_hits=summary_hits,
+            now=now,
+            lookback_hours=lookback_hours,
+        )
+        paper.relevance_score = paper.base_relevance_score
         filtered.append(paper)
 
-    filtered.sort(key=lambda item: item.published_at, reverse=True)
+    filtered.sort(key=_paper_sort_key)
     return filtered[: feed.max_items]
+
+
+def finalize_digest_scoring(digest: DigestRun) -> None:
+    """Apply cross-source ranking bonuses and final paper ordering."""
+
+    for feed in digest.feeds:
+        for paper in feed.papers:
+            paper.match_reasons = _finalize_match_reasons(paper)
+            paper.relevance_score = (
+                paper.base_relevance_score + _cross_source_score_bonus(paper)
+            )
+        feed.papers.sort(key=_paper_sort_key)
 
 
 def render_markdown(digest: DigestRun) -> str:
@@ -137,6 +177,13 @@ def _render_default_markdown(digest: DigestRun) -> str:
             lines.append(f"   - {paper.date_label}: {published}")
             lines.append(f"   - Authors: {authors}")
             lines.append(f"   - Source: {paper.source_label()}")
+            if paper.relevance_score:
+                lines.append(f"   - Relevance: {paper.relevance_score}")
+            if paper.match_reasons:
+                lines.append(
+                    "   - Match Reasons: "
+                    + paper.match_reason_label(limit=4)
+                )
             lines.append(f"   - Categories: {', '.join(paper.categories)}")
             if paper.pdf_url:
                 lines.append(f"   - PDF: {paper.pdf_url}")
@@ -227,6 +274,12 @@ def _render_zh_daily_brief(digest: DigestRun) -> str:
             lines.append(f"   - {paper.date_label}：{published}")
             lines.append(f"   - 作者：{authors}")
             lines.append(f"   - 来源：{paper.source_label()}")
+            if paper.relevance_score:
+                lines.append(f"   - 相关性分数：{paper.relevance_score}")
+            if paper.match_reasons:
+                lines.append(
+                    "   - 命中原因：" + paper.match_reason_label(limit=4)
+                )
             lines.append(f"   - 分类：{', '.join(paper.categories)}")
             if paper.tags:
                 lines.append(f"   - 标签：{' / '.join(paper.tags)}")
@@ -279,6 +332,103 @@ def write_outputs(config: AppConfig, digest: DigestRun) -> tuple[Path, Path]:
 def _matches_any_keyword(paper: Paper, keywords: list[str]) -> bool:
     haystack = f"{paper.title}\n{paper.summary}".lower()
     return any(keyword.lower() in haystack for keyword in keywords)
+
+
+def _keyword_hits(text: str, keywords: list[str]) -> list[str]:
+    haystack = text.casefold()
+    hits: list[str] = []
+    seen: set[str] = set()
+    for keyword in keywords:
+        normalized = keyword.strip()
+        needle = normalized.casefold()
+        if not normalized or needle in seen:
+            continue
+        if needle in haystack:
+            seen.add(needle)
+            hits.append(normalized)
+    return hits
+
+
+def _build_match_reasons(
+    paper: Paper,
+    *,
+    title_hits: list[str],
+    summary_hits: list[str],
+) -> list[str]:
+    reasons = [f'title matched "{keyword}"' for keyword in title_hits]
+    reasons.extend(f'summary matched "{keyword}"' for keyword in summary_hits)
+    if paper.doi:
+        reasons.append("has DOI")
+    if paper.pdf_url:
+        reasons.append("has PDF")
+    if paper.summary and len(paper.summary) >= 120:
+        reasons.append("has rich summary")
+    if paper.authors and paper.categories:
+        reasons.append("has complete metadata")
+    return _merge_unique_reasons(reasons)
+
+
+def _compute_relevance_score(
+    paper: Paper,
+    *,
+    title_hits: list[str],
+    summary_hits: list[str],
+    now: datetime,
+    lookback_hours: int,
+) -> int:
+    age_hours = max((now - paper.published_at).total_seconds() / 3600, 0.0)
+    freshness_bonus = max(
+        0,
+        min(_FRESHNESS_SCORE_CAP, int(lookback_hours - age_hours)),
+    )
+    summary_bonus = _RICH_SUMMARY_SCORE if len(paper.summary) >= 120 else 0
+    metadata_bonus = _METADATA_SCORE if paper.authors and paper.categories else 0
+    return (
+        len(title_hits) * _TITLE_MATCH_SCORE
+        + len(summary_hits) * _SUMMARY_MATCH_SCORE
+        + (_DOI_SCORE if paper.doi else 0)
+        + (_PDF_SCORE if paper.pdf_url else 0)
+        + summary_bonus
+        + metadata_bonus
+        + freshness_bonus
+    )
+
+
+def _cross_source_score_bonus(paper: Paper) -> int:
+    extra_sources = max(len(paper.source_variants) - 1, 0)
+    return extra_sources * _SOURCE_VARIANT_SCORE
+
+
+def _finalize_match_reasons(paper: Paper) -> list[str]:
+    reasons = [
+        reason
+        for reason in paper.match_reasons
+        if not reason.startswith("seen in ")
+    ]
+    if len(paper.source_variants) > 1:
+        reasons.append(f"seen in {len(paper.source_variants)} sources")
+    return _merge_unique_reasons(reasons)
+
+
+def _merge_unique_reasons(reasons: list[str]) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for reason in reasons:
+        normalized = reason.strip()
+        key = normalized.casefold()
+        if not normalized or key in seen:
+            continue
+        seen.add(key)
+        merged.append(normalized)
+    return merged
+
+
+def _paper_sort_key(paper: Paper) -> tuple[int, float, str]:
+    return (
+        -paper.relevance_score,
+        -paper.published_at.timestamp(),
+        paper.title.casefold(),
+    )
 
 
 def summarize_digest(digest: DigestRun) -> str:
