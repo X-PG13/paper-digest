@@ -89,6 +89,28 @@ class ArchiveSiteTests(unittest.TestCase):
                                 "tags": ["评测"],
                             },
                         ],
+                    },
+                    {
+                        "name": "Vision",
+                        "key_points": [],
+                        "papers": [
+                            {
+                                "title": "Paper Circle",
+                                "abstract_url": "https://openalex.org/W123",
+                                "canonical_id": "doi:10.5555/paper-circle",
+                                "summary": (
+                                    "A prior appearance used for momentum tracking."
+                                ),
+                                "topics": ["Agent"],
+                                "tags": ["方法"],
+                                "source_variants": ["openalex"],
+                                "source_urls": {
+                                    "openalex": "https://openalex.org/W123",
+                                    "doi": "https://doi.org/10.5555/paper-circle",
+                                },
+                                "doi": "10.5555/paper-circle",
+                            }
+                        ],
                     }
                 ],
                 template="default",
@@ -103,6 +125,7 @@ class ArchiveSiteTests(unittest.TestCase):
 
             index_html = (site_path / "index.html").read_text(encoding="utf-8")
             trends_html = (site_path / "trends.html").read_text(encoding="utf-8")
+            momentum_html = (site_path / "momentum.html").read_text(encoding="utf-8")
             llm_html = (site_path / "feeds/llm.html").read_text(encoding="utf-8")
             llm_xml = (site_path / "feeds/llm.xml").read_text(encoding="utf-8")
             agent_html = (site_path / "topics/agent.html").read_text(encoding="utf-8")
@@ -110,19 +133,26 @@ class ArchiveSiteTests(unittest.TestCase):
             paper_detail = next(
                 path
                 for path in (site_path / "papers").glob("*.html")
-                if "Paper Circle" in path.read_text(encoding="utf-8")
+                if "<h1>Paper Circle</h1>" in path.read_text(encoding="utf-8")
             ).read_text(encoding="utf-8")
             self.assertIn("研究日报归档页", index_html)
             self.assertIn("订阅入口", index_html)
             self.assertIn("最近 7 天", index_html)
             self.assertIn("Paper Circle", index_html)
             self.assertIn("papers/", index_html)
+            self.assertIn("momentum.html", index_html)
             self.assertIn("digests/2026-04-08/digest.md", index_html)
             self.assertIn("2026-04-08 23:59:44 (Asia/Shanghai)", index_html)
             self.assertIn('data-feed-names="|llm|vision|"', index_html)
             self.assertIn("feeds/llm.html", index_html)
             self.assertIn("topics/agent.html", index_html)
             self.assertIn("趋势与订阅总览", trends_html)
+            self.assertIn("持续升温论文", trends_html)
+            self.assertIn("momentum.html", trends_html)
+            self.assertIn("持续升温论文", momentum_html)
+            self.assertIn("首次出现", momentum_html)
+            self.assertIn("最近出现", momentum_html)
+            self.assertIn("Paper Circle", momentum_html)
             self.assertIn("LLM 固定订阅页", llm_html)
             self.assertIn('type="application/rss+xml"', llm_html)
             self.assertIn("订阅 RSS", llm_html)
@@ -143,15 +173,20 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn("Canonical Paper", paper_detail)
             self.assertIn("合并来源", paper_detail)
             self.assertIn("OpenAlex", paper_detail)
-            self.assertIn("Semantic Scholar", paper_detail)
             self.assertIn("历史命中", paper_detail)
             self.assertIn("相关推荐", paper_detail)
             self.assertIn("Agent Systems", paper_detail)
+            self.assertIn("首次出现", paper_detail)
+            self.assertIn("最近出现", paper_detail)
+            self.assertIn("覆盖跨度", paper_detail)
+            self.assertIn("2 个活跃日期 / 2 个 feed / 2 次归档出现", paper_detail)
+            self.assertIn("持续升温", paper_detail)
             self.assertTrue((site_path / "latest.md").exists())
             self.assertTrue((site_path / "latest.json").exists())
             self.assertTrue((site_path / "digests/2026-04-08/digest.json").exists())
             self.assertTrue((site_path / "digests/2026-04-08/digest.md").exists())
             self.assertTrue((site_path / "trends.html").exists())
+            self.assertTrue((site_path / "momentum.html").exists())
             self.assertTrue((site_path / "feeds/llm.html").exists())
             self.assertTrue((site_path / "feeds/llm.xml").exists())
             self.assertTrue(any((site_path / "papers").glob("*.html")))

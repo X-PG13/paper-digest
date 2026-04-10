@@ -71,13 +71,15 @@ scale as new paper sources and output channels are added.
 
 - Scans historical `output/YYYY-MM-DD/digest.json` files.
 - Builds a static archive site with daily cards, feed summaries, feed-specific
-  fixed pages, keyword tracking pages, canonical paper detail pages, RSS
-  subscription feeds, and a trend overview page.
+  fixed pages, keyword tracking pages, canonical paper detail pages, a
+  rising-paper view, RSS subscription feeds, and a trend overview page.
 - Provides client-side filtering for feed, title keyword, and recent date
   windows on the main archive page.
 - Normalizes merged-source papers into stable detail pages so feed, topic, and
   RSS views can link through a canonical archive record instead of only the
   current upstream source URL.
+- Tracks first-seen, last-seen, active-day, and active-feed signals so the site
+  can highlight papers that keep resurfacing across runs.
 - Copies dated Markdown and JSON files into a Pages-friendly output tree.
 
 ### `paper_digest.archive_backfill`

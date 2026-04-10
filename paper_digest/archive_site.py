@@ -161,6 +161,11 @@ class RelatedPaper:
 class PaperDetail:
     paper: PaperArchive
     appearances: list[PaperAppearance]
+    first_seen: datetime
+    last_seen: datetime
+    active_days: int
+    active_feeds: int
+    appearance_count: int
     related_papers: list[RelatedPaper]
 
 
@@ -194,7 +199,11 @@ def build_archive_site(
         encoding="utf-8",
     )
     site_root.joinpath("trends.html").write_text(
-        _render_trends_page(feed_overviews, keyword_overviews),
+        _render_trends_page(feed_overviews, keyword_overviews, paper_details),
+        encoding="utf-8",
+    )
+    site_root.joinpath("momentum.html").write_text(
+        _render_momentum_page(paper_details),
         encoding="utf-8",
     )
 
@@ -596,6 +605,15 @@ def _build_paper_details(
             (paper for _, _, paper in occurrences),
             key=_paper_detail_score,
         )
+        sorted_occurrences = sorted(
+            occurrences,
+            key=lambda item: (
+                -item[0].generated_at.timestamp(),
+                item[1].name.lower(),
+            ),
+        )
+        first_seen = min(day.generated_at for day, _, _ in occurrences)
+        last_seen = max(day.generated_at for day, _, _ in occurrences)
         appearances = [
             PaperAppearance(
                 date=day.date,
@@ -611,17 +629,16 @@ def _build_paper_details(
                 markdown_href=day.markdown_href,
                 json_href=day.json_href,
             )
-            for day, feed, paper in sorted(
-                occurrences,
-                key=lambda item: (
-                    -item[0].generated_at.timestamp(),
-                    item[1].name.lower(),
-                ),
-            )
+            for day, feed, paper in sorted_occurrences
         ]
         details_by_id[canonical_id] = PaperDetail(
             paper=representative,
             appearances=appearances,
+            first_seen=first_seen,
+            last_seen=last_seen,
+            active_days=len({day.date for day, _, _ in occurrences}),
+            active_feeds=len({feed.name for _, feed, _ in occurrences}),
+            appearance_count=len(occurrences),
             related_papers=[],
         )
 
@@ -635,6 +652,11 @@ def _build_paper_details(
         details_by_id[canonical_id] = PaperDetail(
             paper=detail.paper,
             appearances=detail.appearances,
+            first_seen=detail.first_seen,
+            last_seen=detail.last_seen,
+            active_days=detail.active_days,
+            active_feeds=detail.active_feeds,
+            appearance_count=detail.appearance_count,
             related_papers=related,
         )
 
@@ -709,13 +731,15 @@ def _render_index(
         description=(
             "汇总每天生成的 digest.json 和 digest.md，支持按 feed 过滤、"
             "按标题关键词搜索，"
-            "并提供固定 feed 页面、关键词长期追踪页和最近 7 天 / 30 天趋势页。"
+            "并提供固定 feed 页面、关键词长期追踪页、持续升温视图，"
+            "以及最近 7 天 / 30 天趋势页。"
         ),
         hero_links=_render_hero_links(
             [
                 ("latest.md", "查看最新 Markdown"),
                 ("latest.json", "查看最新 JSON"),
                 ("trends.html", "查看趋势总览"),
+                ("momentum.html", "持续升温论文"),
                 (None, f"最近构建：{latest_label}"),
             ]
         ),
@@ -728,6 +752,7 @@ def _render_index(
 def _render_trends_page(
     feed_overviews: list[FeedOverview],
     keyword_overviews: list[KeywordOverview],
+    paper_details: list[PaperDetail],
 ) -> str:
     total_digests = max((len(item.daily_counts) for item in feed_overviews), default=0)
     feed_cards = "\n".join(
@@ -737,6 +762,11 @@ def _render_trends_page(
         _render_keyword_overview_card(item, link_prefix="")
         for item in keyword_overviews
     ) or _render_empty_note("当前没有配置可追踪的关键词。")
+    rising_papers = _build_rising_papers(paper_details)
+    rising_cards = "\n".join(
+        _render_rising_paper_card(item, link_prefix="")
+        for item in rising_papers[:6]
+    ) or _render_empty_note("当前还没有跨多天或多 feed 的持续升温论文。")
     stats = [
         ArchiveStats(
             "Feed 订阅",
@@ -759,6 +789,13 @@ def _render_trends_page(
             sum(item.recent_30_matches for item in keyword_overviews),
             "次关键词命中",
         ),
+        ArchiveStats(
+            "持续升温论文",
+            len(rising_papers),
+            "篇候选",
+            sum(item.active_days for item in rising_papers),
+            "个累计活跃日期",
+        ),
     ]
     content = (
         '<section class="section-grid">'
@@ -774,6 +811,14 @@ def _render_trends_page(
             "这些页面来自你配置里的 feed 关键词，适合观察某个主题是否持续冒头。",
             f'<div class="subscription-grid">{keyword_cards}</div>',
         )
+        + _render_section(
+            "持续升温论文",
+            "这些论文在多个日期或多个 feed 中反复出现，更适合放进长期观察列表。",
+            f'<div class="subscription-grid">{rising_cards}</div>'
+            '<div class="chip-cloud">'
+            '<a class="topic-chip" href="momentum.html">查看完整持续升温视图</a>'
+            "</div>",
+        )
     )
     return _render_page(
         page_title="Paper Digest Trends",
@@ -781,13 +826,14 @@ def _render_trends_page(
         heading="趋势与订阅总览",
         description=(
             "从归档里提炼长期信号：每个 feed 的近 7 天 / 30 天命中情况，"
-            "以及配置关键词的长期命中轨迹。"
+            "配置关键词的长期命中轨迹，以及跨多天反复出现的持续升温论文。"
         ),
         hero_links=_render_hero_links(
             [
                 ("index.html", "返回归档首页"),
                 ("latest.md", "最新 Markdown"),
                 ("latest.json", "最新 JSON"),
+                ("momentum.html", "持续升温论文"),
             ]
         ),
         content=content,
@@ -966,6 +1012,104 @@ def _render_keyword_page(overview: KeywordOverview) -> str:
     )
 
 
+def _build_rising_papers(paper_details: list[PaperDetail]) -> list[PaperDetail]:
+    rising = [
+        detail
+        for detail in paper_details
+        if detail.active_days > 1 or detail.active_feeds > 1
+    ]
+    return sorted(
+        rising,
+        key=lambda detail: (
+            -detail.active_days,
+            -detail.active_feeds,
+            -detail.appearance_count,
+            -detail.last_seen.timestamp(),
+            -detail.paper.relevance_score,
+            detail.paper.title.lower(),
+        ),
+    )
+
+
+def _render_rising_paper_card(detail: PaperDetail, *, link_prefix: str) -> str:
+    detail_link = escape(link_prefix + detail.paper.detail_href)
+    return (
+        f'<a class="resource-card" href="{detail_link}">'
+        '<p class="resource-kicker">Momentum</p>'
+        f'<h3 class="resource-title">{escape(detail.paper.title)}</h3>'
+        f'<p class="resource-copy">{escape(_truncate(detail.paper.summary, 220))}</p>'
+        '<div class="resource-meta">'
+        f"<span>{detail.active_days} 天</span>"
+        f"<span>{detail.active_feeds} 个 feed</span>"
+        f"<span>{detail.appearance_count} 次命中</span>"
+        "</div>"
+        '<div class="resource-meta">'
+        f"<span>首次出现：{escape(_format_seen_label(detail.first_seen))}</span>"
+        f"<span>最近出现：{escape(_format_seen_label(detail.last_seen))}</span>"
+        "</div>"
+        "</a>"
+    )
+
+
+def _render_momentum_page(paper_details: list[PaperDetail]) -> str:
+    rising_papers = _build_rising_papers(paper_details)
+    spotlight_cards = "\n".join(
+        _render_rising_paper_card(item, link_prefix="")
+        for item in rising_papers
+    ) or _render_empty_state("当前还没有跨多天或多 feed 的持续升温论文。")
+    stats = [
+        ArchiveStats(
+            "持续升温论文",
+            len(rising_papers),
+            "篇候选",
+            sum(item.active_days for item in rising_papers),
+            "个累计活跃日期",
+        ),
+        ArchiveStats(
+            "跨 Feed 复现",
+            sum(1 for item in rising_papers if item.active_feeds > 1),
+            "篇论文",
+            max((item.active_feeds for item in rising_papers), default=0),
+            "个最大 feed 覆盖",
+        ),
+        ArchiveStats(
+            "跨天复现",
+            sum(1 for item in rising_papers if item.active_days > 1),
+            "篇论文",
+            max((item.active_days for item in rising_papers), default=0),
+            "个最大活跃日期",
+        ),
+    ]
+    content = (
+        '<section class="section-grid">'
+        + "".join(_render_stats_card(item) for item in stats)
+        + "</section>"
+        + _render_section(
+            "持续升温论文",
+            "优先展示在多个日期或多个 feed 中反复出现的论文，方便建立长期观察清单。",
+            f'<div class="subscription-grid">{spotlight_cards}</div>',
+        )
+    )
+    return _render_page(
+        page_title="Paper Digest Momentum",
+        eyebrow="Relationship View",
+        heading="持续升温论文",
+        description=(
+            "这里聚合跨多天或多 feed 重复出现的论文，"
+            "帮助你快速识别值得长期追踪的研究信号。"
+        ),
+        hero_links=_render_hero_links(
+            [
+                ("index.html", "返回归档首页"),
+                ("trends.html", "查看趋势总览"),
+                ("latest.md", "最新 Markdown"),
+            ]
+        ),
+        content=content,
+        nav_current="momentum",
+    )
+
+
 def _render_paper_page(detail: PaperDetail) -> str:
     paper = detail.paper
     source_links = _render_source_link_grid(paper)
@@ -984,11 +1128,18 @@ def _render_paper_page(detail: PaperDetail) -> str:
                     "个合并来源",
                 ),
                 ArchiveStats(
-                    "历史命中",
-                    len(detail.appearances),
-                    "次归档出现",
-                    len({item.feed_name for item in detail.appearances}),
+                    "历史跨度",
+                    detail.active_days,
+                    "个活跃日期",
+                    detail.active_feeds,
                     "个 feed",
+                ),
+                ArchiveStats(
+                    "归档记录",
+                    detail.appearance_count,
+                    "次归档出现",
+                    len(paper.source_variants),
+                    "个合并来源",
                 ),
                 ArchiveStats(
                     "主题与标签",
@@ -1027,6 +1178,22 @@ def _render_paper_page(detail: PaperDetail) -> str:
                     " / ".join(paper.topics) if paper.topics else "未提供",
                 )
                 + _render_meta_block(
+                    "首次出现",
+                    _format_seen_label(detail.first_seen),
+                )
+                + _render_meta_block(
+                    "最近出现",
+                    _format_seen_label(detail.last_seen),
+                )
+                + _render_meta_block(
+                    "覆盖跨度",
+                    (
+                        f"{detail.active_days} 个活跃日期 / "
+                        f"{detail.active_feeds} 个 feed / "
+                        f"{detail.appearance_count} 次归档出现"
+                    ),
+                )
+                + _render_meta_block(
                     "命中原因",
                     paper.reason_summary or "未记录",
                 )
@@ -1058,6 +1225,7 @@ def _render_paper_page(detail: PaperDetail) -> str:
             [
                 ("../index.html", "返回归档首页"),
                 ("../trends.html", "查看趋势总览"),
+                ("../momentum.html", "持续升温论文"),
                 (paper.href, "打开当前主来源"),
                 (
                     paper.pdf_url,
@@ -1226,6 +1394,7 @@ def _render_nav(current: str, link_prefix: str) -> str:
     items = [
         ("home", f"{link_prefix}index.html", "归档首页"),
         ("trends", f"{link_prefix}trends.html", "趋势总览"),
+        ("momentum", f"{link_prefix}momentum.html", "持续升温"),
         ("papers", f"{link_prefix}index.html", "论文详情"),
     ]
     return (
@@ -1283,11 +1452,21 @@ def _render_subscription_panel(
         "<p>把 feed 命中和关键词命中压缩成可持续浏览的长期视角。</p>"
         "</a>"
     )
+    momentum_card = (
+        '<a class="resource-card" href="momentum.html">'
+        '<p class="resource-kicker">Momentum</p>'
+        '<h3 class="resource-title">持续升温论文</h3>'
+        "<p class=\"resource-copy\">"
+        "把跨多天或多 feed 反复出现的论文抽出来，作为长期观察入口。"
+        "</p>"
+        "</a>"
+    )
     return _render_section(
         "订阅入口",
         "把站点从“按天翻”升级成“按主题长期追”。固定页更适合每天回看同一类研究信号。",
         '<div class="subscription-grid">'
         + trends_card
+        + momentum_card
         + feed_cards
         + "</div>"
         + _render_section_block(
@@ -2440,6 +2619,11 @@ def _latest_label(day: DayArchive | None) -> str:
     if day is None:
         return "No digest runs yet"
     return f"{day.generated_at.strftime('%Y-%m-%d %H:%M:%S')} ({day.timezone})"
+
+
+def _format_seen_label(value: datetime) -> str:
+    timezone = value.tzname() or "UTC"
+    return f"{value.strftime('%Y-%m-%d %H:%M:%S')} ({timezone})"
 
 
 def _sum_counts(points: list[CountPoint], limit: int) -> int:
