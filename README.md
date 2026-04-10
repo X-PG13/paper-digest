@@ -113,7 +113,10 @@ Field reference:
 - `exclude_keywords`: Drop a paper when any excluded keyword matches.
 - `max_results`: Number of newest candidates fetched before local filtering.
 - `max_items`: Maximum number of papers emitted for that feed.
+- `sort_by`: Optional per-feed override for `relevance`, `published_at`, or
+  `hybrid`.
 - `digest`: Rendering options for template selection and feed-level briefings.
+- `ranking`: Default ranking strategy and relevance-weight tuning.
 - `analysis`: Optional structured paper analysis, currently backed by OpenAI.
 - `deliveries`: Optional notification outputs such as email, Feishu webhook,
   WeCom webhook, Slack webhook, Discord webhook, or Telegram bot.
@@ -126,6 +129,21 @@ Digest rendering:
 template = "default"
 top_highlights = 3
 feed_key_points = 3
+```
+
+Ranking strategy:
+
+```toml
+[ranking]
+sort_by = "hybrid"
+title_match_weight = 40
+summary_match_weight = 18
+doi_weight = 12
+pdf_weight = 8
+rich_summary_weight = 6
+metadata_weight = 4
+multi_source_weight = 10
+freshness_weight_cap = 24
 ```
 
 Optional LLM analysis:
@@ -148,12 +166,21 @@ Digest notes:
 
 - `feed_key_points` controls how many feed-level "today's key points" lines
   appear before the detailed paper list.
+- `sort_by = "hybrid"` is the default and keeps the current behavior:
+  relevance-first ranking with `published_at` as the tie-breaker.
+- `sort_by = "published_at"` keeps the newest papers first and uses
+  `relevance_score` only as an explanatory secondary signal.
+- `sort_by = "relevance"` keeps the strongest keyword and metadata matches at
+  the top, even when several papers are similarly recent.
 - `template = "zh_daily_brief"` switches the output into a Chinese briefing
   layout with a topic-organized "今日重点" section plus per-feed "本组速览".
 - `zh_daily_brief` works even when analysis is disabled. In that mode, the
   project generates rule-based Chinese briefing scaffolding around the raw
   paper title and abstract summary, including high-frequency topic extraction,
   rule-based tags such as `方法` / `数据` / `应用`, and topic-oriented highlights.
+- The JSON output now records the active sorting summary, per-feed `sort_by`,
+  `relevance_score`, and `match_reasons` so downstream archive pages and
+  integrations can explain why each paper surfaced.
 
 Analysis notes:
 

@@ -9,16 +9,14 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .arxiv_client import Paper
-from .config import AppConfig, DigestTemplate, FeedConfig
-
-_TITLE_MATCH_SCORE = 40
-_SUMMARY_MATCH_SCORE = 18
-_DOI_SCORE = 12
-_PDF_SCORE = 8
-_RICH_SUMMARY_SCORE = 6
-_METADATA_SCORE = 4
-_SOURCE_VARIANT_SCORE = 10
-_FRESHNESS_SCORE_CAP = 24
+from .config import (
+    AppConfig,
+    DigestTemplate,
+    FeedConfig,
+    RankingConfig,
+    RankingWeights,
+    SortMode,
+)
 
 
 @dataclass(slots=True)
@@ -26,6 +24,7 @@ class FeedDigest:
     name: str
     papers: list[Paper]
     key_points: list[str] = field(default_factory=list)
+    sort_by: SortMode = "hybrid"
 
 
 @dataclass(slots=True)
@@ -46,12 +45,28 @@ class DigestRun:
     highlights: list[str] = field(default_factory=list)
     topic_sections: list[TopicDigest] = field(default_factory=list)
     template: DigestTemplate = "default"
+    default_sort_by: SortMode = "hybrid"
+    sort_summary: str = ""
+    ranking_weights: dict[str, int] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, object]:
+        sort_summary = self.sort_summary or _sort_mode_description(self.default_sort_by)
         return {
             "generated_at": self.generated_at.isoformat(),
             "timezone": self.timezone,
             "lookback_hours": self.lookback_hours,
+            "sorting": {
+                "default_sort_by": self.default_sort_by,
+                "summary": sort_summary,
+                "weights": dict(self.ranking_weights),
+                "feeds": [
+                    {
+                        "name": feed.name,
+                        "sort_by": feed.sort_by,
+                    }
+                    for feed in self.feeds
+                ],
+            },
             "highlights": list(self.highlights),
             "topic_sections": [
                 {
@@ -68,6 +83,7 @@ class DigestRun:
                 {
                     "name": feed.name,
                     "key_points": list(feed.key_points),
+                    "sort_by": feed.sort_by,
                     "papers": [paper.to_dict() for paper in feed.papers],
                 }
                 for feed in self.feeds
@@ -81,6 +97,7 @@ def filter_papers(
     *,
     now: datetime,
     lookback_hours: int,
+    ranking: RankingConfig,
 ) -> list[Paper]:
     cutoff = now - timedelta(hours=lookback_hours)
     filtered: list[Paper] = []
@@ -109,24 +126,34 @@ def filter_papers(
             summary_hits=summary_hits,
             now=now,
             lookback_hours=lookback_hours,
+            weights=ranking.weights,
         )
         paper.relevance_score = paper.base_relevance_score
         filtered.append(paper)
 
-    filtered.sort(key=_paper_sort_key)
+    filtered.sort(
+        key=lambda item: _paper_sort_key(
+            item,
+            sort_by=_effective_sort_mode(feed.sort_by, ranking.sort_by),
+        )
+    )
     return filtered[: feed.max_items]
 
 
-def finalize_digest_scoring(digest: DigestRun) -> None:
+def finalize_digest_scoring(digest: DigestRun, *, ranking: RankingConfig) -> None:
     """Apply cross-source ranking bonuses and final paper ordering."""
 
+    digest.default_sort_by = ranking.sort_by
+    digest.ranking_weights = _ranking_weights_dict(ranking.weights)
     for feed in digest.feeds:
         for paper in feed.papers:
             paper.match_reasons = _finalize_match_reasons(paper)
             paper.relevance_score = (
-                paper.base_relevance_score + _cross_source_score_bonus(paper)
+                paper.base_relevance_score
+                + _cross_source_score_bonus(paper, ranking.weights)
             )
-        feed.papers.sort(key=_paper_sort_key)
+        feed.papers.sort(key=lambda item: _paper_sort_key(item, sort_by=feed.sort_by))
+    digest.sort_summary = _build_sort_summary(digest)
 
 
 def render_markdown(digest: DigestRun) -> str:
@@ -140,12 +167,14 @@ def _render_default_markdown(digest: DigestRun) -> str:
     generated_at = digest.generated_at.astimezone(local_tz).strftime(
         "%Y-%m-%d %H:%M:%S"
     )
+    sort_summary = digest.sort_summary or _sort_mode_description(digest.default_sort_by)
 
     lines = [
         "# Daily Paper Digest",
         "",
         f"- Generated at: {generated_at} ({digest.timezone})",
         f"- Lookback window: last {digest.lookback_hours} hours",
+        f"- Sorting: {sort_summary}",
         "",
     ]
 
@@ -211,6 +240,7 @@ def _render_zh_daily_brief(digest: DigestRun) -> str:
     generated_at = digest.generated_at.astimezone(local_tz).strftime(
         "%Y-%m-%d %H:%M:%S"
     )
+    sort_summary = digest.sort_summary or _sort_mode_description(digest.default_sort_by)
 
     lines = [
         "# 每日论文简报",
@@ -218,6 +248,7 @@ def _render_zh_daily_brief(digest: DigestRun) -> str:
         f"- 生成时间：{generated_at} ({digest.timezone})",
         f"- 检索窗口：最近 {digest.lookback_hours} 小时",
         f"- 命中概览：{summarize_digest(digest)}",
+        f"- 排序策略：{sort_summary}",
         "",
     ]
 
@@ -375,28 +406,31 @@ def _compute_relevance_score(
     summary_hits: list[str],
     now: datetime,
     lookback_hours: int,
+    weights: RankingWeights,
 ) -> int:
     age_hours = max((now - paper.published_at).total_seconds() / 3600, 0.0)
     freshness_bonus = max(
         0,
-        min(_FRESHNESS_SCORE_CAP, int(lookback_hours - age_hours)),
+        min(weights.freshness_weight_cap, int(lookback_hours - age_hours)),
     )
-    summary_bonus = _RICH_SUMMARY_SCORE if len(paper.summary) >= 120 else 0
-    metadata_bonus = _METADATA_SCORE if paper.authors and paper.categories else 0
+    summary_bonus = weights.rich_summary_weight if len(paper.summary) >= 120 else 0
+    metadata_bonus = (
+        weights.metadata_weight if paper.authors and paper.categories else 0
+    )
     return (
-        len(title_hits) * _TITLE_MATCH_SCORE
-        + len(summary_hits) * _SUMMARY_MATCH_SCORE
-        + (_DOI_SCORE if paper.doi else 0)
-        + (_PDF_SCORE if paper.pdf_url else 0)
+        len(title_hits) * weights.title_match_weight
+        + len(summary_hits) * weights.summary_match_weight
+        + (weights.doi_weight if paper.doi else 0)
+        + (weights.pdf_weight if paper.pdf_url else 0)
         + summary_bonus
         + metadata_bonus
         + freshness_bonus
     )
 
 
-def _cross_source_score_bonus(paper: Paper) -> int:
+def _cross_source_score_bonus(paper: Paper, weights: RankingWeights) -> int:
     extra_sources = max(len(paper.source_variants) - 1, 0)
-    return extra_sources * _SOURCE_VARIANT_SCORE
+    return extra_sources * weights.multi_source_weight
 
 
 def _finalize_match_reasons(paper: Paper) -> list[str]:
@@ -423,12 +457,69 @@ def _merge_unique_reasons(reasons: list[str]) -> list[str]:
     return merged
 
 
-def _paper_sort_key(paper: Paper) -> tuple[int, float, str]:
+def _paper_sort_key(
+    paper: Paper,
+    *,
+    sort_by: SortMode,
+) -> tuple[int | float | str, ...]:
+    if sort_by == "published_at":
+        return (
+            -paper.published_at.timestamp(),
+            -paper.relevance_score,
+            paper.title.casefold(),
+        )
+    if sort_by == "relevance":
+        return (
+            -paper.relevance_score,
+            -len(paper.source_variants),
+            paper.title.casefold(),
+        )
     return (
         -paper.relevance_score,
         -paper.published_at.timestamp(),
         paper.title.casefold(),
     )
+
+
+def _effective_sort_mode(
+    feed_sort_by: SortMode | None,
+    default_sort_by: SortMode,
+) -> SortMode:
+    return default_sort_by if feed_sort_by is None else feed_sort_by
+
+
+def _build_sort_summary(digest: DigestRun) -> str:
+    if not digest.feeds:
+        return _sort_mode_description(digest.default_sort_by)
+
+    distinct_modes = {feed.sort_by for feed in digest.feeds}
+    if len(distinct_modes) == 1:
+        mode = next(iter(distinct_modes))
+        return _sort_mode_description(mode)
+
+    per_feed = ", ".join(f"{feed.name}={feed.sort_by}" for feed in digest.feeds)
+    return f"mixed ({per_feed})"
+
+
+def _sort_mode_description(sort_by: SortMode) -> str:
+    if sort_by == "relevance":
+        return "relevance (score-first ranking; recency only breaks exact ties)"
+    if sort_by == "published_at":
+        return "published_at (newest first; relevance is auxiliary)"
+    return "hybrid (relevance first, published_at tie-break)"
+
+
+def _ranking_weights_dict(weights: RankingWeights) -> dict[str, int]:
+    return {
+        "title_match_weight": weights.title_match_weight,
+        "summary_match_weight": weights.summary_match_weight,
+        "doi_weight": weights.doi_weight,
+        "pdf_weight": weights.pdf_weight,
+        "rich_summary_weight": weights.rich_summary_weight,
+        "metadata_weight": weights.metadata_weight,
+        "multi_source_weight": weights.multi_source_weight,
+        "freshness_weight_cap": weights.freshness_weight_cap,
+    }
 
 
 def summarize_digest(digest: DigestRun) -> str:
