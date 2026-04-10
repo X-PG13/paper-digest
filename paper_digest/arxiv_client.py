@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
@@ -14,6 +15,16 @@ from .network import fetch_bytes_with_retry
 
 ARXIV_API_URL = "https://export.arxiv.org/api/query"
 ATOM_NS = {"atom": "http://www.w3.org/2005/Atom"}
+ARXIV_NS = {"arxiv": "http://arxiv.org/schemas/atom"}
+DOI_PREFIX_RE = re.compile(r"^(?:https?://(?:dx\.)?doi\.org/|doi:)", re.IGNORECASE)
+DOI_VALUE_RE = re.compile(r"(10\.\d{4,9}/\S+)", re.IGNORECASE)
+ARXIV_ID_RE = re.compile(
+    r"(?:arxiv\.org/(?:abs|pdf)/)?"
+    r"(?P<identifier>(?:[a-z.-]+/\d{7}|\d{4}\.\d{4,5})(?:v\d+)?)"
+    r"(?:\.pdf)?$",
+    re.IGNORECASE,
+)
+TITLE_TOKEN_RE = re.compile(r"[^a-z0-9]+")
 
 
 class ArxivClientError(RuntimeError):
@@ -44,12 +55,74 @@ class Paper:
     analysis: PaperAnalysis | None = None
     tags: list[str] = field(default_factory=list)
     topics: list[str] = field(default_factory=list)
+    doi: str | None = None
+    arxiv_id: str | None = None
+    source_variants: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.doi = (
+            _normalize_doi(self.doi)
+            or _extract_doi(self.paper_id)
+            or _extract_doi(self.abstract_url)
+        )
+        self.arxiv_id = (
+            _normalize_arxiv_identifier(self.arxiv_id)
+            or _extract_arxiv_identifier(self.paper_id)
+            or _extract_arxiv_identifier(self.abstract_url)
+            or _extract_arxiv_identifier(self.pdf_url)
+        )
+        self.authors = _merge_unique_strings(self.authors)
+        self.categories = _merge_unique_strings(self.categories)
+        self.tags = _merge_unique_strings(self.tags)
+        self.topics = _merge_unique_strings(self.topics)
+        self.source_variants = _merge_unique_strings(
+            [*self.source_variants, self.source]
+        )
 
     def to_dict(self) -> dict[str, object]:
         data = asdict(self)
         data["published_at"] = self.published_at.isoformat()
         data["updated_at"] = self.updated_at.isoformat()
+        data["canonical_id"] = self.canonical_id()
         return data
+
+    def canonical_id(self) -> str:
+        if self.doi:
+            return f"doi:{self.doi}"
+        if self.arxiv_id:
+            return f"arxiv:{self.arxiv_id}"
+        return f"title:{_normalize_title(self.title)}"
+
+    def source_label(self) -> str:
+        return " / ".join(self.source_variants)
+
+    def merge_duplicate(self, other: Paper) -> None:
+        preferred = (
+            self if _paper_merge_score(self) >= _paper_merge_score(other) else other
+        )
+        secondary = other if preferred is self else self
+
+        self.title = preferred.title
+        self.summary = preferred.summary
+        self.paper_id = preferred.paper_id
+        self.abstract_url = preferred.abstract_url
+        self.pdf_url = preferred.pdf_url or secondary.pdf_url
+        self.published_at = preferred.published_at
+        self.updated_at = max(self.updated_at, other.updated_at)
+        self.source = preferred.source
+        self.date_label = preferred.date_label
+        self.analysis = preferred.analysis or secondary.analysis
+        self.doi = preferred.doi or secondary.doi
+        self.arxiv_id = preferred.arxiv_id or secondary.arxiv_id
+        self.authors = _merge_unique_strings([*preferred.authors, *secondary.authors])
+        self.categories = _merge_unique_strings(
+            [*preferred.categories, *secondary.categories]
+        )
+        self.tags = _merge_unique_strings([*preferred.tags, *secondary.tags])
+        self.topics = _merge_unique_strings([*preferred.topics, *secondary.topics])
+        self.source_variants = _merge_unique_strings(
+            [*self.source_variants, *other.source_variants]
+        )
 
 
 def build_search_query(categories: Iterable[str]) -> str:
@@ -116,6 +189,9 @@ def parse_entry(entry: ET.Element) -> Paper:
     updated_at = _parse_atom_datetime(
         entry.findtext("atom:updated", default="", namespaces=ATOM_NS) or ""
     )
+    doi = _clean_text(
+        entry.findtext("arxiv:doi", default="", namespaces=ARXIV_NS) or ""
+    )
 
     authors = [
         _clean_text(author.findtext("atom:name", default="", namespaces=ATOM_NS) or "")
@@ -149,6 +225,8 @@ def parse_entry(entry: ET.Element) -> Paper:
         updated_at=updated_at,
         source="arxiv",
         date_label="Published",
+        doi=doi or None,
+        arxiv_id=_extract_arxiv_identifier(paper_id),
     )
 
 
@@ -161,3 +239,65 @@ def _parse_atom_datetime(value: str) -> datetime:
 
 def _clean_text(value: str) -> str:
     return " ".join(value.split())
+
+
+def _normalize_doi(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = DOI_PREFIX_RE.sub("", value.strip()).strip()
+    match = DOI_VALUE_RE.search(normalized)
+    if match is None:
+        return None
+    return match.group(1).rstrip(".,;)").lower()
+
+
+def _extract_doi(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return _normalize_doi(value)
+
+
+def _normalize_arxiv_identifier(value: str | None) -> str | None:
+    if value is None:
+        return None
+    match = ARXIV_ID_RE.search(value.strip())
+    if match is None:
+        return None
+    identifier = match.group("identifier").lower()
+    return re.sub(r"v\d+$", "", identifier)
+
+
+def _extract_arxiv_identifier(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return _normalize_arxiv_identifier(value)
+
+
+def _normalize_title(value: str) -> str:
+    normalized = TITLE_TOKEN_RE.sub(" ", value.casefold()).strip()
+    return " ".join(normalized.split())
+
+
+def _merge_unique_strings(values: Iterable[str]) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        normalized = value.strip()
+        key = normalized.casefold()
+        if not normalized or key in seen:
+            continue
+        seen.add(key)
+        merged.append(normalized)
+    return merged
+
+
+def _paper_merge_score(paper: Paper) -> tuple[int, int, int, int, int, int, int]:
+    return (
+        1 if paper.doi else 0,
+        len(paper.summary),
+        len(paper.authors),
+        1 if paper.pdf_url else 0,
+        len(paper.categories),
+        1 if paper.arxiv_id else 0,
+        1 if paper.date_label == "Published" else 0,
+    )

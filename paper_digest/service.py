@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 from .analysis import apply_digest_briefing, enrich_digest_with_analysis
+from .arxiv_client import Paper
 from .config import AppConfig
 from .digest import DigestRun, FeedDigest, filter_papers
 from .sources import fetch_feed_papers
@@ -40,6 +41,7 @@ def generate_digest(
     openalex_api_key = None
     if config.openalex_api_key_env is not None:
         openalex_api_key = os.getenv(config.openalex_api_key_env)
+    papers_by_canonical_id: dict[str, Paper] = {}
 
     for feed in config.feeds:
         papers = fetch_feed_papers(
@@ -66,7 +68,17 @@ def generate_digest(
             now=local_now,
             retention_days=config.state.retention_days,
         )
-        feeds.append(FeedDigest(name=feed.name, papers=filtered))
+        feed_papers: list[Paper] = []
+        for paper in filtered:
+            canonical_id = paper.canonical_id()
+            existing = papers_by_canonical_id.get(canonical_id)
+            if existing is None:
+                papers_by_canonical_id[canonical_id] = paper
+                feed_papers.append(paper)
+                continue
+            existing.merge_duplicate(paper)
+        feed_papers.sort(key=lambda item: item.published_at, reverse=True)
+        feeds.append(FeedDigest(name=feed.name, papers=feed_papers))
 
     digest = DigestRun(
         generated_at=local_now,

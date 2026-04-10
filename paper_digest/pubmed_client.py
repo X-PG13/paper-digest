@@ -153,6 +153,7 @@ def parse_pubmed_article(article: ET.Element) -> Paper:
     categories = _extract_publication_types(article_root.find("PublicationTypeList"))
     entered_at = _extract_entry_datetime(article)
     abstract_url = PUBMED_ARTICLE_URL_TEMPLATE.format(pmid=pmid)
+    doi = _extract_article_id(article, "doi")
 
     return Paper(
         title=title,
@@ -166,6 +167,7 @@ def parse_pubmed_article(article: ET.Element) -> Paper:
         updated_at=entered_at,
         source="pubmed",
         date_label="Entered",
+        doi=doi,
     )
 
 
@@ -243,6 +245,21 @@ def build_pubmed_search_term(feed: FeedConfig) -> str:
         f'"{publication_type}"[Publication Type]' for publication_type in feed.types
     )
     return f"({query_clause}) AND ({type_clause})"
+
+
+def _extract_article_id(article: ET.Element, id_type: str) -> str | None:
+    article_id_list = article.find("./PubmedData/ArticleIdList")
+    if article_id_list is None:
+        return None
+
+    target_type = id_type.casefold()
+    for article_id in article_id_list.findall("ArticleId"):
+        if article_id.attrib.get("IdType", "").casefold() != target_type:
+            continue
+        text = _element_text(article_id)
+        if text:
+            return text
+    return None
 
 
 def _extract_abstract(abstract_root: ET.Element | None) -> str:

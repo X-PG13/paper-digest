@@ -117,6 +117,7 @@ def parse_openalex_work(item: dict[str, object]) -> Paper | None:
         updated_at=published_at,
         source="openalex",
         date_label="Published",
+        doi=_string(item.get("doi")),
     )
 
 

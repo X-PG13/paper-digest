@@ -186,6 +186,89 @@ class GenerateDigestTests(unittest.TestCase):
             openalex_api_key="openalex-secret",
         )
 
+    @patch("paper_digest.service.fetch_feed_papers")
+    def test_generate_digest_merges_cross_feed_duplicates_by_canonical_id(
+        self,
+        mock_fetch_feed_papers,
+    ) -> None:
+        now = datetime(2026, 4, 8, 9, 30, tzinfo=ZoneInfo("UTC"))
+        arxiv_feed = FeedConfig(
+            name="LLM",
+            categories=["cs.AI"],
+            keywords=["agent"],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+        )
+        openalex_feed = FeedConfig(
+            name="OpenAlex AI",
+            source="openalex",
+            queries=["agent systems"],
+            keywords=["agent"],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+        )
+        arxiv_paper = Paper(
+            title="Agent systems",
+            summary="Short summary.",
+            authors=["Alice"],
+            categories=["cs.AI"],
+            paper_id="http://arxiv.org/abs/2604.00001v1",
+            abstract_url="https://arxiv.org/abs/2604.00001v1",
+            pdf_url="https://arxiv.org/pdf/2604.00001v1",
+            published_at=datetime(2026, 4, 8, 0, 30, tzinfo=ZoneInfo("UTC")),
+            updated_at=datetime(2026, 4, 8, 0, 30, tzinfo=ZoneInfo("UTC")),
+            source="arxiv",
+            doi="10.5555/example",
+        )
+        openalex_paper = Paper(
+            title="Agent systems",
+            summary="Longer and more complete summary for the same paper.",
+            authors=["Alice", "Bob"],
+            categories=["Artificial Intelligence"],
+            paper_id="openalex:W123",
+            abstract_url="https://doi.org/10.5555/example",
+            pdf_url=None,
+            published_at=datetime(2026, 4, 8, 0, 30, tzinfo=ZoneInfo("UTC")),
+            updated_at=datetime(2026, 4, 8, 1, 0, tzinfo=ZoneInfo("UTC")),
+            source="openalex",
+            date_label="Published",
+            doi="10.5555/example",
+        )
+        mock_fetch_feed_papers.side_effect = [[arxiv_paper], [openalex_paper]]
+
+        with TemporaryDirectory() as temp_dir:
+            config = AppConfig(
+                timezone="UTC",
+                lookback_hours=24,
+                output_dir=Path(temp_dir) / "output",
+                request_delay_seconds=0.0,
+                feeds=[arxiv_feed, openalex_feed],
+                state=StateConfig(
+                    enabled=True,
+                    path=Path(temp_dir) / "state.json",
+                    retention_days=90,
+                ),
+            )
+
+            digest = generate_digest(config, now=now)
+
+        self.assertEqual(len(digest.feeds[0].papers), 1)
+        self.assertEqual(len(digest.feeds[1].papers), 0)
+        merged_paper = digest.feeds[0].papers[0]
+        self.assertEqual(
+            merged_paper.source_variants,
+            ["arxiv", "openalex"],
+        )
+        self.assertEqual(
+            merged_paper.summary,
+            "Longer and more complete summary for the same paper.",
+        )
+        self.assertEqual(merged_paper.pdf_url, "https://arxiv.org/pdf/2604.00001v1")
+        self.assertEqual(merged_paper.authors, ["Alice", "Bob"])
+        self.assertEqual(merged_paper.canonical_id(), "doi:10.5555/example")
+
     @patch("paper_digest.service.save_state")
     @patch("paper_digest.service.fetch_feed_papers")
     def test_generate_digest_does_not_persist_when_state_is_provided(
