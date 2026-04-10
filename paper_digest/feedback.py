@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import cast
 
 from .arxiv_client import Paper
@@ -25,10 +26,17 @@ class FeedbackState:
 def load_feedback(config: FeedbackConfig) -> FeedbackState:
     """Load feedback state from disk if enabled, otherwise return an empty map."""
 
-    if not config.enabled or not config.path.exists():
+    if not config.enabled:
+        return FeedbackState(papers={})
+    return load_feedback_file(config.path)
+
+
+def load_feedback_file(path: object) -> FeedbackState:
+    feedback_path = _coerce_feedback_path(path)
+    if not feedback_path.exists():
         return FeedbackState(papers={})
 
-    raw = json.loads(config.path.read_text(encoding="utf-8"))
+    raw = json.loads(feedback_path.read_text(encoding="utf-8"))
     papers = raw.get("papers", {})
     if not isinstance(papers, dict):
         return FeedbackState(papers={})
@@ -42,6 +50,74 @@ def load_feedback(config: FeedbackConfig) -> FeedbackState:
             continue
         normalized[canonical_id.strip()] = entry
     return FeedbackState(papers=normalized)
+
+
+def save_feedback(config: FeedbackConfig, feedback_state: FeedbackState) -> None:
+    save_feedback_file(config.path, feedback_state)
+
+
+def save_feedback_file(path: object, feedback_state: FeedbackState) -> None:
+    feedback_path = _coerce_feedback_path(path)
+    feedback_path.parent.mkdir(parents=True, exist_ok=True)
+    papers = {
+        canonical_id: _serialize_feedback_entry(entry)
+        for canonical_id, entry in sorted(feedback_state.papers.items())
+    }
+    payload = {
+        "version": 1,
+        "papers": papers,
+    }
+    feedback_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def set_feedback_status(
+    feedback_state: FeedbackState,
+    *,
+    canonical_id: str,
+    status: FeedbackStatus,
+    updated_at: datetime | None = None,
+) -> FeedbackEntry:
+    normalized_id = normalize_feedback_canonical_id(canonical_id)
+    entry = FeedbackEntry(
+        status=status,
+        updated_at=updated_at or datetime.now(UTC),
+    )
+    feedback_state.papers[normalized_id] = entry
+    return entry
+
+
+def clear_feedback_status(
+    feedback_state: FeedbackState,
+    *,
+    canonical_id: str,
+) -> bool:
+    normalized_id = normalize_feedback_canonical_id(canonical_id)
+    return feedback_state.papers.pop(normalized_id, None) is not None
+
+
+def list_feedback_entries(
+    feedback_state: FeedbackState,
+) -> list[tuple[str, FeedbackEntry]]:
+    return sorted(
+        feedback_state.papers.items(),
+        key=lambda item: (
+            -(item[1].updated_at.timestamp() if item[1].updated_at is not None else -1),
+            item[0],
+        ),
+    )
+
+
+def normalize_feedback_canonical_id(value: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError("canonical_id must not be empty")
+    prefix, separator, remainder = normalized.partition(":")
+    if not separator:
+        return normalized
+    return f"{prefix.casefold()}:{remainder.casefold()}"
 
 
 def apply_feedback_to_papers(
@@ -100,6 +176,18 @@ def feedback_label_zh(status: FeedbackStatus | None) -> str | None:
     return labels[status]
 
 
+def feedback_command_snippet(
+    canonical_id: str,
+    status: FeedbackStatus,
+    *,
+    config_path: str = "config.toml",
+) -> str:
+    return (
+        "python -m paper_digest feedback set "
+        f"'{canonical_id}' {status} --config {config_path}"
+    )
+
+
 def _parse_feedback_entry(value: object) -> FeedbackEntry | None:
     if isinstance(value, str):
         status = _feedback_status(value)
@@ -134,3 +222,18 @@ def _parse_optional_datetime(value: object) -> datetime | None:
     if parsed.tzinfo is None:
         return None
     return parsed
+
+
+def _serialize_feedback_entry(entry: FeedbackEntry) -> object:
+    if entry.updated_at is None:
+        return entry.status
+    return {
+        "status": entry.status,
+        "updated_at": entry.updated_at.isoformat(),
+    }
+
+
+def _coerce_feedback_path(path: object) -> Path:
+    if isinstance(path, Path):
+        return path
+    return Path(str(path))

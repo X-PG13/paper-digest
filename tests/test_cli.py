@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import io
+import json
+import textwrap
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
@@ -154,3 +156,110 @@ class CliTests(unittest.TestCase):
         self.assertIn("delivery failed", stderr.getvalue())
         self.assertIn("Artifacts preserved at", stderr.getvalue())
         mock_save_state.assert_not_called()
+
+    def _write_feedback_config(self, root: Path) -> Path:
+        config_path = root / "config.toml"
+        config_path.write_text(
+            textwrap.dedent(
+                """
+                [app]
+                timezone = "UTC"
+                output_dir = "output"
+
+                [state]
+                enabled = true
+                path = ".paper-digest-state/state.json"
+                retention_days = 90
+
+                [feedback]
+                enabled = true
+                path = ".paper-digest-state/feedback.json"
+
+                [[feeds]]
+                name = "LLM"
+                categories = ["cs.AI"]
+                keywords = ["agent"]
+                """
+            ).strip(),
+            encoding="utf-8",
+        )
+        return config_path
+
+    def test_feedback_set_and_list_round_trip(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = self._write_feedback_config(root)
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "feedback",
+                        "set",
+                        "doi:10.5555/example",
+                        "star",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            feedback_path = root / ".paper-digest-state" / "feedback.json"
+            payload = json.loads(feedback_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                payload["papers"]["doi:10.5555/example"]["status"],
+                "star",
+            )
+            self.assertIn("Set doi:10.5555/example -> star", stdout.getvalue())
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "feedback",
+                        "list",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            self.assertIn("star\tdoi:10.5555/example\t", stdout.getvalue())
+
+    def test_feedback_clear_removes_entry(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = self._write_feedback_config(root)
+            feedback_path = root / ".paper-digest-state" / "feedback.json"
+            feedback_path.parent.mkdir(parents=True, exist_ok=True)
+            feedback_path.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "papers": {
+                            "doi:10.5555/example": {
+                                "status": "follow_up",
+                                "updated_at": "2026-04-10T09:15:00+08:00",
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "feedback",
+                        "clear",
+                        "doi:10.5555/example",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(feedback_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["papers"], {})
+            self.assertIn("Cleared doi:10.5555/example", stdout.getvalue())

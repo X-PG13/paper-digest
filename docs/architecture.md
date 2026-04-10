@@ -70,6 +70,7 @@ scale as new paper sources and output channels are added.
 ### `paper_digest.feedback`
 
 - Loads a local per-paper feedback map keyed by canonical paper identity.
+- Persists feedback updates back to disk for CLI-driven workflows.
 - Applies `star`, `follow_up`, and `ignore` signals before final digest
   ranking.
 - Keeps user feedback policy out of the source clients and renderers.
@@ -89,6 +90,9 @@ scale as new paper sources and output channels are added.
   can highlight papers that keep resurfacing across runs.
 - Builds a dedicated reading-list view from local feedback signals so starred
   and follow-up papers stay visible as a personal research queue.
+- Builds a weekly-review view and copyable feedback command affordances so the
+  static site can feed back into the local feedback file without becoming a
+  dynamic web app.
 - Copies dated Markdown and JSON files into a Pages-friendly output tree.
 
 ### `paper_digest.archive_backfill`
@@ -166,6 +170,7 @@ scale as new paper sources and output channels are added.
 ### `paper_digest.cli`
 
 - Handles argument parsing and exit codes.
+- Supports both digest generation and local feedback-state management commands.
 - Converts domain errors into concise user-facing messages.
 
 ## Extension Strategy

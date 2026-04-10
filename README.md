@@ -204,6 +204,8 @@ hide_ignored = true
   down-ranks them, depending on `hide_ignored`.
 - The archive site exposes a dedicated `output/site/reading-list.html` page
   that aggregates starred and follow-up papers.
+- The archive site also exposes `output/site/weekly-review.html`, which groups
+  starred and follow-up papers into weekly review buckets.
 
 Example feedback file:
 
@@ -219,6 +221,15 @@ Example feedback file:
     "title:example-normalized-title": "ignore"
   }
 }
+```
+
+You can manage that file without editing JSON directly:
+
+```bash
+python -m paper_digest feedback set 'doi:10.5555/paper-circle' star --config config.toml
+python -m paper_digest feedback set 'doi:10.5555/paper-circle' follow_up --config config.toml
+python -m paper_digest feedback clear 'doi:10.5555/paper-circle' --config config.toml
+python -m paper_digest feedback list --config config.toml
 ```
 
 Analysis notes:
@@ -462,11 +473,15 @@ The CLI also rebuilds `output/site/index.html` on every run. That static site:
   across multiple dates or feeds, with first-seen and last-seen timestamps
 - emits a `output/site/reading-list.html` view for papers you have starred or
   marked for follow-up in the local feedback state
+- emits a `output/site/weekly-review.html` view that groups starred and
+  follow-up papers into weekly review sections
 - emits fixed feed pages under `output/site/feeds/`
 - emits feed RSS files under `output/site/feeds/*.xml`
 - emits keyword tracking pages under `output/site/topics/` from configured feed keywords
 - emits keyword RSS files under `output/site/topics/*.xml`
 - emits a `output/site/trends.html` overview for feed and keyword subscription trends
+- exposes `canonical_id` plus copyable feedback CLI snippets on each canonical
+  paper detail page, so you can move from browsing to local feedback updates quickly
 
 When GitHub Pages is enabled for the repository, the scheduled workflow uploads
 `output/site` and deploys it automatically after each successful digest run.
