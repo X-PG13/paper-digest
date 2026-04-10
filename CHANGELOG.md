@@ -16,6 +16,9 @@ Versioning.
 - The static archive site now emits canonical paper detail pages with merged
   source links, match reasons, history, and lightweight related-paper
   suggestions.
+- Canonical paper detail pages now expose first-seen / last-seen history, and
+  the archive site includes a dedicated rising-paper view for papers that keep
+  resurfacing across multiple dates or feeds.
 - The manual `Daily Digest` workflow now accepts a temporary `config.toml`
   override input and isolates those validation runs from caches and Pages
   deployment.
