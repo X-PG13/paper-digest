@@ -24,6 +24,29 @@ class ArchiveSiteTests(unittest.TestCase):
                             {
                                 "title": "Paper Circle",
                                 "abstract_url": "https://arxiv.org/abs/2604.06170v1",
+                                "canonical_id": "doi:10.5555/paper-circle",
+                                "summary": (
+                                    "A canonical paper with merged source links."
+                                ),
+                                "authors": ["Alice", "Bob"],
+                                "tags": ["方法"],
+                                "topics": ["Agent"],
+                                "source_variants": [
+                                    "arxiv",
+                                    "openalex",
+                                    "semantic_scholar",
+                                ],
+                                "source_urls": {
+                                    "arxiv": "https://arxiv.org/abs/2604.06170v1",
+                                    "doi": "https://doi.org/10.5555/paper-circle",
+                                    "openalex": "https://openalex.org/W123",
+                                    "semantic_scholar": (
+                                        "https://www.semanticscholar.org/paper/abc"
+                                    ),
+                                },
+                                "doi": "10.5555/paper-circle",
+                                "arxiv_id": "2604.06170",
+                                "pdf_url": "https://arxiv.org/pdf/2604.06170v1",
                                 "relevance_score": 91,
                                 "match_reasons": [
                                     'title matched "agent"',
@@ -52,10 +75,18 @@ class ArchiveSiteTests(unittest.TestCase):
                             {
                                 "title": "Agent Systems",
                                 "abstract_url": "https://arxiv.org/abs/2604.00001v1",
+                                "canonical_id": "arxiv:2604.00001",
+                                "summary": "Another agent paper for the related list.",
+                                "topics": ["Agent"],
+                                "tags": ["评测"],
                             },
                             {
                                 "title": "Benchmark Design",
                                 "abstract_url": "https://arxiv.org/abs/2604.00002v1",
+                                "canonical_id": "arxiv:2604.00002",
+                                "summary": "A benchmark-oriented paper.",
+                                "topics": ["Benchmark"],
+                                "tags": ["评测"],
                             },
                         ],
                     }
@@ -76,10 +107,16 @@ class ArchiveSiteTests(unittest.TestCase):
             llm_xml = (site_path / "feeds/llm.xml").read_text(encoding="utf-8")
             agent_html = (site_path / "topics/agent.html").read_text(encoding="utf-8")
             agent_xml = (site_path / "topics/agent.xml").read_text(encoding="utf-8")
+            paper_detail = next(
+                path
+                for path in (site_path / "papers").glob("*.html")
+                if "Paper Circle" in path.read_text(encoding="utf-8")
+            ).read_text(encoding="utf-8")
             self.assertIn("研究日报归档页", index_html)
             self.assertIn("订阅入口", index_html)
             self.assertIn("最近 7 天", index_html)
             self.assertIn("Paper Circle", index_html)
+            self.assertIn("papers/", index_html)
             self.assertIn("digests/2026-04-08/digest.md", index_html)
             self.assertIn("2026-04-08 23:59:44 (Asia/Shanghai)", index_html)
             self.assertIn('data-feed-names="|llm|vision|"', index_html)
@@ -90,17 +127,26 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn('type="application/rss+xml"', llm_html)
             self.assertIn("订阅 RSS", llm_html)
             self.assertIn("../trends.html", llm_html)
+            self.assertIn("../papers/", llm_html)
             self.assertIn("Score 91", llm_html)
             self.assertIn('title matched &quot;agent&quot;', llm_html)
             self.assertIn("关键词追踪：agent", agent_html)
             self.assertIn('type="application/rss+xml"', agent_html)
+            self.assertIn("../papers/", agent_html)
             self.assertIn("Agent Systems", agent_html)
             self.assertIn("<rss version=\"2.0\">", llm_xml)
             self.assertIn("<title>LLM Feed Archive</title>", llm_xml)
-            self.assertIn("<link>https://arxiv.org/abs/2604.06170v1</link>", llm_xml)
+            self.assertIn("<link>../papers/", llm_xml)
             self.assertIn("<rss version=\"2.0\">", agent_xml)
             self.assertIn("<title>agent Topic Archive</title>", agent_xml)
-            self.assertIn("<link>https://arxiv.org/abs/2604.00001v1</link>", agent_xml)
+            self.assertIn("<link>../papers/", agent_xml)
+            self.assertIn("Canonical Paper", paper_detail)
+            self.assertIn("合并来源", paper_detail)
+            self.assertIn("OpenAlex", paper_detail)
+            self.assertIn("Semantic Scholar", paper_detail)
+            self.assertIn("历史命中", paper_detail)
+            self.assertIn("相关推荐", paper_detail)
+            self.assertIn("Agent Systems", paper_detail)
             self.assertTrue((site_path / "latest.md").exists())
             self.assertTrue((site_path / "latest.json").exists())
             self.assertTrue((site_path / "digests/2026-04-08/digest.json").exists())
@@ -108,6 +154,7 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertTrue((site_path / "trends.html").exists())
             self.assertTrue((site_path / "feeds/llm.html").exists())
             self.assertTrue((site_path / "feeds/llm.xml").exists())
+            self.assertTrue(any((site_path / "papers").glob("*.html")))
             self.assertTrue((site_path / "topics/agent.html").exists())
             self.assertTrue((site_path / "topics/agent.xml").exists())
 
@@ -171,17 +218,27 @@ class ArchiveSiteTests(unittest.TestCase):
                     "papers": [
                         {
                             "title": paper["title"],
-                            "summary": "",
-                            "authors": [],
-                            "categories": [],
+                            "summary": paper.get("summary", ""),
+                            "authors": paper.get("authors", []),
+                            "categories": paper.get("categories", []),
                             "paper_id": paper["abstract_url"],
                             "abstract_url": paper["abstract_url"],
-                            "pdf_url": None,
+                            "pdf_url": paper.get("pdf_url"),
                             "published_at": generated_at,
                             "updated_at": generated_at,
                             "source": "arxiv",
+                            "source_variants": paper.get("source_variants", ["arxiv"]),
+                            "source_urls": paper.get(
+                                "source_urls",
+                                {"arxiv": paper["abstract_url"]},
+                            ),
+                            "doi": paper.get("doi"),
+                            "arxiv_id": paper.get("arxiv_id"),
                             "date_label": "Published",
                             "analysis": None,
+                            "canonical_id": paper.get("canonical_id"),
+                            "tags": paper.get("tags", []),
+                            "topics": paper.get("topics", []),
                             "relevance_score": paper.get("relevance_score", 0),
                             "match_reasons": paper.get("match_reasons", []),
                         }

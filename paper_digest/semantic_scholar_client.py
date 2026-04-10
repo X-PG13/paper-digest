@@ -122,6 +122,7 @@ def parse_semantic_scholar_item(item: dict[str, object]) -> Paper | None:
     published_at = _parse_publication_date(publication_date)
     abstract_url = _resolve_abstract_url(item)
     external_ids = item.get("externalIds")
+    semantic_scholar_url = _string(item.get("url")) or abstract_url
 
     return Paper(
         title=_string(item.get("title")) or f"Semantic Scholar {paper_id}",
@@ -137,6 +138,7 @@ def parse_semantic_scholar_item(item: dict[str, object]) -> Paper | None:
         date_label="Published",
         doi=_external_id(external_ids, "DOI"),
         arxiv_id=_external_id(external_ids, "ArXiv"),
+        source_urls={"semantic_scholar": semantic_scholar_url},
     )
 
 

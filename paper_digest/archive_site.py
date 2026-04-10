@@ -23,11 +23,27 @@ class ArchiveSiteError(RuntimeError):
 
 @dataclass(slots=True, frozen=True)
 class PaperArchive:
+    canonical_id: str
+    slug: str
     title: str
     href: str
+    detail_href: str
     summary: str
     relevance_score: int
     reason_summary: str
+    source: str
+    source_variants: list[str]
+    source_urls: dict[str, str]
+    paper_id: str
+    pdf_url: str | None
+    doi: str | None
+    arxiv_id: str | None
+    authors: list[str]
+    categories: list[str]
+    tags: list[str]
+    topics: list[str]
+    published_at: datetime
+    updated_at: datetime
     search_text: str
 
 
@@ -92,6 +108,7 @@ class KeywordMatch:
     feed_name: str
     title: str
     href: str
+    detail_href: str
     summary: str
 
 
@@ -117,6 +134,36 @@ class SubscriptionItem:
     published_at: datetime
 
 
+@dataclass(slots=True, frozen=True)
+class PaperAppearance:
+    date: str
+    generated_at: datetime
+    generated_label: str
+    feed_name: str
+    feed_slug: str
+    summary: str
+    relevance_score: int
+    match_reasons: list[str]
+    markdown_href: str
+    json_href: str
+
+
+@dataclass(slots=True, frozen=True)
+class RelatedPaper:
+    title: str
+    detail_href: str
+    relation_summary: str
+    relevance_score: int
+    source_label: str
+
+
+@dataclass(slots=True, frozen=True)
+class PaperDetail:
+    paper: PaperArchive
+    appearances: list[PaperAppearance]
+    related_papers: list[RelatedPaper]
+
+
 def build_archive_site(
     output_dir: Path,
     *,
@@ -127,16 +174,19 @@ def build_archive_site(
     site_root = output_dir / "site"
     digests_root = site_root / "digests"
     feeds_root = site_root / "feeds"
+    papers_root = site_root / "papers"
     topics_root = site_root / "topics"
     if site_root.exists():
         shutil.rmtree(site_root)
     digests_root.mkdir(parents=True, exist_ok=True)
     feeds_root.mkdir(parents=True, exist_ok=True)
+    papers_root.mkdir(parents=True, exist_ok=True)
     topics_root.mkdir(parents=True, exist_ok=True)
 
     archives = _load_archives(output_dir, digests_root)
     feed_overviews = _build_feed_overviews(archives)
     keyword_overviews = _build_keyword_overviews(archives, tracked_keywords)
+    paper_details = _build_paper_details(archives, tracked_keywords)
 
     _copy_latest_files(output_dir, site_root)
     site_root.joinpath("index.html").write_text(
@@ -165,6 +215,11 @@ def build_archive_site(
         )
         topics_root.joinpath(f"{keyword_overview.slug}.xml").write_text(
             _render_keyword_rss(keyword_overview),
+            encoding="utf-8",
+        )
+    for detail in paper_details:
+        papers_root.joinpath(f"{detail.paper.slug}.html").write_text(
+            _render_paper_page(detail),
             encoding="utf-8",
         )
     return site_root
@@ -234,7 +289,7 @@ def _load_day_archive(digest_json_path: Path, digests_root: Path) -> DayArchive:
     search_terms: list[str] = []
     total_papers = 0
     for raw_feed in raw_feeds:
-        feed = _parse_feed(raw_feed, digest_json_path)
+        feed = _parse_feed(raw_feed, digest_json_path, generated_at)
         feeds.append(feed)
         total_papers += feed.count
         search_terms.append(feed.name.lower())
@@ -254,7 +309,11 @@ def _load_day_archive(digest_json_path: Path, digests_root: Path) -> DayArchive:
     )
 
 
-def _parse_feed(raw_feed: object, digest_json_path: Path) -> FeedArchive:
+def _parse_feed(
+    raw_feed: object,
+    digest_json_path: Path,
+    generated_at: datetime,
+) -> FeedArchive:
     if not isinstance(raw_feed, dict):
         raise ArchiveSiteError(f"invalid feed payload in {digest_json_path}")
 
@@ -268,7 +327,7 @@ def _parse_feed(raw_feed: object, digest_json_path: Path) -> FeedArchive:
             f"invalid papers for feed {name!r} in {digest_json_path}"
         )
 
-    papers = _parse_papers(raw_papers)
+    papers = _parse_papers(raw_papers, digest_json_path, generated_at)
     raw_key_points = raw_feed.get("key_points")
     key_points = (
         [
@@ -291,7 +350,11 @@ def _parse_feed(raw_feed: object, digest_json_path: Path) -> FeedArchive:
     )
 
 
-def _parse_papers(raw_papers: list[object]) -> list[PaperArchive]:
+def _parse_papers(
+    raw_papers: list[object],
+    digest_json_path: Path,
+    generated_at: datetime,
+) -> list[PaperArchive]:
     papers: list[PaperArchive] = []
     for raw_paper in raw_papers:
         if not isinstance(raw_paper, dict):
@@ -301,12 +364,29 @@ def _parse_papers(raw_papers: list[object]) -> list[PaperArchive]:
         summary = raw_paper.get("summary", "")
         relevance_score = raw_paper.get("relevance_score", 0)
         raw_match_reasons = raw_paper.get("match_reasons", [])
+        canonical_id = raw_paper.get("canonical_id")
+        paper_id = raw_paper.get("paper_id")
+        raw_source = raw_paper.get("source", "unknown")
+        raw_source_variants = raw_paper.get("source_variants", [])
+        raw_source_urls = raw_paper.get("source_urls", {})
         if not isinstance(title, str) or not isinstance(abstract_url, str):
             continue
         normalized_summary = summary.strip() if isinstance(summary, str) else ""
         normalized_score = (
             relevance_score if isinstance(relevance_score, int) else 0
         )
+        normalized_source = (
+            raw_source.strip().lower()
+            if isinstance(raw_source, str) and raw_source.strip()
+            else "unknown"
+        )
+        normalized_canonical_id = _canonical_id_from_payload(
+            canonical_id,
+            paper_id,
+            abstract_url,
+            title,
+        )
+        slug = _paper_slug(normalized_canonical_id)
         reason_summary = ""
         if isinstance(raw_match_reasons, list):
             reasons = [
@@ -315,15 +395,64 @@ def _parse_papers(raw_papers: list[object]) -> list[PaperArchive]:
                 if isinstance(item, str) and item.strip()
             ]
             reason_summary = "；".join(reasons[:3])
+        published_at = _parse_optional_datetime(
+            raw_paper.get("published_at"),
+            fallback=generated_at,
+            digest_json_path=digest_json_path,
+        )
+        updated_at = _parse_optional_datetime(
+            raw_paper.get("updated_at"),
+            fallback=published_at,
+            digest_json_path=digest_json_path,
+        )
+        source_variants = _normalize_string_list(raw_source_variants)
+        if normalized_source not in {item.lower() for item in source_variants}:
+            source_variants.append(normalized_source)
         papers.append(
             PaperArchive(
+                canonical_id=normalized_canonical_id,
+                slug=slug,
                 title=title.strip(),
                 href=abstract_url,
+                detail_href=f"papers/{slug}.html",
                 summary=normalized_summary,
                 relevance_score=normalized_score,
                 reason_summary=reason_summary,
+                source=normalized_source,
+                source_variants=source_variants,
+                source_urls=_normalize_source_url_map(
+                    raw_source_urls,
+                    source=normalized_source,
+                    abstract_url=abstract_url,
+                    paper_id=paper_id if isinstance(paper_id, str) else "",
+                    doi=_optional_clean_string(raw_paper.get("doi")),
+                    arxiv_id=_optional_clean_string(raw_paper.get("arxiv_id")),
+                ),
+                paper_id=_optional_clean_string(paper_id) or abstract_url,
+                pdf_url=_optional_clean_string(raw_paper.get("pdf_url")),
+                doi=_optional_clean_string(raw_paper.get("doi")),
+                arxiv_id=_optional_clean_string(raw_paper.get("arxiv_id")),
+                authors=_normalize_string_list(raw_paper.get("authors", [])),
+                categories=_normalize_string_list(raw_paper.get("categories", [])),
+                tags=_normalize_string_list(raw_paper.get("tags", [])),
+                topics=_normalize_string_list(raw_paper.get("topics", [])),
+                published_at=published_at,
+                updated_at=updated_at,
                 search_text=_normalize_search(
-                    f"{title} {normalized_summary} {reason_summary}"
+                    " ".join(
+                        [
+                            title,
+                            normalized_summary,
+                            reason_summary,
+                            " ".join(_normalize_string_list(raw_paper.get("tags", []))),
+                            " ".join(
+                                _normalize_string_list(raw_paper.get("topics", []))
+                            ),
+                            " ".join(
+                                _normalize_string_list(raw_paper.get("categories", []))
+                            ),
+                        ]
+                    )
                 ),
             )
         )
@@ -412,6 +541,7 @@ def _build_keyword_overviews(
                                 feed_name=feed.name,
                                 title=paper.title,
                                 href=paper.href,
+                                detail_href=paper.detail_href,
                                 summary=paper.summary,
                             )
                         )
@@ -441,6 +571,80 @@ def _build_keyword_overviews(
     return sorted(
         overviews,
         key=lambda item: (-item.total_matches, item.term.lower()),
+    )
+
+
+def _build_paper_details(
+    archives: list[DayArchive],
+    tracked_keywords: Sequence[str],
+) -> list[PaperDetail]:
+    occurrences_by_id: dict[
+        str,
+        list[tuple[DayArchive, FeedArchive, PaperArchive]],
+    ] = {}
+    for day in archives:
+        for feed in day.feeds:
+            for paper in feed.papers:
+                occurrences_by_id.setdefault(paper.canonical_id, []).append(
+                    (day, feed, paper)
+                )
+
+    details_by_id: dict[str, PaperDetail] = {}
+    normalized_keywords = _normalize_keywords(tracked_keywords)
+    for canonical_id, occurrences in occurrences_by_id.items():
+        representative = max(
+            (paper for _, _, paper in occurrences),
+            key=_paper_detail_score,
+        )
+        appearances = [
+            PaperAppearance(
+                date=day.date,
+                generated_at=day.generated_at,
+                generated_label=(
+                    f"{day.generated_at.strftime('%Y-%m-%d %H:%M:%S')} ({day.timezone})"
+                ),
+                feed_name=feed.name,
+                feed_slug=feed.slug,
+                summary=paper.summary,
+                relevance_score=paper.relevance_score,
+                match_reasons=_expand_reason_summary(paper.reason_summary),
+                markdown_href=day.markdown_href,
+                json_href=day.json_href,
+            )
+            for day, feed, paper in sorted(
+                occurrences,
+                key=lambda item: (
+                    -item[0].generated_at.timestamp(),
+                    item[1].name.lower(),
+                ),
+            )
+        ]
+        details_by_id[canonical_id] = PaperDetail(
+            paper=representative,
+            appearances=appearances,
+            related_papers=[],
+        )
+
+    for canonical_id, detail in list(details_by_id.items()):
+        related = _build_related_papers(
+            canonical_id,
+            detail.paper,
+            details_by_id,
+            normalized_keywords,
+        )
+        details_by_id[canonical_id] = PaperDetail(
+            paper=detail.paper,
+            appearances=detail.appearances,
+            related_papers=related,
+        )
+
+    return sorted(
+        details_by_id.values(),
+        key=lambda detail: (
+            -detail.paper.relevance_score,
+            -detail.paper.updated_at.timestamp(),
+            detail.paper.title.lower(),
+        ),
     )
 
 
@@ -762,6 +966,113 @@ def _render_keyword_page(overview: KeywordOverview) -> str:
     )
 
 
+def _render_paper_page(detail: PaperDetail) -> str:
+    paper = detail.paper
+    source_links = _render_source_link_grid(paper)
+    appearances = _render_paper_appearances(detail.appearances)
+    related = _render_related_papers(detail.related_papers)
+    content = (
+        '<section class="section-grid">'
+        + "".join(
+            _render_stats_card(item)
+            for item in (
+                ArchiveStats(
+                    "相关性",
+                    paper.relevance_score,
+                    "当前分数",
+                    len(paper.source_variants),
+                    "个合并来源",
+                ),
+                ArchiveStats(
+                    "历史命中",
+                    len(detail.appearances),
+                    "次归档出现",
+                    len({item.feed_name for item in detail.appearances}),
+                    "个 feed",
+                ),
+                ArchiveStats(
+                    "主题与标签",
+                    len(paper.topics),
+                    "个主题词",
+                    len(paper.tags),
+                    "个标签",
+                ),
+            )
+        )
+        + "</section>"
+        + _render_section(
+            "论文概览",
+            _truncate(paper.summary or "这篇论文当前没有可显示的摘要。", 220),
+            (
+                '<div class="detail-grid">'
+                + _render_meta_block("规范主键", paper.canonical_id)
+                + _render_meta_block(
+                    "合并来源",
+                    _paper_source_label(paper),
+                )
+                + _render_meta_block(
+                    "作者",
+                    "，".join(paper.authors) if paper.authors else "作者信息缺失",
+                )
+                + _render_meta_block(
+                    "分类",
+                    ", ".join(paper.categories) if paper.categories else "未提供",
+                )
+                + _render_meta_block(
+                    "标签",
+                    " / ".join(paper.tags) if paper.tags else "未提供",
+                )
+                + _render_meta_block(
+                    "主题词",
+                    " / ".join(paper.topics) if paper.topics else "未提供",
+                )
+                + _render_meta_block(
+                    "命中原因",
+                    paper.reason_summary or "未记录",
+                )
+                + "</div>"
+            ),
+        )
+        + _render_section(
+            "来源与外链",
+            "优先展示这篇论文在各来源上的规范化入口，再补当前摘要页和 PDF。",
+            source_links,
+        )
+        + _render_section(
+            "历史命中",
+            "按归档时间回看它在哪些 feed 中出现过，并保留当日 digest 产物入口。",
+            appearances,
+        )
+        + _render_section(
+            "相关推荐",
+            "基于共享主题、标签和配置关键词做的轻量规则推荐。",
+            related,
+        )
+    )
+    return _render_page(
+        page_title=f"{paper.title} | Paper Detail",
+        eyebrow="Canonical Paper",
+        heading=paper.title,
+        description="这是一篇规范化归档后的论文详情页，聚合了多来源命中、历史出现记录和相关推荐。",
+        hero_links=_render_hero_links(
+            [
+                ("../index.html", "返回归档首页"),
+                ("../trends.html", "查看趋势总览"),
+                (paper.href, "打开当前主来源"),
+                (
+                    paper.pdf_url,
+                    "打开 PDF",
+                )
+                if paper.pdf_url
+                else (None, f"来源：{_paper_source_label(paper)}"),
+            ]
+        ),
+        content=content,
+        nav_current="papers",
+        link_prefix="../",
+    )
+
+
 def _render_page(
     *,
     page_title: str,
@@ -808,7 +1119,7 @@ def _render_page(
 
 
 def _render_feed_rss(overview: FeedOverview, archives: list[DayArchive]) -> str:
-    items = _build_feed_subscription_items(overview, archives)
+    items = _build_feed_subscription_items(overview, archives, link_prefix="../")
     return _render_rss(
         title=f"{overview.name} Feed Archive",
         link=f"{overview.slug}.html",
@@ -818,7 +1129,7 @@ def _render_feed_rss(overview: FeedOverview, archives: list[DayArchive]) -> str:
 
 
 def _render_keyword_rss(overview: KeywordOverview) -> str:
-    items = _build_keyword_subscription_items(overview)
+    items = _build_keyword_subscription_items(overview, link_prefix="../")
     return _render_rss(
         title=f"{overview.term} Topic Archive",
         link=f"{overview.slug}.html",
@@ -830,6 +1141,8 @@ def _render_keyword_rss(overview: KeywordOverview) -> str:
 def _build_feed_subscription_items(
     overview: FeedOverview,
     archives: list[DayArchive],
+    *,
+    link_prefix: str,
 ) -> list[SubscriptionItem]:
     items: list[SubscriptionItem] = []
     for day in archives:
@@ -840,7 +1153,7 @@ def _build_feed_subscription_items(
             items.append(
                 SubscriptionItem(
                     title=paper.title,
-                    link=paper.href,
+                    link=link_prefix + paper.detail_href,
                     description=_truncate(
                         f"{paper.summary or feed.summary} 归档日期：{day.date}。", 500
                     ),
@@ -853,13 +1166,15 @@ def _build_feed_subscription_items(
 
 def _build_keyword_subscription_items(
     overview: KeywordOverview,
+    *,
+    link_prefix: str,
 ) -> list[SubscriptionItem]:
     items: list[SubscriptionItem] = []
     for match in overview.matches[:50]:
         items.append(
             SubscriptionItem(
                 title=match.title,
-                link=match.href,
+                link=link_prefix + match.detail_href,
                 description=_truncate(
                     f"{match.summary} 来源分组：{match.feed_name}。"
                     f"归档日期：{match.date}。",
@@ -911,6 +1226,7 @@ def _render_nav(current: str, link_prefix: str) -> str:
     items = [
         ("home", f"{link_prefix}index.html", "归档首页"),
         ("trends", f"{link_prefix}trends.html", "趋势总览"),
+        ("papers", f"{link_prefix}index.html", "论文详情"),
     ]
     return (
         '<nav class="top-nav">'
@@ -1137,8 +1453,8 @@ def _render_feed_card(
     titles = "".join(
         (
             "<li>"
-            f'<a href="{escape(item.href)}" target="_blank" '
-            f'rel="noreferrer">{escape(item.title)}</a>'
+            f'<a href="{escape(link_prefix + item.detail_href)}">'
+            f"{escape(item.title)}</a>"
             + (
                 (
                     '<span class="paper-inline-meta">'
@@ -1152,6 +1468,12 @@ def _render_feed_card(
                 f'{escape(_truncate(item.reason_summary, 120))}</div>'
                 if item.reason_summary
                 else ""
+            )
+            + (
+                '<div class="paper-inline-links">'
+                f'<a href="{escape(item.href)}" target="_blank" rel="noreferrer">'
+                "原始来源</a>"
+                "</div>"
             )
             + "</li>"
         )
@@ -1282,9 +1604,93 @@ def _render_keyword_match_card(match: KeywordMatch) -> str:
     return (
         '<article class="match-card">'
         f'<span class="feed-pill">{escape(match.feed_name)}</span>'
-        f'<h4 class="match-card-title"><a href="{escape(match.href)}" '
-        f'target="_blank" rel="noreferrer">{escape(match.title)}</a></h4>'
+        f'<h4 class="match-card-title"><a href="{escape("../" + match.detail_href)}">'
+        f"{escape(match.title)}</a></h4>"
+        f'<p class="match-meta-link"><a href="{escape(match.href)}" '
+        f'target="_blank" rel="noreferrer">查看原始来源</a></p>'
         f"{summary}"
+        "</article>"
+    )
+
+
+def _render_source_link_grid(paper: PaperArchive) -> str:
+    links = _paper_source_links(paper)
+    if not links:
+        return _render_empty_note("当前没有可展示的来源链接。")
+    return (
+        '<div class="chip-cloud">'
+        + "".join(
+            f'<a class="topic-chip" href="{escape(href)}" target="_blank" '
+            f'rel="noreferrer">{escape(label)}</a>'
+            for label, href in links
+        )
+        + "</div>"
+    )
+
+
+def _render_paper_appearances(appearances: list[PaperAppearance]) -> str:
+    if not appearances:
+        return _render_empty_note("这篇论文还没有历史命中记录。")
+    cards: list[str] = []
+    for item in appearances:
+        summary = (
+            f'<p class="match-copy">{escape(_truncate(item.summary, 180))}</p>'
+            if item.summary
+            else ""
+        )
+        reasons = escape("；".join(item.match_reasons[:3]) or "无额外命中原因")
+        cards.append(
+            '<article class="match-card">'
+            f'<span class="feed-pill">{escape(item.feed_name)}</span>'
+            f'<h4 class="match-card-title">{escape(item.date)}</h4>'
+            f'<p class="match-meta">{escape(item.generated_label)}</p>'
+            f"{summary}"
+            '<p class="match-copy">'
+            f"Score {item.relevance_score} · {reasons}"
+            "</p>"
+            '<div class="chip-cloud">'
+            f'<a class="topic-chip" href="../{escape(item.markdown_href)}">Markdown</a>'
+            f'<a class="topic-chip" href="../{escape(item.json_href)}">JSON</a>'
+            f'<a class="topic-chip" href="../feeds/{escape(item.feed_slug)}.html">'
+            "对应 Feed 页</a>"
+            "</div>"
+            "</article>"
+        )
+    return (
+        '<div class="match-list">'
+        + "".join(cards)
+        + "</div>"
+    )
+
+
+def _render_related_papers(related_papers: list[RelatedPaper]) -> str:
+    if not related_papers:
+        return _render_empty_note("暂时没有足够强的同主题相关推荐。")
+    cards: list[str] = []
+    for item in related_papers:
+        cards.append(
+            f'<a class="resource-card" href="../{escape(item.detail_href)}">'
+            '<p class="resource-kicker">Related</p>'
+            f'<h3 class="resource-title">{escape(item.title)}</h3>'
+            f'<p class="resource-copy">{escape(item.relation_summary)}</p>'
+            '<div class="resource-meta">'
+            f"<span>Score {item.relevance_score}</span>"
+            f"<span>{escape(item.source_label)}</span>"
+            "</div>"
+            "</a>"
+        )
+    return (
+        '<div class="subscription-grid">'
+        + "".join(cards)
+        + "</div>"
+    )
+
+
+def _render_meta_block(label: str, value: str) -> str:
+    return (
+        '<article class="meta-card">'
+        f'<p class="metric-label">{escape(label)}</p>'
+        f'<p class="resource-copy">{escape(value)}</p>'
         "</article>"
     )
 
@@ -1354,9 +1760,128 @@ def _render_index_script() -> str:
   for (const chip of chips) {
     chip.addEventListener("click", () => setActiveChip(chip.dataset.days || "all"));
   }
-  applyFilters();
+    applyFilters();
 </script>
 """
+
+
+def _paper_detail_score(paper: PaperArchive) -> tuple[int, int, int, int, float]:
+    return (
+        paper.relevance_score,
+        len(paper.source_variants),
+        len(paper.summary),
+        len(paper.authors),
+        paper.updated_at.timestamp(),
+    )
+
+
+def _expand_reason_summary(value: str) -> list[str]:
+    return [item.strip() for item in value.split("；") if item.strip()]
+
+
+def _paper_source_label(paper: PaperArchive) -> str:
+    return " / ".join(_source_display_label(item) for item in paper.source_variants)
+
+
+def _paper_source_links(paper: PaperArchive) -> list[tuple[str, str]]:
+    ordered_keys = [
+        "arxiv",
+        "doi",
+        "openalex",
+        "semantic_scholar",
+        "pubmed",
+        "crossref",
+    ]
+    links: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for key in [*ordered_keys, *paper.source_urls.keys()]:
+        href = paper.source_urls.get(key)
+        if href is None or key in seen:
+            continue
+        seen.add(key)
+        links.append((_source_display_label(key), href))
+    if paper.pdf_url is not None:
+        links.append(("PDF", paper.pdf_url))
+    return links
+
+
+def _build_related_papers(
+    canonical_id: str,
+    paper: PaperArchive,
+    details_by_id: dict[str, PaperDetail],
+    tracked_keywords: list[str],
+) -> list[RelatedPaper]:
+    related: list[tuple[int, PaperArchive, str]] = []
+    self_topics = {item.casefold() for item in paper.topics}
+    self_tags = {item.casefold() for item in paper.tags}
+    self_keyword_hits = {
+        keyword.casefold()
+        for keyword in tracked_keywords
+        if keyword.casefold() in paper.search_text
+    }
+
+    for other_id, detail in details_by_id.items():
+        if other_id == canonical_id:
+            continue
+        other = detail.paper
+        shared_topics = [
+            item for item in other.topics if item.casefold() in self_topics
+        ]
+        shared_tags = [item for item in other.tags if item.casefold() in self_tags]
+        shared_keywords = [
+            keyword
+            for keyword in tracked_keywords
+            if keyword.casefold() in self_keyword_hits
+            and keyword.casefold() in other.search_text
+        ]
+        score = len(shared_topics) * 4 + len(shared_tags) * 2 + len(shared_keywords)
+        if score <= 0:
+            continue
+        related.append(
+            (
+                score,
+                other,
+                _related_reason_summary(
+                    shared_topics,
+                    shared_tags,
+                    shared_keywords,
+                ),
+            )
+        )
+
+    related.sort(
+        key=lambda item: (
+            -item[0],
+            -item[1].relevance_score,
+            -item[1].updated_at.timestamp(),
+            item[1].title.lower(),
+        )
+    )
+    return [
+        RelatedPaper(
+            title=other.title,
+            detail_href=other.detail_href,
+            relation_summary=summary,
+            relevance_score=other.relevance_score,
+            source_label=_paper_source_label(other),
+        )
+        for _, other, summary in related[:6]
+    ]
+
+
+def _related_reason_summary(
+    shared_topics: list[str],
+    shared_tags: list[str],
+    shared_keywords: list[str],
+) -> str:
+    segments: list[str] = []
+    if shared_topics:
+        segments.append(f"共享主题：{' / '.join(shared_topics[:3])}")
+    if shared_tags:
+        segments.append(f"共享标签：{' / '.join(shared_tags[:3])}")
+    if shared_keywords:
+        segments.append(f"共享关键词：{' / '.join(shared_keywords[:3])}")
+    return "；".join(segments)
 
 
 def _site_styles() -> str:
@@ -1484,7 +2009,8 @@ def _site_styles() -> str:
     .section-grid,
     .archive-grid,
     .subscription-grid,
-    .match-grid {
+    .match-grid,
+    .detail-grid {
       display: grid;
       gap: 18px;
     }
@@ -1752,6 +2278,19 @@ def _site_styles() -> str:
       border-bottom: 1px dashed rgba(154, 52, 18, 0.45);
     }
 
+    .paper-inline-links,
+    .match-meta-link {
+      margin-top: 6px;
+      font-size: 0.88rem;
+    }
+
+    .paper-inline-links a,
+    .match-meta-link a {
+      color: var(--brand);
+      text-decoration: none;
+      border-bottom: 1px dashed rgba(154, 52, 18, 0.45);
+    }
+
     .trend-list {
       display: grid;
       gap: 10px;
@@ -1786,6 +2325,20 @@ def _site_styles() -> str:
 
     .match-grid {
       margin-top: 12px;
+    }
+
+    .detail-grid {
+      margin-top: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .meta-card {
+      padding: 16px 18px;
+      border-radius: 18px;
+      border: 1px solid rgba(74, 56, 42, 0.12);
+      background: rgba(255, 255, 255, 0.82);
+      display: grid;
+      gap: 8px;
     }
 
     .match-day {
@@ -1902,6 +2455,123 @@ def _find_feed(day: DayArchive, name: str) -> FeedArchive | None:
         if feed.name == name:
             return feed
     return None
+
+
+def _parse_optional_datetime(
+    value: object,
+    *,
+    fallback: datetime,
+    digest_json_path: Path,
+) -> datetime:
+    if not isinstance(value, str):
+        return fallback
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return fallback
+    if parsed.tzinfo is None:
+        raise ArchiveSiteError(f"naive paper datetime in {digest_json_path}")
+    return parsed
+
+
+def _optional_clean_string(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    return cleaned or None
+
+
+def _normalize_string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        stripped = item.strip()
+        key = stripped.casefold()
+        if not stripped or key in seen:
+            continue
+        seen.add(key)
+        normalized.append(stripped)
+    return normalized
+
+
+def _normalize_source_url_map(
+    value: object,
+    *,
+    source: str,
+    abstract_url: str,
+    paper_id: str,
+    doi: str | None,
+    arxiv_id: str | None,
+) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if not isinstance(key, str) or not isinstance(item, str):
+                continue
+            stripped_key = key.strip().lower()
+            stripped_value = item.strip()
+            if stripped_key and stripped_value:
+                normalized[stripped_key] = stripped_value
+    if source and abstract_url:
+        normalized.setdefault(source, abstract_url)
+    if doi:
+        normalized.setdefault("doi", f"https://doi.org/{doi}")
+    if arxiv_id:
+        normalized.setdefault("arxiv", f"https://arxiv.org/abs/{arxiv_id}")
+    if source == "pubmed" and paper_id.startswith("pubmed:"):
+        normalized.setdefault(
+            "pubmed",
+            f"https://pubmed.ncbi.nlm.nih.gov/{paper_id.removeprefix('pubmed:')}/",
+        )
+    if source == "openalex" and paper_id.startswith("openalex:"):
+        normalized.setdefault(
+            "openalex",
+            f"https://openalex.org/{paper_id.removeprefix('openalex:')}",
+        )
+    return normalized
+
+
+def _canonical_id_from_payload(
+    canonical_id: object,
+    paper_id: object,
+    abstract_url: str,
+    title: str,
+) -> str:
+    if isinstance(canonical_id, str) and canonical_id.strip():
+        return canonical_id.strip()
+    raw_paper_id = _optional_clean_string(paper_id)
+    if raw_paper_id:
+        normalized = raw_paper_id.lower()
+        if normalized.startswith("https://doi.org/"):
+            return f"doi:{normalized.removeprefix('https://doi.org/')}"
+        if normalized.startswith("pubmed:"):
+            return normalized
+    if "arxiv.org/abs/" in abstract_url:
+        return "arxiv:" + abstract_url.rstrip("/").split("/")[-1].lower().split("v")[0]
+    normalized_title = re.sub(r"[^a-z0-9]+", " ", title.casefold()).strip()
+    return "title:" + " ".join(normalized_title.split())
+
+
+def _paper_slug(canonical_id: str) -> str:
+    prefix = canonical_id.split(":", 1)[0]
+    digest = hashlib.sha1(canonical_id.encode("utf-8")).hexdigest()[:12]
+    return f"{_slugify(prefix)}-{digest}"
+
+
+def _source_display_label(value: str) -> str:
+    labels = {
+        "arxiv": "arXiv",
+        "doi": "DOI",
+        "openalex": "OpenAlex",
+        "semantic_scholar": "Semantic Scholar",
+        "pubmed": "PubMed",
+        "crossref": "Crossref",
+    }
+    return labels.get(value.lower(), value)
 
 
 def _normalize_keywords(keywords: Sequence[str]) -> list[str]:
