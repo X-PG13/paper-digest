@@ -194,6 +194,25 @@ class DigestTests(unittest.TestCase):
             markdown,
         )
 
+    def test_render_markdown_includes_feedback_status(self) -> None:
+        paper = build_paper(
+            title="Reasoning paper",
+            summary="Reasoning summary.",
+            hours_ago=1,
+            authors=["Alice"],
+        )
+        paper.feedback_status = "follow_up"
+        digest = DigestRun(
+            generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
+            timezone="UTC",
+            lookback_hours=24,
+            feeds=[FeedDigest(name="LLM", papers=[paper])],
+        )
+
+        markdown = render_markdown(digest)
+
+        self.assertIn("Feedback: follow_up", markdown)
+
     def test_render_markdown_supports_zh_daily_brief_template(self) -> None:
         analyzed_paper = build_paper(
             title="多模态推理论文",
@@ -279,6 +298,26 @@ class DigestTests(unittest.TestCase):
         markdown = render_markdown(digest)
 
         self.assertIn("来源：arxiv / semantic_scholar / openalex", markdown)
+
+    def test_render_zh_daily_brief_includes_feedback_status(self) -> None:
+        paper = build_paper(
+            title="待跟进论文",
+            summary="原始摘要。",
+            hours_ago=1,
+            authors=["Alice"],
+        )
+        paper.feedback_status = "follow_up"
+        digest = DigestRun(
+            generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
+            timezone="UTC",
+            lookback_hours=24,
+            feeds=[FeedDigest(name="LLM", papers=[paper])],
+            template="zh_daily_brief",
+        )
+
+        markdown = render_markdown(digest)
+
+        self.assertIn("反馈状态：待跟进", markdown)
 
     def test_filter_papers_without_keywords_sorts_and_limits(self) -> None:
         feed = FeedConfig(

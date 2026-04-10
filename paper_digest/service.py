@@ -11,6 +11,7 @@ from .analysis import apply_digest_briefing, enrich_digest_with_analysis
 from .arxiv_client import Paper
 from .config import AppConfig
 from .digest import DigestRun, FeedDigest, filter_papers, finalize_digest_scoring
+from .feedback import FeedbackState, apply_feedback_to_papers, load_feedback
 from .sources import fetch_feed_papers
 from .state import DigestState, dedupe_papers, load_state, save_state
 
@@ -20,6 +21,7 @@ def generate_digest(
     *,
     now: datetime | None = None,
     state: DigestState | None = None,
+    feedback_state: FeedbackState | None = None,
 ) -> DigestRun:
     """Build a digest for every configured feed."""
 
@@ -37,6 +39,9 @@ def generate_digest(
     managed_state = state
     if managed_state is None:
         managed_state = load_state(config.state)
+    managed_feedback = feedback_state
+    if managed_feedback is None:
+        managed_feedback = load_feedback(config.feedback)
     contact_email = config.email.from_address if config.email is not None else None
     openalex_api_key = None
     if config.openalex_api_key_env is not None:
@@ -61,6 +66,11 @@ def generate_digest(
             now=now_utc,
             lookback_hours=config.lookback_hours,
             ranking=config.ranking,
+        )
+        filtered = apply_feedback_to_papers(
+            filtered,
+            feedback_state=managed_feedback,
+            config=config.feedback,
         )
         filtered = dedupe_papers(
             managed_state,

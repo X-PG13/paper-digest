@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import unittest
+from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from paper_digest.archive_site import build_archive_site
+from paper_digest.feedback import FeedbackEntry, FeedbackState
 
 
 class ArchiveSiteTests(unittest.TestCase):
@@ -121,11 +123,24 @@ class ArchiveSiteTests(unittest.TestCase):
             site_path = build_archive_site(
                 output_dir,
                 tracked_keywords=["agent", "benchmark", "diffusion"],
+                feedback_state=FeedbackState(
+                    papers={
+                        "doi:10.5555/paper-circle": FeedbackEntry(
+                            status="star",
+                            updated_at=datetime.fromisoformat(
+                                "2026-04-09T08:30:00+08:00"
+                            ),
+                        )
+                    }
+                ),
             )
 
             index_html = (site_path / "index.html").read_text(encoding="utf-8")
             trends_html = (site_path / "trends.html").read_text(encoding="utf-8")
             momentum_html = (site_path / "momentum.html").read_text(encoding="utf-8")
+            reading_list_html = (site_path / "reading-list.html").read_text(
+                encoding="utf-8"
+            )
             llm_html = (site_path / "feeds/llm.html").read_text(encoding="utf-8")
             llm_xml = (site_path / "feeds/llm.xml").read_text(encoding="utf-8")
             agent_html = (site_path / "topics/agent.html").read_text(encoding="utf-8")
@@ -141,6 +156,7 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn("Paper Circle", index_html)
             self.assertIn("papers/", index_html)
             self.assertIn("momentum.html", index_html)
+            self.assertIn("reading-list.html", index_html)
             self.assertIn("digests/2026-04-08/digest.md", index_html)
             self.assertIn("2026-04-08 23:59:44 (Asia/Shanghai)", index_html)
             self.assertIn('data-feed-names="|llm|vision|"', index_html)
@@ -153,6 +169,11 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn("首次出现", momentum_html)
             self.assertIn("最近出现", momentum_html)
             self.assertIn("Paper Circle", momentum_html)
+            self.assertIn("阅读清单", reading_list_html)
+            self.assertIn("Reading List", reading_list_html)
+            self.assertIn("Paper Circle", reading_list_html)
+            self.assertIn("papers/", reading_list_html)
+            self.assertNotIn("Benchmark Design", reading_list_html)
             self.assertIn("LLM 固定订阅页", llm_html)
             self.assertIn('type="application/rss+xml"', llm_html)
             self.assertIn("订阅 RSS", llm_html)
@@ -176,11 +197,14 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn("历史命中", paper_detail)
             self.assertIn("相关推荐", paper_detail)
             self.assertIn("Agent Systems", paper_detail)
+            self.assertIn("反馈状态", paper_detail)
+            self.assertIn("标星", paper_detail)
             self.assertIn("首次出现", paper_detail)
             self.assertIn("最近出现", paper_detail)
             self.assertIn("覆盖跨度", paper_detail)
             self.assertIn("2 个活跃日期 / 2 个 feed / 2 次归档出现", paper_detail)
             self.assertIn("持续升温", paper_detail)
+            self.assertTrue((site_path / "reading-list.html").exists())
             self.assertTrue((site_path / "latest.md").exists())
             self.assertTrue((site_path / "latest.json").exists())
             self.assertTrue((site_path / "digests/2026-04-08/digest.json").exists())
@@ -276,6 +300,7 @@ class ArchiveSiteTests(unittest.TestCase):
                             "topics": paper.get("topics", []),
                             "relevance_score": paper.get("relevance_score", 0),
                             "match_reasons": paper.get("match_reasons", []),
+                            "feedback_status": paper.get("feedback_status"),
                         }
                         for paper in feed["papers"]
                     ],

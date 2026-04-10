@@ -17,6 +17,7 @@ from .config import (
     RankingWeights,
     SortMode,
 )
+from .feedback import feedback_label, feedback_label_zh
 
 
 @dataclass(slots=True)
@@ -206,6 +207,9 @@ def _render_default_markdown(digest: DigestRun) -> str:
             lines.append(f"   - {paper.date_label}: {published}")
             lines.append(f"   - Authors: {authors}")
             lines.append(f"   - Source: {paper.source_label()}")
+            feedback = feedback_label(paper.feedback_status)
+            if feedback is not None:
+                lines.append(f"   - Feedback: {feedback}")
             if paper.relevance_score:
                 lines.append(f"   - Relevance: {paper.relevance_score}")
             if paper.match_reasons:
@@ -305,6 +309,9 @@ def _render_zh_daily_brief(digest: DigestRun) -> str:
             lines.append(f"   - {paper.date_label}：{published}")
             lines.append(f"   - 作者：{authors}")
             lines.append(f"   - 来源：{paper.source_label()}")
+            feedback = feedback_label_zh(paper.feedback_status)
+            if feedback is not None:
+                lines.append(f"   - 反馈状态：{feedback}")
             if paper.relevance_score:
                 lines.append(f"   - 相关性分数：{paper.relevance_score}")
             if paper.match_reasons:

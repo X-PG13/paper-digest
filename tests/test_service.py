@@ -12,11 +12,13 @@ from paper_digest.config import (
     AnalysisConfig,
     AppConfig,
     DigestConfig,
+    FeedbackConfig,
     FeedConfig,
     RankingConfig,
     RankingWeights,
     StateConfig,
 )
+from paper_digest.feedback import FeedbackEntry, FeedbackState
 from paper_digest.service import generate_digest
 from paper_digest.state import DigestState
 
@@ -272,6 +274,225 @@ class GenerateDigestTests(unittest.TestCase):
         self.assertEqual(merged_paper.authors, ["Alice", "Bob"])
         self.assertEqual(merged_paper.canonical_id(), "doi:10.5555/example")
         self.assertGreater(merged_paper.relevance_score, 80)
+
+    @patch("paper_digest.service.fetch_feed_papers")
+    def test_generate_digest_boosts_starred_papers(
+        self,
+        mock_fetch_feed_papers,
+    ) -> None:
+        now = datetime(2026, 4, 8, 9, 30, tzinfo=ZoneInfo("UTC"))
+        feed = FeedConfig(
+            name="LLM",
+            categories=["cs.AI"],
+            keywords=["agent"],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+        )
+        starred = Paper(
+            title="Agent planning with verification",
+            summary="Agent planning benchmark.",
+            authors=["Alice"],
+            categories=["cs.AI"],
+            paper_id="http://arxiv.org/abs/2604.00002v1",
+            abstract_url="https://arxiv.org/abs/2604.00002v1",
+            pdf_url="https://arxiv.org/pdf/2604.00002v1",
+            published_at=datetime(2026, 4, 8, 0, 30, tzinfo=ZoneInfo("UTC")),
+            updated_at=datetime(2026, 4, 8, 0, 30, tzinfo=ZoneInfo("UTC")),
+        )
+        unstarred = Paper(
+            title="Agent benchmark recap",
+            summary="A fresh agent benchmark.",
+            authors=["Bob"],
+            categories=["cs.AI"],
+            paper_id="http://arxiv.org/abs/2604.00003v1",
+            abstract_url="https://arxiv.org/abs/2604.00003v1",
+            pdf_url="https://arxiv.org/pdf/2604.00003v1",
+            published_at=datetime(2026, 4, 8, 6, 30, tzinfo=ZoneInfo("UTC")),
+            updated_at=datetime(2026, 4, 8, 6, 30, tzinfo=ZoneInfo("UTC")),
+        )
+        mock_fetch_feed_papers.return_value = [starred, unstarred]
+
+        with TemporaryDirectory() as temp_dir:
+            config = AppConfig(
+                timezone="UTC",
+                lookback_hours=24,
+                output_dir=Path(temp_dir) / "output",
+                request_delay_seconds=0.0,
+                feeds=[feed],
+                state=StateConfig(
+                    enabled=True,
+                    path=Path(temp_dir) / "state.json",
+                    retention_days=90,
+                ),
+            )
+            feedback_state = FeedbackState(
+                papers={
+                    "arxiv:2604.00002": FeedbackEntry(status="star"),
+                }
+            )
+
+            digest = generate_digest(
+                config,
+                now=now,
+                feedback_state=feedback_state,
+            )
+
+        self.assertEqual(
+            [paper.title for paper in digest.feeds[0].papers],
+            ["Agent planning with verification", "Agent benchmark recap"],
+        )
+        self.assertEqual(digest.feeds[0].papers[0].feedback_status, "star")
+        self.assertIn("feedback: starred", digest.feeds[0].papers[0].match_reasons)
+        self.assertGreater(
+            digest.feeds[0].papers[0].relevance_score,
+            digest.feeds[0].papers[1].relevance_score,
+        )
+
+    @patch("paper_digest.service.fetch_feed_papers")
+    def test_generate_digest_hides_ignored_papers_by_default(
+        self,
+        mock_fetch_feed_papers,
+    ) -> None:
+        now = datetime(2026, 4, 8, 9, 30, tzinfo=ZoneInfo("UTC"))
+        feed = FeedConfig(
+            name="LLM",
+            categories=["cs.AI"],
+            keywords=["agent"],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+        )
+        ignored = Paper(
+            title="Ignored agent paper",
+            summary="An agent paper that should disappear.",
+            authors=["Alice"],
+            categories=["cs.AI"],
+            paper_id="http://arxiv.org/abs/2604.00004v1",
+            abstract_url="https://arxiv.org/abs/2604.00004v1",
+            pdf_url="https://arxiv.org/pdf/2604.00004v1",
+            published_at=datetime(2026, 4, 8, 3, 30, tzinfo=ZoneInfo("UTC")),
+            updated_at=datetime(2026, 4, 8, 3, 30, tzinfo=ZoneInfo("UTC")),
+        )
+        visible = Paper(
+            title="Visible agent paper",
+            summary="An agent paper that remains.",
+            authors=["Bob"],
+            categories=["cs.AI"],
+            paper_id="http://arxiv.org/abs/2604.00005v1",
+            abstract_url="https://arxiv.org/abs/2604.00005v1",
+            pdf_url="https://arxiv.org/pdf/2604.00005v1",
+            published_at=datetime(2026, 4, 8, 4, 30, tzinfo=ZoneInfo("UTC")),
+            updated_at=datetime(2026, 4, 8, 4, 30, tzinfo=ZoneInfo("UTC")),
+        )
+        mock_fetch_feed_papers.return_value = [ignored, visible]
+
+        with TemporaryDirectory() as temp_dir:
+            config = AppConfig(
+                timezone="UTC",
+                lookback_hours=24,
+                output_dir=Path(temp_dir) / "output",
+                request_delay_seconds=0.0,
+                feeds=[feed],
+                state=StateConfig(
+                    enabled=True,
+                    path=Path(temp_dir) / "state.json",
+                    retention_days=90,
+                ),
+            )
+            feedback_state = FeedbackState(
+                papers={
+                    "arxiv:2604.00004": FeedbackEntry(status="ignore"),
+                }
+            )
+
+            digest = generate_digest(
+                config,
+                now=now,
+                feedback_state=feedback_state,
+            )
+
+        self.assertEqual(
+            [paper.title for paper in digest.feeds[0].papers],
+            ["Visible agent paper"],
+        )
+
+    @patch("paper_digest.service.fetch_feed_papers")
+    def test_generate_digest_can_keep_ignored_papers_with_penalty(
+        self,
+        mock_fetch_feed_papers,
+    ) -> None:
+        now = datetime(2026, 4, 8, 9, 30, tzinfo=ZoneInfo("UTC"))
+        feed = FeedConfig(
+            name="LLM",
+            categories=["cs.AI"],
+            keywords=["agent"],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+        )
+        ignored = Paper(
+            title="Ignored agent paper",
+            summary="An agent paper that should be down-ranked.",
+            authors=["Alice"],
+            categories=["cs.AI"],
+            paper_id="http://arxiv.org/abs/2604.00006v1",
+            abstract_url="https://arxiv.org/abs/2604.00006v1",
+            pdf_url="https://arxiv.org/pdf/2604.00006v1",
+            published_at=datetime(2026, 4, 8, 6, 30, tzinfo=ZoneInfo("UTC")),
+            updated_at=datetime(2026, 4, 8, 6, 30, tzinfo=ZoneInfo("UTC")),
+        )
+        baseline = Paper(
+            title="Baseline agent paper",
+            summary="An agent paper without feedback.",
+            authors=["Bob"],
+            categories=["cs.AI"],
+            paper_id="http://arxiv.org/abs/2604.00007v1",
+            abstract_url="https://arxiv.org/abs/2604.00007v1",
+            pdf_url="https://arxiv.org/pdf/2604.00007v1",
+            published_at=datetime(2026, 4, 8, 4, 30, tzinfo=ZoneInfo("UTC")),
+            updated_at=datetime(2026, 4, 8, 4, 30, tzinfo=ZoneInfo("UTC")),
+        )
+        mock_fetch_feed_papers.return_value = [ignored, baseline]
+
+        with TemporaryDirectory() as temp_dir:
+            config = AppConfig(
+                timezone="UTC",
+                lookback_hours=24,
+                output_dir=Path(temp_dir) / "output",
+                request_delay_seconds=0.0,
+                feeds=[feed],
+                state=StateConfig(
+                    enabled=True,
+                    path=Path(temp_dir) / "state.json",
+                    retention_days=90,
+                ),
+                feedback=FeedbackConfig(
+                    enabled=True,
+                    path=Path(temp_dir) / "feedback.json",
+                    hide_ignored=False,
+                    ignore_penalty=120,
+                ),
+            )
+            feedback_state = FeedbackState(
+                papers={
+                    "arxiv:2604.00006": FeedbackEntry(status="ignore"),
+                }
+            )
+
+            digest = generate_digest(
+                config,
+                now=now,
+                feedback_state=feedback_state,
+            )
+
+        self.assertEqual(
+            [paper.title for paper in digest.feeds[0].papers],
+            ["Baseline agent paper", "Ignored agent paper"],
+        )
+        ignored_paper = digest.feeds[0].papers[1]
+        self.assertEqual(ignored_paper.feedback_status, "ignore")
+        self.assertIn("feedback: ignored", ignored_paper.match_reasons)
 
     @patch("paper_digest.service.save_state")
     @patch("paper_digest.service.fetch_feed_papers")

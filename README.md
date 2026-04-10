@@ -63,6 +63,7 @@ python -m paper_digest --config config.toml
 - `output/latest.json`
 - `output/latest.md`
 - `output/site/index.html`
+- `output/site/reading-list.html`
 - `output/YYYY-MM-DD/digest.json`
 - `output/YYYY-MM-DD/digest.md`
 
@@ -102,6 +103,7 @@ Field reference:
 - `openalex_api_key_env`: Optional environment variable name for an OpenAlex API
   key on manual or scheduled runs.
 - `state`: Persistent history used for deduplication across runs.
+- `feedback`: Local per-paper feedback state keyed by `canonical_id`.
 - `source`: `arxiv`, `crossref`, `pubmed`, `semantic_scholar`, or `openalex`.
 - `categories`: arXiv categories such as `cs.AI`, `cs.CL`, or `cs.CV`.
 - `queries`: Required for `crossref`, `pubmed`, `semantic_scholar`, and
@@ -182,6 +184,42 @@ Digest notes:
 - The JSON output now records the active sorting summary, per-feed `sort_by`,
   `relevance_score`, and `match_reasons` so downstream archive pages and
   integrations can explain why each paper surfaced.
+
+Feedback loop:
+
+```toml
+[feedback]
+enabled = true
+path = ".paper-digest-state/feedback.json"
+star_boost = 80
+follow_up_boost = 35
+ignore_penalty = 120
+hide_ignored = true
+```
+
+- Feedback is keyed by canonical paper identity: DOI first, then arXiv id,
+  then a normalized title fallback.
+- Supported statuses are `star`, `follow_up`, and `ignore`.
+- `star` and `follow_up` boost ranking; `ignore` either hides papers or
+  down-ranks them, depending on `hide_ignored`.
+- The archive site exposes a dedicated `output/site/reading-list.html` page
+  that aggregates starred and follow-up papers.
+
+Example feedback file:
+
+```json
+{
+  "version": 1,
+  "papers": {
+    "doi:10.5555/paper-circle": {
+      "status": "star",
+      "updated_at": "2026-04-10T09:15:00+08:00"
+    },
+    "arxiv:2604.00001": "follow_up",
+    "title:example-normalized-title": "ignore"
+  }
+}
+```
 
 Analysis notes:
 
@@ -371,7 +409,7 @@ For manual validation runs, `workflow_dispatch` also accepts an optional
 config instead of `PAPER_DIGEST_CONFIG_TOML`.
 
 The workflow restores and saves `.paper-digest-state/` through the GitHub
-Actions cache so deduplication survives across runs.
+Actions cache so deduplication and local feedback state survive across runs.
 
 It also restores and saves `output/` history through the GitHub Actions cache.
 That keeps dated digest folders alive across runs, so feed pages, keyword pages,
@@ -422,6 +460,8 @@ The CLI also rebuilds `output/site/index.html` on every run. That static site:
   source links, match reasons, and lightweight related-paper suggestions
 - emits a `output/site/momentum.html` view for papers that keep resurfacing
   across multiple dates or feeds, with first-seen and last-seen timestamps
+- emits a `output/site/reading-list.html` view for papers you have starred or
+  marked for follow-up in the local feedback state
 - emits fixed feed pages under `output/site/feeds/`
 - emits feed RSS files under `output/site/feeds/*.xml`
 - emits keyword tracking pages under `output/site/topics/` from configured feed keywords

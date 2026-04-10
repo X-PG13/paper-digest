@@ -466,6 +466,43 @@ class LoadConfigTests(unittest.TestCase):
             (config_path.parent / ".cache/custom-state.json").resolve(),
         )
 
+    def test_load_config_reads_feedback_settings(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text(
+                textwrap.dedent(
+                    """
+                    [app]
+                    timezone = "UTC"
+
+                    [[feeds]]
+                    name = "LLM"
+                    categories = ["cs.AI"]
+
+                    [feedback]
+                    enabled = true
+                    path = ".cache/feedback.json"
+                    star_boost = 90
+                    follow_up_boost = 40
+                    ignore_penalty = 150
+                    hide_ignored = false
+                    """
+                ).strip(),
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        self.assertTrue(config.feedback.enabled)
+        self.assertEqual(
+            config.feedback.path,
+            (config_path.parent / ".cache/feedback.json").resolve(),
+        )
+        self.assertEqual(config.feedback.star_boost, 90)
+        self.assertEqual(config.feedback.follow_up_boost, 40)
+        self.assertEqual(config.feedback.ignore_penalty, 150)
+        self.assertFalse(config.feedback.hide_ignored)
+
     def test_email_auth_requires_username_and_password_env_together(self) -> None:
         with TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "config.toml"
