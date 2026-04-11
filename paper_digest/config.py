@@ -29,6 +29,7 @@ AnalysisReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "x
 DigestTemplate = Literal["default", "zh_daily_brief"]
 SortMode = Literal["relevance", "published_at", "hybrid"]
 FeedbackStatus = Literal["star", "follow_up", "ignore"]
+FocusReason = Literal["new_starred", "follow_up_resurfaced", "starred_momentum"]
 
 
 @dataclass(slots=True, frozen=True)
@@ -60,6 +61,9 @@ class EmailConfig:
     target: DeliveryTarget = "digest"
     include_focus: bool = True
     focus_target: DeliveryFocusTarget = "digest"
+    focus_statuses: list[FeedbackStatus] = field(default_factory=list)
+    focus_reasons: list[FocusReason] = field(default_factory=list)
+    focus_max_items: int | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -70,6 +74,9 @@ class FeishuWebhookConfig:
     target: DeliveryTarget = "digest"
     include_focus: bool = True
     focus_target: DeliveryFocusTarget = "digest"
+    focus_statuses: list[FeedbackStatus] = field(default_factory=list)
+    focus_reasons: list[FocusReason] = field(default_factory=list)
+    focus_max_items: int | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -80,6 +87,9 @@ class WeComWebhookConfig:
     target: DeliveryTarget = "digest"
     include_focus: bool = True
     focus_target: DeliveryFocusTarget = "digest"
+    focus_statuses: list[FeedbackStatus] = field(default_factory=list)
+    focus_reasons: list[FocusReason] = field(default_factory=list)
+    focus_max_items: int | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -90,6 +100,9 @@ class SlackWebhookConfig:
     target: DeliveryTarget = "digest"
     include_focus: bool = True
     focus_target: DeliveryFocusTarget = "digest"
+    focus_statuses: list[FeedbackStatus] = field(default_factory=list)
+    focus_reasons: list[FocusReason] = field(default_factory=list)
+    focus_max_items: int | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -100,6 +113,9 @@ class DiscordWebhookConfig:
     target: DeliveryTarget = "digest"
     include_focus: bool = True
     focus_target: DeliveryFocusTarget = "digest"
+    focus_statuses: list[FeedbackStatus] = field(default_factory=list)
+    focus_reasons: list[FocusReason] = field(default_factory=list)
+    focus_max_items: int | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -111,6 +127,9 @@ class TelegramBotConfig:
     target: DeliveryTarget = "digest"
     include_focus: bool = True
     focus_target: DeliveryFocusTarget = "digest"
+    focus_statuses: list[FeedbackStatus] = field(default_factory=list)
+    focus_reasons: list[FocusReason] = field(default_factory=list)
+    focus_max_items: int | None = None
 
 
 DeliveryConfig = (
@@ -644,6 +663,18 @@ def _build_email_config(value: dict[str, Any], field_name: str) -> EmailConfig:
             value.get("focus_target", "digest"),
             f"{field_name}.focus_target",
         ),
+        focus_statuses=_focus_status_list(
+            value.get("focus_statuses", []),
+            f"{field_name}.focus_statuses",
+        ),
+        focus_reasons=_focus_reason_list(
+            value.get("focus_reasons", []),
+            f"{field_name}.focus_reasons",
+        ),
+        focus_max_items=_optional_positive_int(
+            value.get("focus_max_items"),
+            f"{field_name}.focus_max_items",
+        ),
     )
 
 
@@ -675,6 +706,18 @@ def _build_feishu_webhook_config(
         focus_target=_delivery_focus_target(
             value.get("focus_target", "digest"),
             f"{field_name}.focus_target",
+        ),
+        focus_statuses=_focus_status_list(
+            value.get("focus_statuses", []),
+            f"{field_name}.focus_statuses",
+        ),
+        focus_reasons=_focus_reason_list(
+            value.get("focus_reasons", []),
+            f"{field_name}.focus_reasons",
+        ),
+        focus_max_items=_optional_positive_int(
+            value.get("focus_max_items"),
+            f"{field_name}.focus_max_items",
         ),
     )
 
@@ -708,6 +751,18 @@ def _build_wecom_webhook_config(
             value.get("focus_target", "digest"),
             f"{field_name}.focus_target",
         ),
+        focus_statuses=_focus_status_list(
+            value.get("focus_statuses", []),
+            f"{field_name}.focus_statuses",
+        ),
+        focus_reasons=_focus_reason_list(
+            value.get("focus_reasons", []),
+            f"{field_name}.focus_reasons",
+        ),
+        focus_max_items=_optional_positive_int(
+            value.get("focus_max_items"),
+            f"{field_name}.focus_max_items",
+        ),
     )
 
 
@@ -739,6 +794,18 @@ def _build_slack_webhook_config(
         focus_target=_delivery_focus_target(
             value.get("focus_target", "digest"),
             f"{field_name}.focus_target",
+        ),
+        focus_statuses=_focus_status_list(
+            value.get("focus_statuses", []),
+            f"{field_name}.focus_statuses",
+        ),
+        focus_reasons=_focus_reason_list(
+            value.get("focus_reasons", []),
+            f"{field_name}.focus_reasons",
+        ),
+        focus_max_items=_optional_positive_int(
+            value.get("focus_max_items"),
+            f"{field_name}.focus_max_items",
         ),
     )
 
@@ -772,6 +839,18 @@ def _build_discord_webhook_config(
             value.get("focus_target", "digest"),
             f"{field_name}.focus_target",
         ),
+        focus_statuses=_focus_status_list(
+            value.get("focus_statuses", []),
+            f"{field_name}.focus_statuses",
+        ),
+        focus_reasons=_focus_reason_list(
+            value.get("focus_reasons", []),
+            f"{field_name}.focus_reasons",
+        ),
+        focus_max_items=_optional_positive_int(
+            value.get("focus_max_items"),
+            f"{field_name}.focus_max_items",
+        ),
     )
 
 
@@ -802,6 +881,18 @@ def _build_telegram_bot_config(
         focus_target=_delivery_focus_target(
             value.get("focus_target", "digest"),
             f"{field_name}.focus_target",
+        ),
+        focus_statuses=_focus_status_list(
+            value.get("focus_statuses", []),
+            f"{field_name}.focus_statuses",
+        ),
+        focus_reasons=_focus_reason_list(
+            value.get("focus_reasons", []),
+            f"{field_name}.focus_reasons",
+        ),
+        focus_max_items=_optional_positive_int(
+            value.get("focus_max_items"),
+            f"{field_name}.focus_max_items",
         ),
     )
 
@@ -937,6 +1028,47 @@ def _delivery_focus_target(value: Any, field_name: str) -> DeliveryFocusTarget:
     return "separate"
 
 
+def _focus_status_list(value: Any, field_name: str) -> list[FeedbackStatus]:
+    items = _string_list(value, field_name)
+    statuses: list[FeedbackStatus] = []
+    for item in items:
+        statuses.append(_focus_feedback_status_value(item, field_name))
+    return statuses
+
+
+def _focus_reason_list(value: Any, field_name: str) -> list[FocusReason]:
+    items = _string_list(value, field_name)
+    reasons: list[FocusReason] = []
+    for item in items:
+        reasons.append(_focus_reason_value(item, field_name))
+    return reasons
+
+
+def _focus_feedback_status_value(value: str, field_name: str) -> FeedbackStatus:
+    normalized = value.strip().lower()
+    if normalized not in {"star", "follow_up"}:
+        raise ConfigError(
+            f"{field_name} must contain only 'star' or 'follow_up'"
+        )
+    if normalized == "star":
+        return "star"
+    return "follow_up"
+
+
+def _focus_reason_value(value: str, field_name: str) -> FocusReason:
+    normalized = value.strip().lower()
+    if normalized not in {"new_starred", "follow_up_resurfaced", "starred_momentum"}:
+        raise ConfigError(
+            f"{field_name} must contain only 'new_starred', "
+            "'follow_up_resurfaced', or 'starred_momentum'"
+        )
+    if normalized == "new_starred":
+        return "new_starred"
+    if normalized == "follow_up_resurfaced":
+        return "follow_up_resurfaced"
+    return "starred_momentum"
+
+
 def _analysis_provider(value: Any, field_name: str) -> AnalysisProvider:
     if not isinstance(value, str):
         raise ConfigError(f"{field_name} must be 'openai'")
@@ -1008,6 +1140,12 @@ def _optional_sort_mode(value: Any, field_name: str) -> SortMode | None:
     if value is None:
         return None
     return _sort_mode(value, field_name)
+
+
+def _optional_positive_int(value: Any, field_name: str) -> int | None:
+    if value is None:
+        return None
+    return _positive_int(value, field_name)
 
 
 def _positive_int(value: Any, field_name: str) -> int:

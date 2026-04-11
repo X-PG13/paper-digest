@@ -223,6 +223,61 @@ class DeliveryTests(unittest.TestCase):
         self.assertIn("## Focus 区块", messages[1].body)
         self.assertIn("Focus Brief", messages[1].title)
 
+    def test_build_notification_messages_filters_focus_by_delivery_rules(self) -> None:
+        delivery = FeishuWebhookConfig(
+            webhook_url="https://open.feishu.cn/example",
+            title_prefix="[Robot]",
+            skip_if_empty=True,
+            target="digest",
+            include_focus=True,
+            focus_target="separate",
+            focus_statuses=["star"],
+            focus_reasons=["starred_momentum"],
+            focus_max_items=1,
+        )
+        digest = build_digest()
+        digest.focus_items = [
+            FocusItem(
+                canonical_id="doi:starred-new",
+                title="New Starred Paper",
+                abstract_url="https://example.com/new-starred",
+                summary="A newly starred paper.",
+                source_label="arxiv",
+                feedback_status="star",
+                reasons=["new_starred"],
+                feed_names=["LLM"],
+            ),
+            FocusItem(
+                canonical_id="doi:starred-momentum",
+                title="Momentum Paper",
+                abstract_url="https://example.com/momentum",
+                summary="A starred paper that entered momentum.",
+                source_label="openalex",
+                feedback_status="star",
+                reasons=["starred_momentum"],
+                feed_names=["LLM", "Vision"],
+            ),
+            FocusItem(
+                canonical_id="doi:follow-up",
+                title="Follow Up Paper",
+                abstract_url="https://example.com/follow-up",
+                summary="A resurfaced follow-up paper.",
+                source_label="pubmed",
+                feedback_status="follow_up",
+                reasons=["follow_up_resurfaced"],
+                feed_names=["PubMed AI"],
+            ),
+        ]
+
+        messages = build_notification_messages(delivery, digest)
+
+        self.assertEqual(len(messages), 2)
+        self.assertEqual(messages[1].kind, "focus")
+        self.assertIn("Focus=1, star=1", messages[1].title)
+        self.assertIn("Momentum Paper", messages[1].body)
+        self.assertNotIn("New Starred Paper", messages[1].body)
+        self.assertNotIn("Follow Up Paper", messages[1].body)
+
     @patch("paper_digest.delivery.send_wecom_message")
     @patch("paper_digest.delivery.send_slack_message")
     @patch("paper_digest.delivery.send_discord_message")
