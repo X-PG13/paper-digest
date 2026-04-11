@@ -191,6 +191,9 @@ max_items = 10
 # target = "digest"
 # include_focus = true
 # focus_target = "digest"
+# focus_statuses = ["star", "follow_up"]
+# focus_reasons = ["new_starred", "follow_up_resurfaced", "starred_momentum"]
+# focus_max_items = 5
 
 # Example Feishu webhook delivery:
 # [[deliveries]]
@@ -201,6 +204,9 @@ max_items = 10
 # target = "per_feed"
 # include_focus = true
 # focus_target = "separate"
+# focus_statuses = ["star"]
+# focus_reasons = ["new_starred", "starred_momentum"]
+# focus_max_items = 3
 
 # Example WeCom webhook delivery:
 # [[deliveries]]
@@ -211,6 +217,9 @@ max_items = 10
 # target = "per_feed"
 # include_focus = false
 # focus_target = "digest"
+# focus_statuses = []
+# focus_reasons = []
+# focus_max_items = 5
 
 # Example Slack webhook delivery:
 # [[deliveries]]
@@ -221,6 +230,9 @@ max_items = 10
 # target = "per_feed"
 # include_focus = true
 # focus_target = "digest"
+# focus_statuses = ["follow_up"]
+# focus_reasons = ["follow_up_resurfaced"]
+# focus_max_items = 2
 
 # Example Discord webhook delivery:
 # [[deliveries]]
@@ -231,6 +243,9 @@ max_items = 10
 # target = "per_feed"
 # include_focus = true
 # focus_target = "digest"
+# focus_statuses = ["star"]
+# focus_reasons = ["starred_momentum"]
+# focus_max_items = 2
 
 # Example Telegram bot delivery:
 # [[deliveries]]
@@ -242,6 +257,9 @@ max_items = 10
 # target = "per_feed"
 # include_focus = true
 # focus_target = "digest"
+# focus_statuses = ["star", "follow_up"]
+# focus_reasons = ["new_starred", "follow_up_resurfaced"]
+# focus_max_items = 4
 
 # Legacy email configuration is still supported:
 # [email]
@@ -259,3 +277,6 @@ max_items = 10
 # target = "digest"
 # include_focus = true
 # focus_target = "digest"
+# focus_statuses = ["star", "follow_up"]
+# focus_reasons = ["new_starred", "follow_up_resurfaced", "starred_momentum"]
+# focus_max_items = 5

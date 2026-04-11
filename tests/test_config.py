@@ -191,6 +191,9 @@ class LoadConfigTests(unittest.TestCase):
                     target = "digest"
                     include_focus = false
                     focus_target = "digest"
+                    focus_statuses = ["star"]
+                    focus_reasons = ["new_starred"]
+                    focus_max_items = 2
 
                     [[deliveries]]
                     type = "wecom_webhook"
@@ -236,6 +239,9 @@ class LoadConfigTests(unittest.TestCase):
         self.assertEqual(config.deliveries[4].target, "digest")
         self.assertEqual(config.deliveries[5].target, "per_feed")
         self.assertFalse(config.deliveries[1].include_focus)
+        self.assertEqual(config.deliveries[1].focus_statuses, ["star"])
+        self.assertEqual(config.deliveries[1].focus_reasons, ["new_starred"])
+        self.assertEqual(config.deliveries[1].focus_max_items, 2)
         self.assertEqual(config.deliveries[2].focus_target, "separate")
 
     def test_load_config_reads_analysis_settings(self) -> None:

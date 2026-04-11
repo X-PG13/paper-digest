@@ -34,6 +34,8 @@ Versioning.
   starred papers that newly enter the momentum view.
 - Deliveries can now opt in or out of Focus independently and choose whether
   Focus stays inline with the digest or gets emitted as a separate `Focus Brief`.
+- Deliveries can now also filter Focus by feedback status and trigger reason,
+  and each delivery can cap its own Focus item count independently.
 - The manual `Daily Digest` workflow now accepts a temporary `config.toml`
   override input and isolates those validation runs from caches and Pages
   deployment.

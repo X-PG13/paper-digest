@@ -288,6 +288,9 @@ skip_if_empty = true
 target = "digest"
 include_focus = true
 focus_target = "digest"
+focus_statuses = ["star", "follow_up"]
+focus_reasons = ["new_starred", "follow_up_resurfaced", "starred_momentum"]
+focus_max_items = 5
 
 [[deliveries]]
 type = "feishu_webhook"
@@ -297,6 +300,9 @@ skip_if_empty = true
 target = "per_feed"
 include_focus = true
 focus_target = "separate"
+focus_statuses = ["star"]
+focus_reasons = ["new_starred", "starred_momentum"]
+focus_max_items = 3
 
 [[deliveries]]
 type = "wecom_webhook"
@@ -358,6 +364,13 @@ Notes:
 - `focus_target = "digest"` keeps Focus inline with the main digest, while
   `focus_target = "separate"` emits a second `Focus Brief` message for that
   delivery when focus items exist.
+- `focus_statuses = ["star", "follow_up"]` narrows Focus to specific feedback
+  states for that delivery. Leave it empty to accept all Focus statuses.
+- `focus_reasons = ["new_starred", "follow_up_resurfaced", "starred_momentum"]`
+  narrows Focus to specific trigger types for that delivery. Leave it empty to
+  accept all Focus reasons.
+- `focus_max_items = 3` overrides the global `[notify].max_focus_items` cap for
+  one delivery, so you can keep chat channels tighter than email digests.
 - Legacy `[email]` config is still supported for backward compatibility.
 - Delivery failures return a non-zero exit code, keep generated artifacts on
   disk, and do not persist dedup state for that run.

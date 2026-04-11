@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -65,16 +66,18 @@ def build_notification_messages(
 ) -> list[NotificationMessage]:
     """Build delivery messages according to channel policy."""
 
+    focus_digest = _filter_focus_for_delivery(digest, delivery)
+
     if feedback_only:
         if not _include_focus(delivery):
             return []
-        if _skip_if_empty(delivery) and not digest.focus_items:
+        if _skip_if_empty(delivery) and not focus_digest.focus_items:
             return []
-        return [_build_focus_notification_message(delivery, digest)]
+        return [_build_focus_notification_message(delivery, focus_digest)]
 
-    digest_for_digest = _digest_without_focus(digest)
+    digest_for_digest = _digest_without_focus(focus_digest)
     if _include_focus(delivery) and _focus_target(delivery) == "digest":
-        digest_for_digest = digest
+        digest_for_digest = focus_digest
 
     messages: list[NotificationMessage] = []
     if _delivery_target(delivery) == "per_feed":
@@ -105,8 +108,8 @@ def build_notification_messages(
             )
 
     if _include_focus(delivery) and _focus_target(delivery) == "separate":
-        if digest.focus_items:
-            messages.append(_build_focus_notification_message(delivery, digest))
+        if focus_digest.focus_items:
+            messages.append(_build_focus_notification_message(delivery, focus_digest))
     return messages
 
 
@@ -165,6 +168,17 @@ def _build_notification_message(
 
 
 def _digest_without_focus(digest: DigestRun) -> DigestRun:
+    return _clone_digest(
+        digest,
+        focus_items=[],
+    )
+
+
+def _clone_digest(
+    digest: DigestRun,
+    *,
+    focus_items: list[FocusItem],
+) -> DigestRun:
     return DigestRun(
         generated_at=digest.generated_at,
         timezone=digest.timezone,
@@ -179,13 +193,46 @@ def _digest_without_focus(digest: DigestRun) -> DigestRun:
             for feed in digest.feeds
         ],
         highlights=list(digest.highlights),
-        focus_items=[],
+        focus_items=list(focus_items),
         topic_sections=list(digest.topic_sections),
         template=digest.template,
         default_sort_by=digest.default_sort_by,
         sort_summary=digest.sort_summary,
         ranking_weights=dict(digest.ranking_weights),
     )
+
+
+def _filter_focus_for_delivery(
+    digest: DigestRun,
+    delivery: DeliveryConfig,
+) -> DigestRun:
+    if not digest.focus_items:
+        return digest
+
+    filtered_items = list(digest.focus_items)
+    allowed_statuses = set(_focus_statuses(delivery))
+    if allowed_statuses:
+        filtered_items = [
+            item
+            for item in filtered_items
+            if item.feedback_status in allowed_statuses
+        ]
+
+    allowed_reasons = set(_focus_reasons(delivery))
+    if allowed_reasons:
+        filtered_items = [
+            item
+            for item in filtered_items
+            if any(reason in allowed_reasons for reason in item.reasons)
+        ]
+
+    max_items = _focus_max_items(delivery)
+    if max_items is not None:
+        filtered_items = filtered_items[:max_items]
+
+    if filtered_items == digest.focus_items:
+        return digest
+    return _clone_digest(digest, focus_items=filtered_items)
 
 
 def send_configured_deliveries(config: AppConfig, digest: DigestRun) -> list[str]:
@@ -429,6 +476,24 @@ def _focus_target(
     delivery: DeliveryConfig,
 ) -> str:
     return delivery.focus_target
+
+
+def _focus_statuses(
+    delivery: DeliveryConfig,
+) -> Sequence[str]:
+    return delivery.focus_statuses
+
+
+def _focus_reasons(
+    delivery: DeliveryConfig,
+) -> Sequence[str]:
+    return delivery.focus_reasons
+
+
+def _focus_max_items(
+    delivery: DeliveryConfig,
+) -> int | None:
+    return delivery.focus_max_items
 
 
 def _title_prefix(
