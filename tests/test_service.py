@@ -821,10 +821,12 @@ class GenerateDigestTests(unittest.TestCase):
                     "arxiv:2604.06170": FeedbackEntry(
                         status="star",
                         updated_at=datetime(2026, 4, 9, 8, 0, tzinfo=ZoneInfo("UTC")),
+                        note="seed paper for the agent track",
                     ),
                     follow_up_canonical_id: FeedbackEntry(
                         status="follow_up",
                         updated_at=datetime(2026, 4, 8, 8, 0, tzinfo=ZoneInfo("UTC")),
+                        note="recheck if this resurfaces",
                     ),
                 }
             )
@@ -842,10 +844,18 @@ class GenerateDigestTests(unittest.TestCase):
             focus_by_id["arxiv:2604.06170"].reasons,
             ["new_starred", "starred_momentum"],
         )
+        self.assertEqual(
+            focus_by_id["arxiv:2604.06170"].feedback_note,
+            "seed paper for the agent track",
+        )
         self.assertIn("LLM", focus_by_id["arxiv:2604.06170"].feed_names)
         self.assertEqual(
             focus_by_id[follow_up_canonical_id].reasons,
             ["follow_up_resurfaced"],
+        )
+        self.assertEqual(
+            focus_by_id[follow_up_canonical_id].feedback_note,
+            "recheck if this resurfaces",
         )
         self.assertIn("PubMed AI", focus_by_id[follow_up_canonical_id].feed_names)
         self.assertEqual(len(digest.feeds[1].papers), 0)

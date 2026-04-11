@@ -16,6 +16,7 @@ from .config import FeedbackConfig, FeedbackStatus
 class FeedbackEntry:
     status: FeedbackStatus
     updated_at: datetime | None = None
+    note: str | None = None
 
 
 @dataclass(slots=True)
@@ -79,11 +80,39 @@ def set_feedback_status(
     canonical_id: str,
     status: FeedbackStatus,
     updated_at: datetime | None = None,
+    note: str | None = None,
 ) -> FeedbackEntry:
     normalized_id = normalize_feedback_canonical_id(canonical_id)
+    existing = feedback_state.papers.get(normalized_id)
+    normalized_note = (
+        existing.note
+        if note is None and existing is not None
+        else _normalize_note(note)
+    )
     entry = FeedbackEntry(
         status=status,
         updated_at=updated_at or datetime.now(UTC),
+        note=normalized_note,
+    )
+    feedback_state.papers[normalized_id] = entry
+    return entry
+
+
+def set_feedback_note(
+    feedback_state: FeedbackState,
+    *,
+    canonical_id: str,
+    note: str,
+    updated_at: datetime | None = None,
+) -> FeedbackEntry | None:
+    normalized_id = normalize_feedback_canonical_id(canonical_id)
+    existing = feedback_state.papers.get(normalized_id)
+    if existing is None:
+        return None
+    entry = FeedbackEntry(
+        status=existing.status,
+        updated_at=updated_at or datetime.now(UTC),
+        note=_normalize_note(note),
     )
     feedback_state.papers[normalized_id] = entry
     return entry
@@ -96,6 +125,24 @@ def clear_feedback_status(
 ) -> bool:
     normalized_id = normalize_feedback_canonical_id(canonical_id)
     return feedback_state.papers.pop(normalized_id, None) is not None
+
+
+def clear_feedback_note(
+    feedback_state: FeedbackState,
+    *,
+    canonical_id: str,
+    updated_at: datetime | None = None,
+) -> bool:
+    normalized_id = normalize_feedback_canonical_id(canonical_id)
+    existing = feedback_state.papers.get(normalized_id)
+    if existing is None or existing.note is None:
+        return False
+    feedback_state.papers[normalized_id] = FeedbackEntry(
+        status=existing.status,
+        updated_at=updated_at or datetime.now(UTC),
+        note=None,
+    )
+    return True
 
 
 def list_feedback_entries(
@@ -136,6 +183,7 @@ def apply_feedback_to_papers(
             continue
 
         paper.feedback_status = entry.status
+        paper.feedback_note = entry.note
         if entry.status == "ignore" and config.hide_ignored:
             continue
         if entry.status == "star":
@@ -213,7 +261,11 @@ def _parse_feedback_entry(value: object) -> FeedbackEntry | None:
     if status is None:
         return None
     updated_at = _parse_optional_datetime(value.get("updated_at"))
-    return FeedbackEntry(status=status, updated_at=updated_at)
+    return FeedbackEntry(
+        status=status,
+        updated_at=updated_at,
+        note=_normalize_note(value.get("note")),
+    )
 
 
 def _feedback_status(value: object) -> FeedbackStatus | None:
@@ -238,15 +290,28 @@ def _parse_optional_datetime(value: object) -> datetime | None:
 
 
 def _serialize_feedback_entry(entry: FeedbackEntry) -> object:
-    if entry.updated_at is None:
+    if entry.updated_at is None and entry.note is None:
         return entry.status
-    return {
+    payload: dict[str, object] = {
         "status": entry.status,
-        "updated_at": entry.updated_at.isoformat(),
     }
+    if entry.updated_at is not None:
+        payload["updated_at"] = entry.updated_at.isoformat()
+    if entry.note is not None:
+        payload["note"] = entry.note
+    return payload
 
 
 def _coerce_feedback_path(path: object) -> Path:
     if isinstance(path, Path):
         return path
     return Path(str(path))
+
+
+def _normalize_note(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    return normalized or None

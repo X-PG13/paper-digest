@@ -12,10 +12,12 @@ from paper_digest.feedback import (
     FeedbackEntry,
     FeedbackState,
     apply_feedback_to_papers,
+    clear_feedback_note,
     clear_feedback_status,
     list_feedback_entries,
     load_feedback,
     save_feedback_file,
+    set_feedback_note,
     set_feedback_status,
 )
 
@@ -51,6 +53,7 @@ class FeedbackTests(unittest.TestCase):
                             "doi:10.5555/example": {
                                 "status": "reading",
                                 "updated_at": "2026-04-10T09:15:00+08:00",
+                                "note": "compare with clinical baselines",
                             },
                             "title:ignored-entry": {
                                 "status": "unsupported",
@@ -73,6 +76,10 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(
             state.papers["doi:10.5555/example"].updated_at,
             datetime.fromisoformat("2026-04-10T09:15:00+08:00"),
+        )
+        self.assertEqual(
+            state.papers["doi:10.5555/example"].note,
+            "compare with clinical baselines",
         )
         self.assertNotIn("title:ignored-entry", state.papers)
 
@@ -154,7 +161,10 @@ class FeedbackTests(unittest.TestCase):
             feedback_state=FeedbackState(
                 papers={
                     "arxiv:2604.00005": FeedbackEntry(status="reading"),
-                    "arxiv:2604.00006": FeedbackEntry(status="done"),
+                    "arxiv:2604.00006": FeedbackEntry(
+                        status="done",
+                        note="already reviewed last week",
+                    ),
                 }
             ),
             config=FeedbackConfig(
@@ -168,6 +178,7 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(len(adjusted), 2)
         self.assertEqual(reading.feedback_status, "reading")
         self.assertEqual(done.feedback_status, "done")
+        self.assertEqual(done.feedback_note, "already reviewed last week")
         self.assertEqual(reading.base_relevance_score, 62)
         self.assertEqual(done.base_relevance_score, 25)
         self.assertIn("feedback: reading", reading.match_reasons)
@@ -181,10 +192,28 @@ class FeedbackTests(unittest.TestCase):
             canonical_id=" DOI:10.5555/Example ",
             status="star",
             updated_at=datetime.fromisoformat("2026-04-10T09:00:00+00:00"),
+            note="primary note",
         )
 
         self.assertEqual(entry.status, "star")
+        self.assertEqual(entry.note, "primary note")
         self.assertIn("doi:10.5555/example", state.papers)
+        updated = set_feedback_note(
+            state,
+            canonical_id="doi:10.5555/example",
+            note="secondary note",
+            updated_at=datetime.fromisoformat("2026-04-10T10:00:00+00:00"),
+        )
+        self.assertIsNotNone(updated)
+        assert updated is not None
+        self.assertEqual(updated.note, "secondary note")
+        self.assertTrue(
+            clear_feedback_note(
+                state,
+                canonical_id="doi:10.5555/example",
+            )
+        )
+        self.assertIsNone(state.papers["doi:10.5555/example"].note)
         self.assertTrue(
             clear_feedback_status(
                 state,
@@ -203,6 +232,7 @@ class FeedbackTests(unittest.TestCase):
                         updated_at=datetime.fromisoformat(
                             "2026-04-10T09:15:00+08:00"
                         ),
+                        note="finished and archived",
                     )
                 }
             )
@@ -216,5 +246,9 @@ class FeedbackTests(unittest.TestCase):
             )
 
         self.assertEqual(loaded.papers["doi:10.5555/example"].status, "done")
+        self.assertEqual(
+            loaded.papers["doi:10.5555/example"].note,
+            "finished and archived",
+        )
         listed = list_feedback_entries(loaded)
         self.assertEqual(listed[0][0], "doi:10.5555/example")

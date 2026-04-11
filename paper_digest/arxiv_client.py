@@ -63,6 +63,7 @@ class Paper:
     relevance_score: int = 0
     match_reasons: list[str] = field(default_factory=list)
     feedback_status: FeedbackStatus | None = None
+    feedback_note: str | None = None
 
     def __post_init__(self) -> None:
         self.doi = (
@@ -94,6 +95,7 @@ class Paper:
         if self.relevance_score < self.base_relevance_score:
             self.relevance_score = self.base_relevance_score
         self.match_reasons = _merge_unique_strings(self.match_reasons)
+        self.feedback_note = _normalize_optional_note(self.feedback_note)
 
     def to_dict(self) -> dict[str, object]:
         data = asdict(self)
@@ -154,6 +156,7 @@ class Paper:
         )
         self.relevance_score = max(self.relevance_score, other.relevance_score)
         self.feedback_status = preferred.feedback_status or secondary.feedback_status
+        self.feedback_note = preferred.feedback_note or secondary.feedback_note
         self.match_reasons = _merge_unique_strings(
             [*self.match_reasons, *other.match_reasons]
         )
@@ -324,6 +327,13 @@ def _merge_unique_strings(values: Iterable[str]) -> list[str]:
         seen.add(key)
         merged.append(normalized)
     return merged
+
+
+def _normalize_optional_note(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
 
 
 def _normalize_source_urls(
