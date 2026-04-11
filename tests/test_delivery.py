@@ -163,6 +163,66 @@ class DeliveryTests(unittest.TestCase):
         self.assertIn("# Daily Paper Focus", messages[0].body)
         self.assertIn("Why it was pushed", messages[0].body)
 
+    def test_build_notification_messages_can_exclude_focus_from_delivery(self) -> None:
+        delivery = FeishuWebhookConfig(
+            webhook_url="https://open.feishu.cn/example",
+            title_prefix="[Robot]",
+            skip_if_empty=True,
+            target="digest",
+            include_focus=False,
+        )
+        digest = build_digest()
+        digest.focus_items = [
+            FocusItem(
+                canonical_id="arxiv:2604.06170",
+                title="Paper Circle",
+                abstract_url="https://arxiv.org/abs/2604.06170v1",
+                summary="Framework summary",
+                source_label="arxiv",
+                feedback_status="star",
+                reasons=["new_starred"],
+                feed_names=["LLM"],
+            )
+        ]
+
+        messages = build_notification_messages(delivery, digest)
+
+        self.assertEqual(len(messages), 1)
+        self.assertNotIn("Focus=1", messages[0].title)
+        self.assertNotIn("## Focus 区块", messages[0].body)
+
+    def test_build_notification_messages_can_send_separate_focus_brief(self) -> None:
+        delivery = FeishuWebhookConfig(
+            webhook_url="https://open.feishu.cn/example",
+            title_prefix="[Robot]",
+            skip_if_empty=True,
+            target="digest",
+            include_focus=True,
+            focus_target="separate",
+        )
+        digest = build_digest()
+        digest.focus_items = [
+            FocusItem(
+                canonical_id="arxiv:2604.06170",
+                title="Paper Circle",
+                abstract_url="https://arxiv.org/abs/2604.06170v1",
+                summary="Framework summary",
+                source_label="arxiv",
+                feedback_status="star",
+                reasons=["new_starred"],
+                feed_names=["LLM"],
+            )
+        ]
+
+        messages = build_notification_messages(delivery, digest)
+
+        self.assertEqual(len(messages), 2)
+        self.assertEqual(messages[0].kind, "digest")
+        self.assertEqual(messages[1].kind, "focus")
+        self.assertNotIn("## Focus 区块", messages[0].body)
+        self.assertIn("## Focus 区块", messages[1].body)
+        self.assertIn("Focus Brief", messages[1].title)
+
     @patch("paper_digest.delivery.send_wecom_message")
     @patch("paper_digest.delivery.send_slack_message")
     @patch("paper_digest.delivery.send_discord_message")
@@ -302,6 +362,64 @@ class DeliveryTests(unittest.TestCase):
             receipts,
             [
                 "Feishu webhook sent to https://open.feishu.cn/example "
-                "(Focus=1, follow_up=1)"
+                "for Focus (Focus=1, follow_up=1)"
+            ],
+        )
+
+    @patch("paper_digest.delivery.send_feishu_message")
+    def test_send_configured_deliveries_sends_separate_focus_message(
+        self,
+        mock_send_feishu_message,
+    ) -> None:
+        digest = build_digest()
+        digest.focus_items = [
+            FocusItem(
+                canonical_id="pubmed:41951858",
+                title="ClinicRealm",
+                abstract_url="https://pubmed.ncbi.nlm.nih.gov/41951858/",
+                summary="Clinical prediction benchmark.",
+                source_label="PubMed",
+                feedback_status="follow_up",
+                reasons=["follow_up_resurfaced"],
+                feed_names=["PubMed AI"],
+            )
+        ]
+        config = AppConfig(
+            timezone="UTC",
+            lookback_hours=24,
+            output_dir=Path("output"),
+            request_delay_seconds=0.0,
+            feeds=[],
+            state=StateConfig(
+                enabled=True,
+                path=Path("state.json"),
+                retention_days=90,
+            ),
+            deliveries=[
+                FeishuWebhookConfig(
+                    webhook_url="https://open.feishu.cn/example",
+                    title_prefix="[Robot]",
+                    skip_if_empty=True,
+                    target="digest",
+                    include_focus=True,
+                    focus_target="separate",
+                )
+            ],
+        )
+
+        receipts = send_configured_deliveries(config, digest)
+
+        self.assertEqual(mock_send_feishu_message.call_count, 2)
+        self.assertEqual(
+            receipts,
+            [
+                (
+                    "Feishu webhook sent to https://open.feishu.cn/example "
+                    "(LLM=1, Vision=0)"
+                ),
+                (
+                    "Feishu webhook sent to https://open.feishu.cn/example "
+                    "for Focus (Focus=1, follow_up=1)"
+                ),
             ],
         )

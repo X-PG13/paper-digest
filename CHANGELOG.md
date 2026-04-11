@@ -32,6 +32,8 @@ Versioning.
 - Notifications now support a feedback-driven `Focus` block with configurable
   `[notify]` rules for newly starred papers, resurfaced follow-up papers, and
   starred papers that newly enter the momentum view.
+- Deliveries can now opt in or out of Focus independently and choose whether
+  Focus stays inline with the digest or gets emitted as a separate `Focus Brief`.
 - The manual `Daily Digest` workflow now accepts a temporary `config.toml`
   override input and isolates those validation runs from caches and Pages
   deployment.

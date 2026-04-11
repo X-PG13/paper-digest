@@ -189,6 +189,8 @@ max_items = 10
 # subject_prefix = "[Paper Digest]"
 # skip_if_empty = true
 # target = "digest"
+# include_focus = true
+# focus_target = "digest"
 
 # Example Feishu webhook delivery:
 # [[deliveries]]
@@ -197,6 +199,8 @@ max_items = 10
 # title_prefix = "[Paper Digest]"
 # skip_if_empty = true
 # target = "per_feed"
+# include_focus = true
+# focus_target = "separate"
 
 # Example WeCom webhook delivery:
 # [[deliveries]]
@@ -205,6 +209,8 @@ max_items = 10
 # title_prefix = "[Paper Digest]"
 # skip_if_empty = true
 # target = "per_feed"
+# include_focus = false
+# focus_target = "digest"
 
 # Example Slack webhook delivery:
 # [[deliveries]]
@@ -213,6 +219,8 @@ max_items = 10
 # title_prefix = "[Paper Digest]"
 # skip_if_empty = true
 # target = "per_feed"
+# include_focus = true
+# focus_target = "digest"
 
 # Example Discord webhook delivery:
 # [[deliveries]]
@@ -221,6 +229,8 @@ max_items = 10
 # title_prefix = "[Paper Digest]"
 # skip_if_empty = true
 # target = "per_feed"
+# include_focus = true
+# focus_target = "digest"
 
 # Example Telegram bot delivery:
 # [[deliveries]]
@@ -230,6 +240,8 @@ max_items = 10
 # title_prefix = "[Paper Digest]"
 # skip_if_empty = true
 # target = "per_feed"
+# include_focus = true
+# focus_target = "digest"
 
 # Legacy email configuration is still supported:
 # [email]
@@ -245,3 +257,5 @@ max_items = 10
 # subject_prefix = "[Paper Digest]"
 # skip_if_empty = true
 # target = "digest"
+# include_focus = true
+# focus_target = "digest"

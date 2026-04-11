@@ -286,6 +286,8 @@ use_starttls = false
 subject_prefix = "[Paper Digest]"
 skip_if_empty = true
 target = "digest"
+include_focus = true
+focus_target = "digest"
 
 [[deliveries]]
 type = "feishu_webhook"
@@ -293,6 +295,8 @@ webhook_url = "https://open.feishu.cn/open-apis/bot/v2/hook/your-token"
 title_prefix = "[Paper Digest]"
 skip_if_empty = true
 target = "per_feed"
+include_focus = true
+focus_target = "separate"
 
 [[deliveries]]
 type = "wecom_webhook"
@@ -300,6 +304,8 @@ webhook_url = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=your-key"
 title_prefix = "[Paper Digest]"
 skip_if_empty = true
 target = "per_feed"
+include_focus = false
+focus_target = "digest"
 
 [[deliveries]]
 type = "slack_webhook"
@@ -347,6 +353,11 @@ Notes:
 - `target = "digest"` sends one message for the whole run.
 - `target = "per_feed"` sends one message per feed, with the title including
   the date and that feed's hit count.
+- `include_focus = false` keeps the delivery on the normal digest path without
+  the feedback-driven Focus block.
+- `focus_target = "digest"` keeps Focus inline with the main digest, while
+  `focus_target = "separate"` emits a second `Focus Brief` message for that
+  delivery when focus items exist.
 - Legacy `[email]` config is still supported for backward compatibility.
 - Delivery failures return a non-zero exit code, keep generated artifacts on
   disk, and do not persist dedup state for that run.

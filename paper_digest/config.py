@@ -15,6 +15,7 @@ class ConfigError(ValueError):
 
 FeedSource = Literal["arxiv", "crossref", "pubmed", "semantic_scholar", "openalex"]
 DeliveryTarget = Literal["digest", "per_feed"]
+DeliveryFocusTarget = Literal["digest", "separate"]
 DeliveryType = Literal[
     "email",
     "feishu_webhook",
@@ -57,6 +58,8 @@ class EmailConfig:
     subject_prefix: str
     skip_if_empty: bool
     target: DeliveryTarget = "digest"
+    include_focus: bool = True
+    focus_target: DeliveryFocusTarget = "digest"
 
 
 @dataclass(slots=True, frozen=True)
@@ -65,6 +68,8 @@ class FeishuWebhookConfig:
     title_prefix: str
     skip_if_empty: bool
     target: DeliveryTarget = "digest"
+    include_focus: bool = True
+    focus_target: DeliveryFocusTarget = "digest"
 
 
 @dataclass(slots=True, frozen=True)
@@ -73,6 +78,8 @@ class WeComWebhookConfig:
     title_prefix: str
     skip_if_empty: bool
     target: DeliveryTarget = "digest"
+    include_focus: bool = True
+    focus_target: DeliveryFocusTarget = "digest"
 
 
 @dataclass(slots=True, frozen=True)
@@ -81,6 +88,8 @@ class SlackWebhookConfig:
     title_prefix: str
     skip_if_empty: bool
     target: DeliveryTarget = "digest"
+    include_focus: bool = True
+    focus_target: DeliveryFocusTarget = "digest"
 
 
 @dataclass(slots=True, frozen=True)
@@ -89,6 +98,8 @@ class DiscordWebhookConfig:
     title_prefix: str
     skip_if_empty: bool
     target: DeliveryTarget = "digest"
+    include_focus: bool = True
+    focus_target: DeliveryFocusTarget = "digest"
 
 
 @dataclass(slots=True, frozen=True)
@@ -98,6 +109,8 @@ class TelegramBotConfig:
     title_prefix: str
     skip_if_empty: bool
     target: DeliveryTarget = "digest"
+    include_focus: bool = True
+    focus_target: DeliveryFocusTarget = "digest"
 
 
 DeliveryConfig = (
@@ -623,6 +636,14 @@ def _build_email_config(value: dict[str, Any], field_name: str) -> EmailConfig:
             value.get("target", "digest"),
             f"{field_name}.target",
         ),
+        include_focus=_bool(
+            value.get("include_focus", True),
+            f"{field_name}.include_focus",
+        ),
+        focus_target=_delivery_focus_target(
+            value.get("focus_target", "digest"),
+            f"{field_name}.focus_target",
+        ),
     )
 
 
@@ -646,6 +667,14 @@ def _build_feishu_webhook_config(
         target=_delivery_target(
             value.get("target", "digest"),
             f"{field_name}.target",
+        ),
+        include_focus=_bool(
+            value.get("include_focus", True),
+            f"{field_name}.include_focus",
+        ),
+        focus_target=_delivery_focus_target(
+            value.get("focus_target", "digest"),
+            f"{field_name}.focus_target",
         ),
     )
 
@@ -671,6 +700,14 @@ def _build_wecom_webhook_config(
             value.get("target", "digest"),
             f"{field_name}.target",
         ),
+        include_focus=_bool(
+            value.get("include_focus", True),
+            f"{field_name}.include_focus",
+        ),
+        focus_target=_delivery_focus_target(
+            value.get("focus_target", "digest"),
+            f"{field_name}.focus_target",
+        ),
     )
 
 
@@ -694,6 +731,14 @@ def _build_slack_webhook_config(
         target=_delivery_target(
             value.get("target", "digest"),
             f"{field_name}.target",
+        ),
+        include_focus=_bool(
+            value.get("include_focus", True),
+            f"{field_name}.include_focus",
+        ),
+        focus_target=_delivery_focus_target(
+            value.get("focus_target", "digest"),
+            f"{field_name}.focus_target",
         ),
     )
 
@@ -719,6 +764,14 @@ def _build_discord_webhook_config(
             value.get("target", "digest"),
             f"{field_name}.target",
         ),
+        include_focus=_bool(
+            value.get("include_focus", True),
+            f"{field_name}.include_focus",
+        ),
+        focus_target=_delivery_focus_target(
+            value.get("focus_target", "digest"),
+            f"{field_name}.focus_target",
+        ),
     )
 
 
@@ -741,6 +794,14 @@ def _build_telegram_bot_config(
         target=_delivery_target(
             value.get("target", "digest"),
             f"{field_name}.target",
+        ),
+        include_focus=_bool(
+            value.get("include_focus", True),
+            f"{field_name}.include_focus",
+        ),
+        focus_target=_delivery_focus_target(
+            value.get("focus_target", "digest"),
+            f"{field_name}.focus_target",
         ),
     )
 
@@ -862,6 +923,18 @@ def _delivery_target(value: Any, field_name: str) -> DeliveryTarget:
     if normalized == "digest":
         return "digest"
     return "per_feed"
+
+
+def _delivery_focus_target(value: Any, field_name: str) -> DeliveryFocusTarget:
+    if not isinstance(value, str):
+        raise ConfigError(f"{field_name} must be 'digest' or 'separate'")
+
+    normalized = value.strip().lower()
+    if normalized not in {"digest", "separate"}:
+        raise ConfigError(f"{field_name} must be 'digest' or 'separate'")
+    if normalized == "digest":
+        return "digest"
+    return "separate"
 
 
 def _analysis_provider(value: Any, field_name: str) -> AnalysisProvider:
