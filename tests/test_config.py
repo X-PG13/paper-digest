@@ -189,6 +189,8 @@ class LoadConfigTests(unittest.TestCase):
                     title_prefix = "[Robot]"
                     skip_if_empty = true
                     target = "digest"
+                    include_focus = false
+                    focus_target = "digest"
 
                     [[deliveries]]
                     type = "wecom_webhook"
@@ -196,6 +198,7 @@ class LoadConfigTests(unittest.TestCase):
                     title_prefix = "[WeCom]"
                     skip_if_empty = false
                     target = "digest"
+                    focus_target = "separate"
 
                     [[deliveries]]
                     type = "slack_webhook"
@@ -232,6 +235,8 @@ class LoadConfigTests(unittest.TestCase):
         self.assertEqual(config.deliveries[3].target, "per_feed")
         self.assertEqual(config.deliveries[4].target, "digest")
         self.assertEqual(config.deliveries[5].target, "per_feed")
+        self.assertFalse(config.deliveries[1].include_focus)
+        self.assertEqual(config.deliveries[2].focus_target, "separate")
 
     def test_load_config_reads_analysis_settings(self) -> None:
         with TemporaryDirectory() as temp_dir:

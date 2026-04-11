@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from .config import (
     AppConfig,
@@ -42,6 +43,7 @@ class NotificationMessage:
     body: str
     summary: str
     feed_name: str | None = None
+    kind: str = "digest"
 
 
 def configured_deliveries(
@@ -63,28 +65,127 @@ def build_notification_messages(
 ) -> list[NotificationMessage]:
     """Build delivery messages according to channel policy."""
 
-    if _delivery_target(delivery) == "per_feed":
-        return [
-            _build_notification_message(
-                delivery,
-                _single_feed_digest(digest, feed),
-                feed.name,
-                feedback_only=feedback_only,
-            )
-            for feed in digest.feeds
-            if _digest_has_notification_content(
-                _single_feed_digest(digest, feed),
-                feedback_only=feedback_only,
-            )
-            or not _skip_if_empty(delivery)
-        ]
+    if feedback_only:
+        if not _include_focus(delivery):
+            return []
+        if _skip_if_empty(delivery) and not digest.focus_items:
+            return []
+        return [_build_focus_notification_message(delivery, digest)]
 
-    if _skip_if_empty(delivery) and not _digest_has_notification_content(
+    digest_for_digest = _digest_without_focus(digest)
+    if _include_focus(delivery) and _focus_target(delivery) == "digest":
+        digest_for_digest = digest
+
+    messages: list[NotificationMessage] = []
+    if _delivery_target(delivery) == "per_feed":
+        for feed in digest_for_digest.feeds:
+            feed_digest = _single_feed_digest(digest_for_digest, feed)
+            if _skip_if_empty(delivery) and not _digest_has_notification_content(
+                feed_digest,
+                feedback_only=False,
+            ):
+                continue
+            messages.append(
+                _build_digest_notification_message(
+                    delivery,
+                    feed_digest,
+                    feed_name=feed.name,
+                )
+            )
+    else:
+        if not (_skip_if_empty(delivery) and not _digest_has_notification_content(
+            digest_for_digest,
+            feedback_only=False,
+        )):
+            messages.append(
+                _build_digest_notification_message(
+                    delivery,
+                    digest_for_digest,
+                )
+            )
+
+    if _include_focus(delivery) and _focus_target(delivery) == "separate":
+        if digest.focus_items:
+            messages.append(_build_focus_notification_message(delivery, digest))
+    return messages
+
+
+def _build_digest_notification_message(
+    delivery: DeliveryConfig,
+    digest: DigestRun,
+    *,
+    feed_name: str | None = None,
+) -> NotificationMessage:
+    return _build_notification_message(
+        delivery,
+        digest,
+        feed_name=feed_name,
+        feedback_only=False,
+        kind="digest",
+    )
+
+
+def _build_focus_notification_message(
+    delivery: DeliveryConfig,
+    digest: DigestRun,
+) -> NotificationMessage:
+    return _build_notification_message(
+        delivery,
+        digest,
+        feedback_only=True,
+        kind="focus",
+    )
+
+
+def _build_notification_message(
+    delivery: DeliveryConfig,
+    digest: DigestRun,
+    feed_name: str | None = None,
+    *,
+    feedback_only: bool = False,
+    kind: str = "digest",
+) -> NotificationMessage:
+    summary = _notification_summary(
         digest,
         feedback_only=feedback_only,
-    ):
-        return []
-    return [_build_notification_message(delivery, digest, feedback_only=feedback_only)]
+        include_focus=(not feedback_only and bool(digest.focus_items)),
+    )
+    return NotificationMessage(
+        title=_build_title(
+            delivery,
+            generated_at=digest.generated_at,
+            summary=summary,
+            kind=kind,
+        ),
+        body=render_notification_markdown(digest, feedback_only=feedback_only),
+        summary=summary,
+        feed_name=feed_name,
+        kind=kind,
+    )
+
+
+def _digest_without_focus(digest: DigestRun) -> DigestRun:
+    return DigestRun(
+        generated_at=digest.generated_at,
+        timezone=digest.timezone,
+        lookback_hours=digest.lookback_hours,
+        feeds=[
+            FeedDigest(
+                name=feed.name,
+                papers=list(feed.papers),
+                key_points=list(feed.key_points),
+                sort_by=feed.sort_by,
+            )
+            for feed in digest.feeds
+        ],
+        highlights=list(digest.highlights),
+        focus_items=[],
+        topic_sections=list(digest.topic_sections),
+        template=digest.template,
+        default_sort_by=digest.default_sort_by,
+        sort_summary=digest.sort_summary,
+        ranking_weights=dict(digest.ranking_weights),
+    )
 
 
 def send_configured_deliveries(config: AppConfig, digest: DigestRun) -> list[str]:
@@ -119,31 +220,18 @@ def send_configured_deliveries(config: AppConfig, digest: DigestRun) -> list[str
     return receipts
 
 
-def _build_notification_message(
-    delivery: DeliveryConfig,
-    digest: DigestRun,
-    feed_name: str | None = None,
-    *,
-    feedback_only: bool = False,
-) -> NotificationMessage:
-    summary = _notification_summary(digest, feedback_only=feedback_only)
-    return NotificationMessage(
-        title=_build_title(delivery, digest, summary=summary),
-        body=render_notification_markdown(digest, feedback_only=feedback_only),
-        summary=summary,
-        feed_name=feed_name,
-    )
-
-
 def _build_title(
     delivery: DeliveryConfig,
-    digest: DigestRun,
     *,
+    generated_at: datetime,
     summary: str,
+    kind: str,
 ) -> str:
-    date_label = digest.generated_at.strftime("%Y-%m-%d")
     prefix = _title_prefix(delivery).strip()
-    return f"{prefix} {date_label} | {summary}".strip()
+    focus_suffix = " Focus Brief" if kind == "focus" else ""
+    dated_prefix = f"{prefix}{focus_suffix}".strip()
+    date_label = generated_at.strftime("%Y-%m-%d")
+    return f"{dated_prefix} {date_label} | {summary}".strip()
 
 
 def _single_feed_digest(digest: DigestRun, feed: FeedDigest) -> DigestRun:
@@ -161,6 +249,7 @@ def _single_feed_digest(digest: DigestRun, feed: FeedDigest) -> DigestRun:
                 name=feed.name,
                 papers=list(feed.papers),
                 key_points=list(feed.key_points),
+                sort_by=feed.sort_by,
             )
         ],
         highlights=highlights,
@@ -231,12 +320,17 @@ def _format_topic_key_point(paper: object) -> str:
     return f"《{title}》{tag_label}：{summary_line}"
 
 
-def _notification_summary(digest: DigestRun, *, feedback_only: bool) -> str:
+def _notification_summary(
+    digest: DigestRun,
+    *,
+    feedback_only: bool,
+    include_focus: bool,
+) -> str:
     focus_summary = summarize_focus_items(digest)
     digest_summary = summarize_digest(digest)
     if feedback_only:
         return focus_summary
-    if digest.focus_items:
+    if include_focus and digest.focus_items:
         return f"{digest_summary} | {focus_summary}"
     return digest_summary
 
@@ -309,6 +403,8 @@ def _build_receipt(
     destination: str,
     message: NotificationMessage,
 ) -> str:
+    if message.kind == "focus":
+        return f"{channel_name} sent to {destination} for Focus ({message.summary})"
     if message.feed_name is not None:
         return (
             f"{channel_name} sent to {destination} "
@@ -321,6 +417,18 @@ def _skip_if_empty(
     delivery: DeliveryConfig,
 ) -> bool:
     return delivery.skip_if_empty
+
+
+def _include_focus(
+    delivery: DeliveryConfig,
+) -> bool:
+    return delivery.include_focus
+
+
+def _focus_target(
+    delivery: DeliveryConfig,
+) -> str:
+    return delivery.focus_target
 
 
 def _title_prefix(
