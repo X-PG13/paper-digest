@@ -547,6 +547,6 @@ def _feedback_status(value: object) -> FeedbackStatus | None:
     if not isinstance(value, str):
         return None
     normalized = value.strip().lower()
-    if normalized not in {"star", "follow_up", "ignore"}:
+    if normalized not in {"star", "follow_up", "reading", "done", "ignore"}:
         return None
     return cast(FeedbackStatus, normalized)

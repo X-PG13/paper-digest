@@ -64,6 +64,8 @@ python -m paper_digest --config config.toml
 - `output/latest.md`
 - `output/site/index.html`
 - `output/site/reading-list.html`
+- `output/site/review-queue.html`
+- `output/site/weekly-review.html`
 - `output/YYYY-MM-DD/digest.json`
 - `output/YYYY-MM-DD/digest.md`
 
@@ -194,19 +196,25 @@ enabled = true
 path = ".paper-digest-state/feedback.json"
 star_boost = 80
 follow_up_boost = 35
+reading_boost = 18
+done_penalty = 20
 ignore_penalty = 120
 hide_ignored = true
 ```
 
 - Feedback is keyed by canonical paper identity: DOI first, then arXiv id,
   then a normalized title fallback.
-- Supported statuses are `star`, `follow_up`, and `ignore`.
-- `star` and `follow_up` boost ranking; `ignore` either hides papers or
-  down-ranks them, depending on `hide_ignored`.
+- Supported statuses are `star`, `follow_up`, `reading`, `done`, and `ignore`.
+- `star`, `follow_up`, and `reading` boost ranking; `done` lowers priority;
+  `ignore` either hides papers or down-ranks them, depending on
+  `hide_ignored`.
 - The archive site exposes a dedicated `output/site/reading-list.html` page
-  that aggregates starred and follow-up papers.
+  that aggregates starred, follow-up, and in-progress papers.
 - The archive site also exposes `output/site/weekly-review.html`, which groups
-  starred and follow-up papers into weekly review buckets.
+  papers into pending, in-progress, completed, and resurfaced buckets.
+- The archive site exposes `output/site/review-queue.html`, which highlights
+  newly surfaced unmarked papers, resurfaced follow-ups, and starred papers
+  that still need action.
 
 Notification focus:
 
@@ -238,8 +246,8 @@ Example feedback file:
       "status": "star",
       "updated_at": "2026-04-10T09:15:00+08:00"
     },
-    "arxiv:2604.00001": "follow_up",
-    "title:example-normalized-title": "ignore"
+    "arxiv:2604.00001": "reading",
+    "title:example-normalized-title": "done"
   }
 }
 ```
@@ -249,6 +257,8 @@ You can manage that file without editing JSON directly:
 ```bash
 python -m paper_digest feedback set 'doi:10.5555/paper-circle' star --config config.toml
 python -m paper_digest feedback set 'doi:10.5555/paper-circle' follow_up --config config.toml
+python -m paper_digest feedback set 'doi:10.5555/paper-circle' reading --config config.toml
+python -m paper_digest feedback set 'doi:10.5555/paper-circle' done --config config.toml
 python -m paper_digest feedback clear 'doi:10.5555/paper-circle' --config config.toml
 python -m paper_digest feedback list --config config.toml
 ```
@@ -531,9 +541,12 @@ The CLI also rebuilds `output/site/index.html` on every run. That static site:
 - emits a `output/site/momentum.html` view for papers that keep resurfacing
   across multiple dates or feeds, with first-seen and last-seen timestamps
 - emits a `output/site/reading-list.html` view for papers you have starred or
-  marked for follow-up in the local feedback state
-- emits a `output/site/weekly-review.html` view that groups starred and
-  follow-up papers into weekly review sections
+  marked as follow-up or reading in the local feedback state
+- emits a `output/site/review-queue.html` view for actionable review work:
+  new high-signal unmarked papers, resurfaced follow-ups, and starred papers
+  that still need attention
+- emits a `output/site/weekly-review.html` view that groups papers into
+  pending, reading, completed, and resurfaced weekly review sections
 - emits fixed feed pages under `output/site/feeds/`
 - emits feed RSS files under `output/site/feeds/*.xml`
 - emits keyword tracking pages under `output/site/topics/` from configured feed keywords

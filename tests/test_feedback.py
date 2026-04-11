@@ -49,7 +49,7 @@ class FeedbackTests(unittest.TestCase):
                         "papers": {
                             "arxiv:2604.00001": "star",
                             "doi:10.5555/example": {
-                                "status": "follow_up",
+                                "status": "reading",
                                 "updated_at": "2026-04-10T09:15:00+08:00",
                             },
                             "title:ignored-entry": {
@@ -69,7 +69,7 @@ class FeedbackTests(unittest.TestCase):
             )
 
         self.assertEqual(state.papers["arxiv:2604.00001"].status, "star")
-        self.assertEqual(state.papers["doi:10.5555/example"].status, "follow_up")
+        self.assertEqual(state.papers["doi:10.5555/example"].status, "reading")
         self.assertEqual(
             state.papers["doi:10.5555/example"].updated_at,
             datetime.fromisoformat("2026-04-10T09:15:00+08:00"),
@@ -139,6 +139,40 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(adjusted[0].base_relevance_score, 15)
         self.assertIn("feedback: ignored", adjusted[0].match_reasons)
 
+    def test_apply_feedback_supports_reading_and_done_states(self) -> None:
+        reading = build_paper(
+            paper_id="http://arxiv.org/abs/2604.00005v1",
+            title="Reading queue paper",
+        )
+        done = build_paper(
+            paper_id="http://arxiv.org/abs/2604.00006v1",
+            title="Done paper",
+        )
+
+        adjusted = apply_feedback_to_papers(
+            [reading, done],
+            feedback_state=FeedbackState(
+                papers={
+                    "arxiv:2604.00005": FeedbackEntry(status="reading"),
+                    "arxiv:2604.00006": FeedbackEntry(status="done"),
+                }
+            ),
+            config=FeedbackConfig(
+                enabled=True,
+                path=Path("feedback.json"),
+                reading_boost=22,
+                done_penalty=15,
+            ),
+        )
+
+        self.assertEqual(len(adjusted), 2)
+        self.assertEqual(reading.feedback_status, "reading")
+        self.assertEqual(done.feedback_status, "done")
+        self.assertEqual(reading.base_relevance_score, 62)
+        self.assertEqual(done.base_relevance_score, 25)
+        self.assertIn("feedback: reading", reading.match_reasons)
+        self.assertIn("feedback: done", done.match_reasons)
+
     def test_set_and_clear_feedback_status_round_trip(self) -> None:
         state = FeedbackState(papers={})
 
@@ -165,7 +199,7 @@ class FeedbackTests(unittest.TestCase):
             state = FeedbackState(
                 papers={
                     "doi:10.5555/example": FeedbackEntry(
-                        status="follow_up",
+                        status="done",
                         updated_at=datetime.fromisoformat(
                             "2026-04-10T09:15:00+08:00"
                         ),
@@ -181,6 +215,6 @@ class FeedbackTests(unittest.TestCase):
                 )
             )
 
-        self.assertEqual(loaded.papers["doi:10.5555/example"].status, "follow_up")
+        self.assertEqual(loaded.papers["doi:10.5555/example"].status, "done")
         listed = list_feedback_entries(loaded)
         self.assertEqual(listed[0][0], "doi:10.5555/example")

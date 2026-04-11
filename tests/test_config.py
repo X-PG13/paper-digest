@@ -495,6 +495,8 @@ class LoadConfigTests(unittest.TestCase):
                     path = ".cache/feedback.json"
                     star_boost = 90
                     follow_up_boost = 40
+                    reading_boost = 20
+                    done_penalty = 25
                     ignore_penalty = 150
                     hide_ignored = false
                     """
@@ -511,6 +513,8 @@ class LoadConfigTests(unittest.TestCase):
         )
         self.assertEqual(config.feedback.star_boost, 90)
         self.assertEqual(config.feedback.follow_up_boost, 40)
+        self.assertEqual(config.feedback.reading_boost, 20)
+        self.assertEqual(config.feedback.done_penalty, 25)
         self.assertEqual(config.feedback.ignore_penalty, 150)
         self.assertFalse(config.feedback.hide_ignored)
 

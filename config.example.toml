@@ -33,6 +33,10 @@ path = ".paper-digest-state/feedback.json"
 star_boost = 80
 # Smaller boost for papers marked as follow-up.
 follow_up_boost = 35
+# Boost applied when a paper is actively being read.
+reading_boost = 18
+# Penalty applied to papers already marked as done.
+done_penalty = 20
 # Penalty applied when a paper is marked ignore but still kept visible.
 ignore_penalty = 120
 # Hide ignored papers from digest output by default.

@@ -19,9 +19,10 @@ Versioning.
 - Canonical paper detail pages now expose first-seen / last-seen history, and
   the archive site includes a dedicated rising-paper view for papers that keep
   resurfacing across multiple dates or feeds.
-- Local feedback state now supports `star`, `follow_up`, and `ignore` paper
-  statuses keyed by canonical id, with ranking effects plus a dedicated
-  reading-list archive page for starred and follow-up papers.
+- Local feedback state now supports `star`, `follow_up`, `reading`, `done`,
+  and `ignore` paper statuses keyed by canonical id, with ranking effects plus
+  dedicated reading-list, review-queue, and staged weekly-review archive
+  pages.
 - A feedback management CLI now supports `set`, `clear`, and `list`, and the
   archive site now exposes copyable canonical-id / feedback command helpers
   plus a weekly review page for starred and follow-up papers.

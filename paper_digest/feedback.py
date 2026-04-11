@@ -144,6 +144,15 @@ def apply_feedback_to_papers(
         elif entry.status == "follow_up":
             paper.base_relevance_score += config.follow_up_boost
             paper.match_reasons.append("feedback: follow up")
+        elif entry.status == "reading":
+            paper.base_relevance_score += config.reading_boost
+            paper.match_reasons.append("feedback: reading")
+        elif entry.status == "done":
+            paper.base_relevance_score = max(
+                0,
+                paper.base_relevance_score - config.done_penalty,
+            )
+            paper.match_reasons.append("feedback: done")
         else:
             paper.base_relevance_score = max(
                 0,
@@ -160,6 +169,8 @@ def feedback_label(status: FeedbackStatus | None) -> str | None:
     labels = {
         "star": "star",
         "follow_up": "follow_up",
+        "reading": "reading",
+        "done": "done",
         "ignore": "ignore",
     }
     return labels[status]
@@ -171,6 +182,8 @@ def feedback_label_zh(status: FeedbackStatus | None) -> str | None:
     labels = {
         "star": "标星",
         "follow_up": "待跟进",
+        "reading": "阅读中",
+        "done": "已完成",
         "ignore": "忽略",
     }
     return labels[status]
@@ -207,7 +220,7 @@ def _feedback_status(value: object) -> FeedbackStatus | None:
     if not isinstance(value, str):
         return None
     normalized = value.strip().lower()
-    if normalized not in {"star", "follow_up", "ignore"}:
+    if normalized not in {"star", "follow_up", "reading", "done", "ignore"}:
         return None
     return cast(FeedbackStatus, normalized)
 
