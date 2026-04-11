@@ -28,7 +28,7 @@ AnalysisProvider = Literal["openai"]
 AnalysisReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
 DigestTemplate = Literal["default", "zh_daily_brief"]
 SortMode = Literal["relevance", "published_at", "hybrid"]
-FeedbackStatus = Literal["star", "follow_up", "ignore"]
+FeedbackStatus = Literal["star", "follow_up", "reading", "done", "ignore"]
 FocusReason = Literal["new_starred", "follow_up_resurfaced", "starred_momentum"]
 
 
@@ -155,6 +155,8 @@ class FeedbackConfig:
     path: Path
     star_boost: int = 80
     follow_up_boost: int = 35
+    reading_boost: int = 18
+    done_penalty: int = 20
     ignore_penalty: int = 120
     hide_ignored: bool = True
 
@@ -400,6 +402,14 @@ def _load_feedback(value: Any, config_path: Path) -> FeedbackConfig:
         follow_up_boost=_non_negative_int(
             feedback.get("follow_up_boost", 35),
             "feedback.follow_up_boost",
+        ),
+        reading_boost=_non_negative_int(
+            feedback.get("reading_boost", 18),
+            "feedback.reading_boost",
+        ),
+        done_penalty=_non_negative_int(
+            feedback.get("done_penalty", 20),
+            "feedback.done_penalty",
         ),
         ignore_penalty=_non_negative_int(
             feedback.get("ignore_penalty", 120),

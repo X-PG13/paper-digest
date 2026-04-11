@@ -226,6 +226,27 @@ class CliTests(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             self.assertIn("star\tdoi:10.5555/example\t", stdout.getvalue())
 
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "feedback",
+                        "set",
+                        "doi:10.5555/example",
+                        "reading",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(feedback_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                payload["papers"]["doi:10.5555/example"]["status"],
+                "reading",
+            )
+            self.assertIn("Set doi:10.5555/example -> reading", stdout.getvalue())
+
     def test_feedback_clear_removes_entry(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

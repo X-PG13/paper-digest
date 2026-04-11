@@ -232,6 +232,10 @@ def build_archive_site(
         _render_reading_list_page(paper_details),
         encoding="utf-8",
     )
+    site_root.joinpath("review-queue.html").write_text(
+        _render_review_queue_page(paper_details),
+        encoding="utf-8",
+    )
 
     for overview in feed_overviews:
         feeds_root.joinpath(f"{overview.slug}.html").write_text(
@@ -1084,6 +1088,36 @@ def _build_rising_papers(paper_details: list[PaperDetail]) -> list[PaperDetail]:
     )
 
 
+def _feedback_stage_priority(status: FeedbackStatus | None) -> int:
+    priority = {
+        "star": 0,
+        "follow_up": 1,
+        "reading": 2,
+        "done": 3,
+        "ignore": 4,
+        None: 5,
+    }
+    return priority[status]
+
+
+def _review_anchor(paper_details: list[PaperDetail]) -> datetime | None:
+    if not paper_details:
+        return None
+    return max(
+        (detail.feedback_updated_at or detail.last_seen) for detail in paper_details
+    )
+
+
+def _is_same_iso_week(value: datetime, anchor: datetime) -> bool:
+    value_year, value_week, _ = value.isocalendar()
+    anchor_year, anchor_week, _ = anchor.isocalendar()
+    return (value_year, value_week) == (anchor_year, anchor_week)
+
+
+def _days_from_anchor(anchor: datetime, value: datetime) -> int:
+    return (anchor.date() - value.date()).days
+
+
 def _render_rising_paper_card(
     detail: PaperDetail,
     *,
@@ -1162,6 +1196,7 @@ def _render_momentum_page(paper_details: list[PaperDetail]) -> str:
             [
                 ("index.html", "返回归档首页"),
                 ("trends.html", "查看趋势总览"),
+                ("review-queue.html", "Review Queue"),
                 ("weekly-review.html", "周度回顾"),
                 ("reading-list.html", "阅读清单"),
                 ("latest.md", "最新 Markdown"),
@@ -1176,13 +1211,12 @@ def _build_reading_list(paper_details: list[PaperDetail]) -> list[PaperDetail]:
     reading_list = [
         detail
         for detail in paper_details
-        if detail.feedback_status in {"star", "follow_up"}
+        if detail.feedback_status in {"star", "follow_up", "reading"}
     ]
-    priority = {"star": 0, "follow_up": 1}
     return sorted(
         reading_list,
         key=lambda detail: (
-            priority[detail.feedback_status or "follow_up"],
+            _feedback_stage_priority(detail.feedback_status),
             -(detail.feedback_updated_at or detail.last_seen).timestamp(),
             -detail.paper.relevance_score,
             detail.paper.title.lower(),
@@ -1193,27 +1227,270 @@ def _build_reading_list(paper_details: list[PaperDetail]) -> list[PaperDetail]:
 def _build_weekly_review_sections(
     paper_details: list[PaperDetail],
 ) -> list[WeeklyReviewSection]:
-    grouped: dict[tuple[int, int], list[PaperDetail]] = {}
-    for detail in _build_reading_list(paper_details):
-        anchor = detail.feedback_updated_at or detail.last_seen
-        iso_year, iso_week, _ = anchor.isocalendar()
-        grouped.setdefault((iso_year, iso_week), []).append(detail)
+    anchor = _review_anchor(paper_details)
+    if anchor is None:
+        return []
+
+    pending = [
+        detail
+        for detail in paper_details
+        if detail.feedback_status in {"star", "follow_up"}
+        and _is_same_iso_week(detail.feedback_updated_at or detail.last_seen, anchor)
+    ]
+    pending.sort(
+        key=lambda detail: (
+            _feedback_stage_priority(detail.feedback_status),
+            -(detail.feedback_updated_at or detail.last_seen).timestamp(),
+            -detail.paper.relevance_score,
+            detail.paper.title.lower(),
+        )
+    )
+
+    reading = [
+        detail for detail in paper_details if detail.feedback_status == "reading"
+    ]
+    reading.sort(
+        key=lambda detail: (
+            -(detail.feedback_updated_at or detail.last_seen).timestamp(),
+            -detail.paper.relevance_score,
+            detail.paper.title.lower(),
+        )
+    )
+
+    done = [detail for detail in paper_details if detail.feedback_status == "done"]
+    done.sort(
+        key=lambda detail: (
+            -(detail.feedback_updated_at or detail.last_seen).timestamp(),
+            -detail.paper.relevance_score,
+            detail.paper.title.lower(),
+        )
+    )
+
+    resurfaced = [
+        detail
+        for detail in paper_details
+        if detail.feedback_status in {"star", "follow_up", "reading"}
+        and _is_same_iso_week(detail.last_seen, anchor)
+        and (detail.active_days > 1 or detail.active_feeds > 1)
+    ]
+    resurfaced.sort(
+        key=lambda detail: (
+            -detail.active_days,
+            -detail.active_feeds,
+            -detail.appearance_count,
+            -detail.last_seen.timestamp(),
+            -detail.paper.relevance_score,
+            detail.paper.title.lower(),
+        )
+    )
 
     sections: list[WeeklyReviewSection] = []
-    for (iso_year, iso_week), items in sorted(grouped.items(), reverse=True):
-        starred = sum(1 for item in items if item.feedback_status == "star")
-        follow_up = sum(1 for item in items if item.feedback_status == "follow_up")
+    if pending:
         sections.append(
             WeeklyReviewSection(
-                label=f"{iso_year} W{iso_week:02d}",
-                description=(
-                    f"本周共 {len(items)} 篇已标记论文，"
-                    f"其中 {starred} 篇标星，{follow_up} 篇待跟进。"
-                ),
-                items=items,
+                label="本周新增待处理",
+                description="最近一周新增的标星和待跟进论文，适合作为本周优先处理列表。",
+                items=pending,
+            )
+        )
+    if reading:
+        sections.append(
+            WeeklyReviewSection(
+                label="正在看",
+                description="已经进入阅读中的论文，适合在周中持续补充笔记或结论。",
+                items=reading,
+            )
+        )
+    if done:
+        sections.append(
+            WeeklyReviewSection(
+                label="已完成",
+                description="本周已经明确完成处理的论文，方便在周报里和待处理项分开回看。",
+                items=done,
+            )
+        )
+    if resurfaced:
+        sections.append(
+            WeeklyReviewSection(
+                label="再次提醒",
+                description="本周再次升温的已标记论文，适合作为周会前的二次提醒列表。",
+                items=resurfaced,
             )
         )
     return sections
+
+
+def _build_review_queue_sections(
+    paper_details: list[PaperDetail],
+) -> list[WeeklyReviewSection]:
+    anchor = _review_anchor(paper_details)
+    if anchor is None:
+        return []
+
+    unreviewed = [
+        detail
+        for detail in paper_details
+        if detail.feedback_status is None
+        and _days_from_anchor(anchor, detail.last_seen) <= 7
+    ]
+    unreviewed.sort(
+        key=lambda detail: (
+            -detail.paper.relevance_score,
+            -detail.last_seen.timestamp(),
+            detail.paper.title.lower(),
+        )
+    )
+
+    resurfaced_follow_up = [
+        detail
+        for detail in paper_details
+        if detail.feedback_status == "follow_up"
+        and _is_same_iso_week(detail.last_seen, anchor)
+        and (detail.active_days > 1 or detail.active_feeds > 1)
+    ]
+    resurfaced_follow_up.sort(
+        key=lambda detail: (
+            -detail.last_seen.timestamp(),
+            -detail.active_days,
+            -detail.active_feeds,
+            -detail.paper.relevance_score,
+            detail.paper.title.lower(),
+        )
+    )
+
+    starred_backlog = [
+        detail for detail in paper_details if detail.feedback_status == "star"
+    ]
+    starred_backlog.sort(
+        key=lambda detail: (
+            -(detail.feedback_updated_at or detail.last_seen).timestamp(),
+            -detail.paper.relevance_score,
+            detail.paper.title.lower(),
+        )
+    )
+
+    sections: list[WeeklyReviewSection] = []
+    if unreviewed:
+        sections.append(
+            WeeklyReviewSection(
+                label="新出现且未标记",
+                description="最近 7 天出现、相关性高但还没进入个人反馈状态的论文。",
+                items=unreviewed[:12],
+            )
+        )
+    if resurfaced_follow_up:
+        sections.append(
+            WeeklyReviewSection(
+                label="待跟进再次出现",
+                description="已经标记为待跟进、且本周又再次出现的论文。",
+                items=resurfaced_follow_up[:12],
+            )
+        )
+    if starred_backlog:
+        sections.append(
+            WeeklyReviewSection(
+                label="标星待处理",
+                description="已经标星、但还没有推进到阅读中或已完成阶段的论文。",
+                items=starred_backlog[:12],
+            )
+        )
+    return sections
+
+
+def _render_review_queue_page(paper_details: list[PaperDetail]) -> str:
+    sections = _build_review_queue_sections(paper_details)
+    section_blocks = (
+        "".join(
+            _render_section_block(
+                section.label,
+                section.description,
+                '<div class="subscription-grid">'
+                + "\n".join(
+                    _render_rising_paper_card(
+                        item,
+                        link_prefix="",
+                        kicker="Review Queue",
+                    )
+                    for item in section.items
+                )
+                + "</div>",
+            )
+            for section in sections
+        )
+        if sections
+        else _render_empty_state("当前还没有需要进入 review queue 的论文。")
+    )
+    pending_count = next(
+        (len(section.items) for section in sections if section.label == "标星待处理"),
+        0,
+    )
+    unreviewed_count = next(
+        (
+            len(section.items)
+            for section in sections
+            if section.label == "新出现且未标记"
+        ),
+        0,
+    )
+    resurfaced_count = next(
+        (
+            len(section.items)
+            for section in sections
+            if section.label == "待跟进再次出现"
+        ),
+        0,
+    )
+    stats = [
+        ArchiveStats(
+            "待判断",
+            unreviewed_count,
+            "篇高相关论文",
+            pending_count,
+            "篇标星待处理",
+        ),
+        ArchiveStats(
+            "再次出现",
+            resurfaced_count,
+            "篇待跟进论文",
+            len(sections),
+            "个队列区块",
+        ),
+        ArchiveStats(
+            "阅读推进",
+            sum(1 for detail in paper_details if detail.feedback_status == "reading"),
+            "篇阅读中",
+            sum(1 for detail in paper_details if detail.feedback_status == "done"),
+            "篇已完成",
+        ),
+    ]
+    content = (
+        '<section class="section-grid">'
+        + "".join(_render_stats_card(item) for item in stats)
+        + "</section>"
+        + _render_section(
+            "行动队列",
+            "把未标记高相关论文、再次出现的待跟进论文，以及仍待处理的标星论文集中起来。",
+            section_blocks,
+        )
+    )
+    return _render_page(
+        page_title="Paper Digest Review Queue",
+        eyebrow="Action Queue",
+        heading="Review Queue",
+        description=(
+            "这里汇总下一步最值得处理的论文，帮助你把每日研究情报转成明确的跟进动作。"
+        ),
+        hero_links=_render_hero_links(
+            [
+                ("index.html", "返回归档首页"),
+                ("trends.html", "查看趋势总览"),
+                ("reading-list.html", "阅读清单"),
+                ("weekly-review.html", "周度回顾"),
+            ]
+        ),
+        content=content,
+        nav_current="review_queue",
+    )
 
 
 def _render_reading_list_page(paper_details: list[PaperDetail]) -> str:
@@ -1225,7 +1502,7 @@ def _render_reading_list_page(paper_details: list[PaperDetail]) -> str:
             kicker="Reading List",
         )
         for item in reading_list
-    ) or _render_empty_state("当前还没有标星或待跟进的论文。")
+    ) or _render_empty_state("当前还没有标星、待跟进或阅读中的论文。")
     stats = [
         ArchiveStats(
             "标星论文",
@@ -1235,11 +1512,11 @@ def _render_reading_list_page(paper_details: list[PaperDetail]) -> str:
             "篇待跟进",
         ),
         ArchiveStats(
-            "跨天复现",
-            sum(1 for item in reading_list if item.active_days > 1),
+            "阅读中",
+            sum(1 for item in reading_list if item.feedback_status == "reading"),
             "篇论文",
-            max((item.active_days for item in reading_list), default=0),
-            "个最大活跃日期",
+            sum(1 for item in reading_list if item.active_days > 1),
+            "篇跨天复现",
         ),
         ArchiveStats(
             "跨 Feed 复现",
@@ -1255,7 +1532,7 @@ def _render_reading_list_page(paper_details: list[PaperDetail]) -> str:
         + "</section>"
         + _render_section(
             "阅读清单",
-            "把你明确标星或待跟进的论文抽出来，作为长期阅读和复盘入口。",
+            "把你标星、待跟进或已经进入阅读中的论文抽出来，作为长期阅读和复盘入口。",
             f'<div class="subscription-grid">{cards}</div>',
         )
     )
@@ -1264,13 +1541,14 @@ def _render_reading_list_page(paper_details: list[PaperDetail]) -> str:
         eyebrow="Feedback View",
         heading="阅读清单",
         description=(
-            "这里汇总你按 canonical_id 标记为 star 或 follow_up 的论文，"
+            "这里汇总你按 canonical_id 标记为 star、follow_up 或 reading 的论文，"
             "方便建立自己的长期研究观察列表。"
         ),
         hero_links=_render_hero_links(
             [
                 ("index.html", "返回归档首页"),
                 ("trends.html", "查看趋势总览"),
+                ("review-queue.html", "Review Queue"),
                 ("momentum.html", "持续升温论文"),
                 ("weekly-review.html", "周度回顾"),
             ]
@@ -1306,25 +1584,34 @@ def _render_weekly_review_page(paper_details: list[PaperDetail]) -> str:
     )
     stats = [
         ArchiveStats(
-            "活跃周数",
-            len(sections),
-            "个反馈周",
-            len(reading_list),
-            "篇已标记论文",
-        ),
-        ArchiveStats(
-            "标星论文",
-            sum(1 for item in reading_list if item.feedback_status == "star"),
-            "篇",
-            sum(1 for item in reading_list if item.feedback_status == "follow_up"),
-            "篇待跟进",
-        ),
-        ArchiveStats(
-            "跨天复现",
-            sum(1 for item in reading_list if item.active_days > 1),
+            "待处理",
+            sum(
+                1
+                for item in reading_list
+                if item.feedback_status in {"star", "follow_up"}
+            ),
             "篇论文",
-            max((item.active_days for item in reading_list), default=0),
-            "个最大活跃日期",
+            sum(1 for item in reading_list if item.feedback_status == "reading"),
+            "篇阅读中",
+        ),
+        ArchiveStats(
+            "已完成",
+            sum(1 for item in paper_details if item.feedback_status == "done"),
+            "篇论文",
+            len(sections),
+            "个回顾区块",
+        ),
+        ArchiveStats(
+            "再次提醒",
+            sum(
+                1
+                for item in paper_details
+                if item.feedback_status in {"star", "follow_up", "reading"}
+                and (item.active_days > 1 or item.active_feeds > 1)
+            ),
+            "篇持续升温论文",
+            len(reading_list),
+            "篇在读清单",
         ),
     ]
     content = (
@@ -1342,13 +1629,14 @@ def _render_weekly_review_page(paper_details: list[PaperDetail]) -> str:
         eyebrow="Feedback Review",
         heading="周度回顾",
         description=(
-            "把 star 和 follow_up 的论文按周整理出来，"
-            "帮助你把日级阅读清单沉淀成更稳定的研究复盘入口。"
+            "把待处理、正在看、已完成和再次提醒的论文拆开，"
+            "帮助你把阅读清单变成真正可执行的周度研究回顾。"
         ),
         hero_links=_render_hero_links(
             [
                 ("index.html", "返回归档首页"),
                 ("trends.html", "查看趋势总览"),
+                ("review-queue.html", "Review Queue"),
                 ("reading-list.html", "阅读清单"),
                 ("momentum.html", "持续升温论文"),
             ]
@@ -1482,6 +1770,7 @@ def _render_paper_page(detail: PaperDetail) -> str:
             [
                 ("../index.html", "返回归档首页"),
                 ("../trends.html", "查看趋势总览"),
+                ("../review-queue.html", "Review Queue"),
                 ("../momentum.html", "持续升温论文"),
                 ("../reading-list.html", "阅读清单"),
                 ("../weekly-review.html", "周度回顾"),
@@ -1555,6 +1844,8 @@ def _render_feedback_actions(detail: PaperDetail) -> str:
             "复制待跟进命令",
             feedback_command_snippet(canonical_id, "follow_up"),
         ),
+        ("复制阅读中命令", feedback_command_snippet(canonical_id, "reading")),
+        ("复制已完成命令", feedback_command_snippet(canonical_id, "done")),
         ("复制忽略命令", feedback_command_snippet(canonical_id, "ignore")),
     ]
     return (
@@ -1702,6 +1993,7 @@ def _render_nav(current: str, link_prefix: str) -> str:
     items = [
         ("home", f"{link_prefix}index.html", "归档首页"),
         ("trends", f"{link_prefix}trends.html", "趋势总览"),
+        ("review_queue", f"{link_prefix}review-queue.html", "行动队列"),
         ("momentum", f"{link_prefix}momentum.html", "持续升温"),
         ("weekly_review", f"{link_prefix}weekly-review.html", "周度回顾"),
         ("reading_list", f"{link_prefix}reading-list.html", "阅读清单"),
@@ -1780,6 +2072,15 @@ def _render_subscription_panel(
         "</p>"
         "</a>"
     )
+    review_queue_card = (
+        '<a class="resource-card" href="review-queue.html">'
+        '<p class="resource-kicker">Action Queue</p>'
+        '<h3 class="resource-title">Review Queue</h3>'
+        "<p class=\"resource-copy\">"
+        "把高相关未标记论文、待跟进再次出现和标星待处理论文集中成行动列表。"
+        "</p>"
+        "</a>"
+    )
     reading_card = (
         '<a class="resource-card" href="reading-list.html">'
         '<p class="resource-kicker">Reading List</p>'
@@ -1794,6 +2095,7 @@ def _render_subscription_panel(
         "把站点从“按天翻”升级成“按主题长期追”。固定页更适合每天回看同一类研究信号。",
         '<div class="subscription-grid">'
         + trends_card
+        + review_queue_card
         + momentum_card
         + weekly_review_card
         + reading_card
@@ -3014,7 +3316,7 @@ def _optional_feedback_status(value: object) -> FeedbackStatus | None:
     if cleaned is None:
         return None
     normalized = cleaned.lower()
-    if normalized not in {"star", "follow_up", "ignore"}:
+    if normalized not in {"star", "follow_up", "reading", "done", "ignore"}:
         return None
     return cast(FeedbackStatus, normalized)
 

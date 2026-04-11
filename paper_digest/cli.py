@@ -77,7 +77,7 @@ def build_feedback_parser() -> ArgumentParser:
     set_parser.add_argument("canonical_id", help="Canonical paper identifier.")
     set_parser.add_argument(
         "status",
-        choices=["star", "follow_up", "ignore"],
+        choices=["star", "follow_up", "reading", "done", "ignore"],
         help="Feedback status to store.",
     )
 

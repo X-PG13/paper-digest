@@ -55,6 +55,20 @@ class ArchiveSiteTests(unittest.TestCase):
                                     "seen in 3 sources",
                                 ],
                             }
+                            ,
+                            {
+                                "title": "Fresh Agent Note",
+                                "abstract_url": "https://arxiv.org/abs/2604.09999v1",
+                                "canonical_id": "arxiv:2604.09999",
+                                "summary": (
+                                    "A recent unreviewed paper for the action queue."
+                                ),
+                                "authors": ["Cara"],
+                                "tags": ["方法"],
+                                "topics": ["Agent"],
+                                "relevance_score": 88,
+                                "match_reasons": ['title matched "agent"'],
+                            }
                         ],
                     },
                     {
@@ -130,7 +144,19 @@ class ArchiveSiteTests(unittest.TestCase):
                             updated_at=datetime.fromisoformat(
                                 "2026-04-09T08:30:00+08:00"
                             ),
-                        )
+                        ),
+                        "arxiv:2604.00001": FeedbackEntry(
+                            status="reading",
+                            updated_at=datetime.fromisoformat(
+                                "2026-04-09T09:15:00+08:00"
+                            ),
+                        ),
+                        "arxiv:2604.00002": FeedbackEntry(
+                            status="done",
+                            updated_at=datetime.fromisoformat(
+                                "2026-04-09T10:00:00+08:00"
+                            ),
+                        ),
                     }
                 ),
             )
@@ -142,6 +168,9 @@ class ArchiveSiteTests(unittest.TestCase):
                 encoding="utf-8"
             )
             reading_list_html = (site_path / "reading-list.html").read_text(
+                encoding="utf-8"
+            )
+            review_queue_html = (site_path / "review-queue.html").read_text(
                 encoding="utf-8"
             )
             llm_html = (site_path / "feeds/llm.html").read_text(encoding="utf-8")
@@ -161,6 +190,7 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn("momentum.html", index_html)
             self.assertIn("weekly-review.html", index_html)
             self.assertIn("reading-list.html", index_html)
+            self.assertIn("review-queue.html", index_html)
             self.assertIn("digests/2026-04-08/digest.md", index_html)
             self.assertIn("2026-04-08 23:59:44 (Asia/Shanghai)", index_html)
             self.assertIn('data-feed-names="|llm|vision|"', index_html)
@@ -174,13 +204,24 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn("最近出现", momentum_html)
             self.assertIn("Paper Circle", momentum_html)
             self.assertIn("周度回顾", weekly_review_html)
-            self.assertIn("2026 W15", weekly_review_html)
+            self.assertIn("本周新增待处理", weekly_review_html)
+            self.assertIn("正在看", weekly_review_html)
+            self.assertIn("已完成", weekly_review_html)
             self.assertIn("Paper Circle", weekly_review_html)
+            self.assertIn("Agent Systems", weekly_review_html)
+            self.assertIn("Benchmark Design", weekly_review_html)
             self.assertIn("Reading List", reading_list_html)
             self.assertIn("阅读清单", reading_list_html)
             self.assertIn("Paper Circle", reading_list_html)
+            self.assertIn("Agent Systems", reading_list_html)
             self.assertIn("papers/", reading_list_html)
             self.assertNotIn("Benchmark Design", reading_list_html)
+            self.assertIn("Review Queue", review_queue_html)
+            self.assertIn("行动队列", review_queue_html)
+            self.assertIn("新出现且未标记", review_queue_html)
+            self.assertIn("标星待处理", review_queue_html)
+            self.assertIn("Fresh Agent Note", review_queue_html)
+            self.assertIn("Paper Circle", review_queue_html)
             self.assertIn("LLM 固定订阅页", llm_html)
             self.assertIn('type="application/rss+xml"', llm_html)
             self.assertIn("订阅 RSS", llm_html)
@@ -208,6 +249,8 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn("标星", paper_detail)
             self.assertIn("复制 canonical_id", paper_detail)
             self.assertIn("复制标星命令", paper_detail)
+            self.assertIn("复制阅读中命令", paper_detail)
+            self.assertIn("复制已完成命令", paper_detail)
             self.assertIn("python -m paper_digest feedback set", paper_detail)
             self.assertIn("首次出现", paper_detail)
             self.assertIn("最近出现", paper_detail)
@@ -216,6 +259,7 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn("持续升温", paper_detail)
             self.assertTrue((site_path / "weekly-review.html").exists())
             self.assertTrue((site_path / "reading-list.html").exists())
+            self.assertTrue((site_path / "review-queue.html").exists())
             self.assertTrue((site_path / "latest.md").exists())
             self.assertTrue((site_path / "latest.json").exists())
             self.assertTrue((site_path / "digests/2026-04-08/digest.json").exists())
