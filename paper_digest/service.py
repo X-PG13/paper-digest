@@ -300,6 +300,7 @@ def _build_focus_items(
             summary=paper.summary,
             source_label=paper.source_label(),
             feedback_status=entry.status,
+            feedback_note=entry.note,
             reasons=reason_codes,
             feed_names=sorted(merged_stats.feed_names),
             relevance_score=paper.relevance_score,

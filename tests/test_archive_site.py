@@ -144,18 +144,21 @@ class ArchiveSiteTests(unittest.TestCase):
                             updated_at=datetime.fromisoformat(
                                 "2026-04-09T08:30:00+08:00"
                             ),
+                            note="anchor paper for the review queue",
                         ),
                         "arxiv:2604.00001": FeedbackEntry(
                             status="reading",
                             updated_at=datetime.fromisoformat(
                                 "2026-04-09T09:15:00+08:00"
                             ),
+                            note="read sections 3 and 4 carefully",
                         ),
                         "arxiv:2604.00002": FeedbackEntry(
                             status="done",
                             updated_at=datetime.fromisoformat(
                                 "2026-04-09T10:00:00+08:00"
                             ),
+                            note="already summarized in weekly notes",
                         ),
                     }
                 ),
@@ -210,10 +213,12 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn("Paper Circle", weekly_review_html)
             self.assertIn("Agent Systems", weekly_review_html)
             self.assertIn("Benchmark Design", weekly_review_html)
+            self.assertIn("read sections 3 and 4 carefully", weekly_review_html)
             self.assertIn("Reading List", reading_list_html)
             self.assertIn("阅读清单", reading_list_html)
             self.assertIn("Paper Circle", reading_list_html)
             self.assertIn("Agent Systems", reading_list_html)
+            self.assertIn("anchor paper for the review queue", reading_list_html)
             self.assertIn("papers/", reading_list_html)
             self.assertNotIn("Benchmark Design", reading_list_html)
             self.assertIn("Review Queue", review_queue_html)
@@ -222,6 +227,7 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn("标星待处理", review_queue_html)
             self.assertIn("Fresh Agent Note", review_queue_html)
             self.assertIn("Paper Circle", review_queue_html)
+            self.assertIn("anchor paper for the review queue", review_queue_html)
             self.assertIn("LLM 固定订阅页", llm_html)
             self.assertIn('type="application/rss+xml"', llm_html)
             self.assertIn("订阅 RSS", llm_html)
@@ -251,7 +257,10 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn("复制标星命令", paper_detail)
             self.assertIn("复制阅读中命令", paper_detail)
             self.assertIn("复制已完成命令", paper_detail)
+            self.assertIn("复制备注命令", paper_detail)
             self.assertIn("python -m paper_digest feedback set", paper_detail)
+            self.assertIn("python -m paper_digest feedback note", paper_detail)
+            self.assertIn("anchor paper for the review queue", paper_detail)
             self.assertIn("首次出现", paper_detail)
             self.assertIn("最近出现", paper_detail)
             self.assertIn("覆盖跨度", paper_detail)

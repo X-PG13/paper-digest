@@ -47,6 +47,7 @@ class FocusItem:
     source_label: str
     feedback_status: FeedbackStatus
     reasons: list[str]
+    feedback_note: str | None = None
     feed_names: list[str] = field(default_factory=list)
     relevance_score: int = 0
     active_days: int = 1
@@ -63,6 +64,7 @@ class FocusItem:
             "summary": self.summary,
             "source_label": self.source_label,
             "feedback_status": self.feedback_status,
+            "feedback_note": self.feedback_note,
             "reasons": list(self.reasons),
             "feed_names": list(self.feed_names),
             "relevance_score": self.relevance_score,
@@ -270,6 +272,8 @@ def _render_default_markdown(digest: DigestRun) -> str:
             feedback = feedback_label(paper.feedback_status)
             if feedback is not None:
                 lines.append(f"   - Feedback: {feedback}")
+            if paper.feedback_note:
+                lines.append(f"   - Note: {paper.feedback_note}")
             if paper.relevance_score:
                 lines.append(f"   - Relevance: {paper.relevance_score}")
             if paper.match_reasons:
@@ -377,6 +381,8 @@ def _render_zh_daily_brief(digest: DigestRun) -> str:
             feedback = feedback_label_zh(paper.feedback_status)
             if feedback is not None:
                 lines.append(f"   - 反馈状态：{feedback}")
+            if paper.feedback_note:
+                lines.append(f"   - 备注：{paper.feedback_note}")
             if paper.relevance_score:
                 lines.append(f"   - 相关性分数：{paper.relevance_score}")
             if paper.match_reasons:
@@ -477,6 +483,8 @@ def _render_focus_lines(digest: DigestRun, *, language: str) -> list[str]:
                 "   - Feedback: "
                 + (feedback_label(item.feedback_status) or item.feedback_status)
             )
+            if item.feedback_note:
+                lines.append(f"   - Note: {item.feedback_note}")
             lines.append(
                 "   - Why it was pushed: "
                 + "; ".join(
@@ -515,6 +523,8 @@ def _render_focus_lines(digest: DigestRun, *, language: str) -> list[str]:
                 "   - 反馈状态："
                 + (feedback_label_zh(item.feedback_status) or item.feedback_status)
             )
+            if item.feedback_note:
+                lines.append(f"   - 备注：{item.feedback_note}")
             lines.append(
                 "   - 推送原因："
                 + "；".join(

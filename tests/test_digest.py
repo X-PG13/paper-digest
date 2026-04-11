@@ -205,6 +205,7 @@ class DigestTests(unittest.TestCase):
             authors=["Alice"],
         )
         paper.feedback_status = "follow_up"
+        paper.feedback_note = "compare with prior benchmark"
         digest = DigestRun(
             generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
             timezone="UTC",
@@ -215,6 +216,7 @@ class DigestTests(unittest.TestCase):
         markdown = render_markdown(digest)
 
         self.assertIn("Feedback: follow_up", markdown)
+        self.assertIn("Note: compare with prior benchmark", markdown)
 
     def test_render_markdown_includes_focus_section(self) -> None:
         digest = DigestRun(
@@ -230,6 +232,7 @@ class DigestTests(unittest.TestCase):
                     summary="Multi-agent research discovery framework.",
                     source_label="arxiv",
                     feedback_status="star",
+                    feedback_note="use this as the anchor paper",
                     reasons=["new_starred", "starred_momentum"],
                     feed_names=["LLM"],
                     relevance_score=80,
@@ -245,6 +248,7 @@ class DigestTests(unittest.TestCase):
         markdown = render_markdown(digest)
 
         self.assertIn("## Focus", markdown)
+        self.assertIn("Note: use this as the anchor paper", markdown)
         self.assertIn("Why it was pushed: newly starred", markdown)
         self.assertIn("Coverage: 2 active days / 1 feeds / 2 appearances", markdown)
 
@@ -262,6 +266,7 @@ class DigestTests(unittest.TestCase):
                     summary="Clinical prediction benchmark.",
                     source_label="PubMed",
                     feedback_status="follow_up",
+                    feedback_note="watch for clinical validation",
                     reasons=["follow_up_resurfaced"],
                     feed_names=["PubMed AI"],
                 )
@@ -273,6 +278,7 @@ class DigestTests(unittest.TestCase):
 
         self.assertIn("# 每日关注清单", markdown)
         self.assertIn("## Focus 区块", markdown)
+        self.assertIn("备注：watch for clinical validation", markdown)
         self.assertIn("推送原因：待跟进论文今天再次出现", markdown)
         self.assertNotIn("## 论文速览", markdown)
 

@@ -208,6 +208,8 @@ hide_ignored = true
 - `star`, `follow_up`, and `reading` boost ranking; `done` lowers priority;
   `ignore` either hides papers or down-ranks them, depending on
   `hide_ignored`.
+- Each feedback entry can also carry a free-form `note`, so you can record why
+  you starred a paper or what to check next.
 - The archive site exposes a dedicated `output/site/reading-list.html` page
   that aggregates starred, follow-up, and in-progress papers.
 - The archive site also exposes `output/site/weekly-review.html`, which groups
@@ -215,6 +217,8 @@ hide_ignored = true
 - The archive site exposes `output/site/review-queue.html`, which highlights
   newly surfaced unmarked papers, resurfaced follow-ups, and starred papers
   that still need action.
+- Paper detail pages, reading lists, weekly review sections, and Focus outputs
+  all surface those feedback notes once they are present.
 
 Notification focus:
 
@@ -244,7 +248,8 @@ Example feedback file:
   "papers": {
     "doi:10.5555/paper-circle": {
       "status": "star",
-      "updated_at": "2026-04-10T09:15:00+08:00"
+      "updated_at": "2026-04-10T09:15:00+08:00",
+      "note": "use this as the anchor paper for next week's review"
     },
     "arxiv:2604.00001": "reading",
     "title:example-normalized-title": "done"
@@ -259,6 +264,9 @@ python -m paper_digest feedback set 'doi:10.5555/paper-circle' star --config con
 python -m paper_digest feedback set 'doi:10.5555/paper-circle' follow_up --config config.toml
 python -m paper_digest feedback set 'doi:10.5555/paper-circle' reading --config config.toml
 python -m paper_digest feedback set 'doi:10.5555/paper-circle' done --config config.toml
+python -m paper_digest feedback set 'doi:10.5555/paper-circle' star --note 'anchor paper for review' --config config.toml
+python -m paper_digest feedback note 'doi:10.5555/paper-circle' 'compare section 4 with baseline table' --config config.toml
+python -m paper_digest feedback clear-note 'doi:10.5555/paper-circle' --config config.toml
 python -m paper_digest feedback clear 'doi:10.5555/paper-circle' --config config.toml
 python -m paper_digest feedback list --config config.toml
 ```
@@ -547,6 +555,8 @@ The CLI also rebuilds `output/site/index.html` on every run. That static site:
   that still need attention
 - emits a `output/site/weekly-review.html` view that groups papers into
   pending, reading, completed, and resurfaced weekly review sections
+- surfaces personal feedback notes across detail pages, the reading list,
+  review queue, weekly review, and feedback-driven Focus blocks
 - emits fixed feed pages under `output/site/feeds/`
 - emits feed RSS files under `output/site/feeds/*.xml`
 - emits keyword tracking pages under `output/site/topics/` from configured feed keywords

@@ -48,6 +48,7 @@ class PaperArchive:
     published_at: datetime
     updated_at: datetime
     feedback_status: FeedbackStatus | None
+    feedback_note: str | None
     search_text: str
 
 
@@ -172,6 +173,7 @@ class PaperDetail:
     appearance_count: int
     feedback_status: FeedbackStatus | None
     feedback_updated_at: datetime | None
+    feedback_note: str | None
     related_papers: list[RelatedPaper]
 
 
@@ -480,6 +482,7 @@ def _parse_papers(
                 feedback_status=_optional_feedback_status(
                     raw_paper.get("feedback_status")
                 ),
+                feedback_note=_optional_clean_string(raw_paper.get("feedback_note")),
                 search_text=_normalize_search(
                     " ".join(
                         [
@@ -683,6 +686,11 @@ def _build_paper_details(
                 canonical_id,
                 feedback_state,
             ),
+            feedback_note=_resolve_feedback_note(
+                canonical_id,
+                representative.feedback_note,
+                feedback_state,
+            ),
             related_papers=[],
         )
 
@@ -703,6 +711,7 @@ def _build_paper_details(
             appearance_count=detail.appearance_count,
             feedback_status=detail.feedback_status,
             feedback_updated_at=detail.feedback_updated_at,
+            feedback_note=detail.feedback_note,
             related_papers=related,
         )
 
@@ -1126,12 +1135,20 @@ def _render_rising_paper_card(
 ) -> str:
     detail_link = escape(link_prefix + detail.paper.detail_href)
     status_badge = _render_feedback_badge(detail.feedback_status)
+    note_html = ""
+    if detail.feedback_note:
+        note_html = (
+            '<p class="resource-copy note-copy">'
+            f"备注：{escape(_truncate(detail.feedback_note, 160))}"
+            "</p>"
+        )
     return (
         f'<a class="resource-card" href="{detail_link}">'
         f'<p class="resource-kicker">{escape(kicker)}</p>'
         f"{status_badge}"
         f'<h3 class="resource-title">{escape(detail.paper.title)}</h3>'
         f'<p class="resource-copy">{escape(_truncate(detail.paper.summary, 220))}</p>'
+        f"{note_html}"
         '<div class="resource-meta">'
         f"<span>{detail.active_days} 天</span>"
         f"<span>{detail.active_feeds} 个 feed</span>"
@@ -1734,10 +1751,29 @@ def _render_paper_page(detail: PaperDetail) -> str:
                     feedback_label_zh(detail.feedback_status) or "未设置",
                 )
                 + _render_meta_block(
+                    "个人备注",
+                    detail.feedback_note or "未设置",
+                )
+                + _render_meta_block(
                     "命中原因",
                     paper.reason_summary or "未记录",
                 )
                 + "</div>"
+            ),
+        )
+        + _render_section(
+            "个人备注",
+            "把你为什么标记这篇论文、接下来准备怎么处理，直接挂在规范化详情页上。",
+            (
+                '<div class="detail-grid">'
+                + _render_meta_block("备注内容", detail.feedback_note or "")
+                + "</div>"
+                if detail.feedback_note
+                else (
+                    '<div class="empty">'
+                    "当前还没有个人备注，可以先用本地 feedback CLI 补上。"
+                    "</div>"
+                )
             ),
         )
         + _render_section(
@@ -1837,6 +1873,10 @@ def _render_page(
 
 def _render_feedback_actions(detail: PaperDetail) -> str:
     canonical_id = detail.paper.canonical_id
+    note_command = (
+        "python -m paper_digest feedback note "
+        f"'{canonical_id}' 'TODO: add note' --config config.toml"
+    )
     buttons = [
         ("复制 canonical_id", canonical_id),
         ("复制标星命令", feedback_command_snippet(canonical_id, "star")),
@@ -1847,6 +1887,7 @@ def _render_feedback_actions(detail: PaperDetail) -> str:
         ("复制阅读中命令", feedback_command_snippet(canonical_id, "reading")),
         ("复制已完成命令", feedback_command_snippet(canonical_id, "done")),
         ("复制忽略命令", feedback_command_snippet(canonical_id, "ignore")),
+        ("复制备注命令", note_command),
     ]
     return (
         '<div class="chip-cloud">'
@@ -3397,6 +3438,18 @@ def _resolve_feedback_updated_at(
     if entry is None:
         return None
     return entry.updated_at
+
+
+def _resolve_feedback_note(
+    canonical_id: str,
+    archived_note: str | None,
+    feedback_state: FeedbackState | None,
+) -> str | None:
+    if feedback_state is not None:
+        entry = feedback_state.papers.get(canonical_id)
+        if entry is not None and entry.note is not None:
+            return entry.note
+    return archived_note
 
 
 def _canonical_id_from_payload(

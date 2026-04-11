@@ -16,11 +16,13 @@ from .crossref_client import CrossrefClientError
 from .delivery import DeliveryError, send_configured_deliveries
 from .digest import summarize_digest, write_outputs
 from .feedback import (
+    clear_feedback_note,
     clear_feedback_status,
     list_feedback_entries,
     load_feedback,
     load_feedback_file,
     save_feedback,
+    set_feedback_note,
     set_feedback_status,
 )
 from .openalex_client import OpenAlexClientError
@@ -80,6 +82,10 @@ def build_feedback_parser() -> ArgumentParser:
         choices=["star", "follow_up", "reading", "done", "ignore"],
         help="Feedback status to store.",
     )
+    set_parser.add_argument(
+        "--note",
+        help="Optional personal note to store with this feedback entry.",
+    )
 
     clear_parser = subparsers.add_parser(
         "clear",
@@ -87,6 +93,21 @@ def build_feedback_parser() -> ArgumentParser:
         parents=[common],
     )
     clear_parser.add_argument("canonical_id", help="Canonical paper identifier.")
+
+    note_parser = subparsers.add_parser(
+        "note",
+        help="Set or update the note for an existing feedback entry.",
+        parents=[common],
+    )
+    note_parser.add_argument("canonical_id", help="Canonical paper identifier.")
+    note_parser.add_argument("note", help="Personal note text.")
+
+    clear_note_parser = subparsers.add_parser(
+        "clear-note",
+        help="Clear the note for an existing feedback entry.",
+        parents=[common],
+    )
+    clear_note_parser.add_argument("canonical_id", help="Canonical paper identifier.")
 
     subparsers.add_parser(
         "list",
@@ -165,14 +186,20 @@ def _main_feedback(argv: Sequence[str]) -> int:
                 feedback_state,
                 canonical_id=args.canonical_id,
                 status=args.status,
+                note=args.note,
             )
             save_feedback(config.feedback, feedback_state)
             updated_at = (
                 entry.updated_at.isoformat() if entry.updated_at is not None else "n/a"
             )
+            note_suffix = (
+                f" with note {entry.note!r}"
+                if entry.note is not None
+                else ""
+            )
             print(
                 f"Set {args.canonical_id.strip()} -> {entry.status} "
-                f"at {updated_at} in {feedback_path}"
+                f"at {updated_at}{note_suffix} in {feedback_path}"
             )
             return 0
         if args.feedback_command == "clear":
@@ -186,6 +213,38 @@ def _main_feedback(argv: Sequence[str]) -> int:
             else:
                 print(f"No entry for {args.canonical_id.strip()} in {feedback_path}")
             return 0
+        if args.feedback_command == "note":
+            note_entry = set_feedback_note(
+                feedback_state,
+                canonical_id=args.canonical_id,
+                note=args.note,
+            )
+            if note_entry is None:
+                print(
+                    f"No entry for {args.canonical_id.strip()} in {feedback_path}",
+                    file=sys.stderr,
+                )
+                return 1
+            save_feedback(config.feedback, feedback_state)
+            print(
+                f"Updated note for {args.canonical_id.strip()} in {feedback_path}"
+            )
+            return 0
+        if args.feedback_command == "clear-note":
+            removed = clear_feedback_note(
+                feedback_state,
+                canonical_id=args.canonical_id,
+            )
+            save_feedback(config.feedback, feedback_state)
+            if removed:
+                print(
+                    f"Cleared note for {args.canonical_id.strip()} in {feedback_path}"
+                )
+            else:
+                print(
+                    f"No note for {args.canonical_id.strip()} in {feedback_path}"
+                )
+            return 0
 
         entries = list_feedback_entries(feedback_state)
         if not entries:
@@ -197,7 +256,8 @@ def _main_feedback(argv: Sequence[str]) -> int:
                 if entry.updated_at is not None
                 else "n/a"
             )
-            print(f"{entry.status}\t{canonical_id}\t{updated_at}")
+            note = entry.note or ""
+            print(f"{entry.status}\t{canonical_id}\t{updated_at}\t{note}")
         return 0
     except ConfigError as exc:
         print(f"Error: {exc}", file=sys.stderr)
