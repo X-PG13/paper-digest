@@ -40,6 +40,9 @@ Versioning.
   Focus stays inline with the digest or gets emitted as a separate `Focus Brief`.
 - Deliveries can now also filter Focus by feedback status and trigger reason,
   and each delivery can cap its own Focus item count independently.
+- Feedback entries now support structured `next_action` and `due_date` fields,
+  the feedback CLI can manage them directly, and digest notifications now
+  include a dedicated weekly action section for overdue and soon-due papers.
 - The manual `Daily Digest` workflow now accepts a temporary `config.toml`
   override input and isolates those validation runs from caches and Pages
   deployment.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -81,6 +81,56 @@ class FocusItem:
 
 
 @dataclass(slots=True)
+class ActionItem:
+    canonical_id: str
+    title: str
+    abstract_url: str
+    summary: str
+    source_label: str
+    feedback_status: FeedbackStatus
+    reasons: list[str]
+    feedback_note: str | None = None
+    next_action: str | None = None
+    due_date: date | None = None
+    days_until_due: int | None = None
+    feed_names: list[str] = field(default_factory=list)
+    relevance_score: int = 0
+    active_days: int = 1
+    active_feeds: int = 1
+    appearance_count: int = 1
+    first_seen: datetime | None = None
+    last_seen: datetime | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "canonical_id": self.canonical_id,
+            "title": self.title,
+            "abstract_url": self.abstract_url,
+            "summary": self.summary,
+            "source_label": self.source_label,
+            "feedback_status": self.feedback_status,
+            "feedback_note": self.feedback_note,
+            "next_action": self.next_action,
+            "due_date": (
+                self.due_date.isoformat() if self.due_date is not None else None
+            ),
+            "days_until_due": self.days_until_due,
+            "reasons": list(self.reasons),
+            "feed_names": list(self.feed_names),
+            "relevance_score": self.relevance_score,
+            "active_days": self.active_days,
+            "active_feeds": self.active_feeds,
+            "appearance_count": self.appearance_count,
+            "first_seen": (
+                self.first_seen.isoformat() if self.first_seen is not None else None
+            ),
+            "last_seen": (
+                self.last_seen.isoformat() if self.last_seen is not None else None
+            ),
+        }
+
+
+@dataclass(slots=True)
 class DigestRun:
     generated_at: datetime
     timezone: str
@@ -88,6 +138,7 @@ class DigestRun:
     feeds: list[FeedDigest]
     highlights: list[str] = field(default_factory=list)
     focus_items: list[FocusItem] = field(default_factory=list)
+    action_items: list[ActionItem] = field(default_factory=list)
     topic_sections: list[TopicDigest] = field(default_factory=list)
     template: DigestTemplate = "default"
     default_sort_by: SortMode = "hybrid"
@@ -114,6 +165,7 @@ class DigestRun:
             },
             "highlights": list(self.highlights),
             "focus_items": [item.to_dict() for item in self.focus_items],
+            "action_items": [item.to_dict() for item in self.action_items],
             "topic_sections": [
                 {
                     "name": topic.name,
@@ -247,6 +299,11 @@ def _render_default_markdown(digest: DigestRun) -> str:
         lines.extend(focus_lines)
         lines.append("")
 
+    action_lines = _render_action_lines(digest, language="en")
+    if action_lines:
+        lines.extend(action_lines)
+        lines.append("")
+
     for feed in digest.feeds:
         lines.append(f"## {feed.name}")
         lines.append("")
@@ -329,6 +386,11 @@ def _render_zh_daily_brief(digest: DigestRun) -> str:
     focus_lines = _render_focus_lines(digest, language="zh")
     if focus_lines:
         lines.extend(focus_lines)
+        lines.append("")
+
+    action_lines = _render_action_lines(digest, language="zh")
+    if action_lines:
+        lines.extend(action_lines)
         lines.append("")
 
     if digest.topic_sections:
@@ -431,7 +493,12 @@ def _render_default_focus_only_markdown(digest: DigestRun) -> str:
     focus_lines = _render_focus_lines(digest, language="en")
     if focus_lines:
         lines.extend(focus_lines)
-    else:
+    action_lines = _render_action_lines(digest, language="en")
+    if action_lines:
+        if focus_lines:
+            lines.append("")
+        lines.extend(action_lines)
+    if not focus_lines and not action_lines:
         lines.extend(
             [
                 "## Focus",
@@ -458,7 +525,12 @@ def _render_zh_focus_only_brief(digest: DigestRun) -> str:
     focus_lines = _render_focus_lines(digest, language="zh")
     if focus_lines:
         lines.extend(focus_lines)
-    else:
+    action_lines = _render_action_lines(digest, language="zh")
+    if action_lines:
+        if focus_lines:
+            lines.append("")
+        lines.extend(action_lines)
+    if not focus_lines and not action_lines:
         lines.extend(
             [
                 "## Focus 区块",
@@ -562,6 +634,103 @@ def _render_focus_lines(digest: DigestRun, *, language: str) -> list[str]:
     return lines
 
 
+def _render_action_lines(digest: DigestRun, *, language: str) -> list[str]:
+    if not digest.action_items:
+        return []
+
+    local_tz = ZoneInfo(digest.timezone)
+    heading = (
+        "## What To Review This Week"
+        if language == "en"
+        else "## 本周该处理什么"
+    )
+    lines = [heading, ""]
+    for index, item in enumerate(digest.action_items, start=1):
+        lines.append(f"{index}. [{item.title}]({item.abstract_url})")
+        if language == "en":
+            lines.append(
+                "   - Feedback: "
+                + (feedback_label(item.feedback_status) or item.feedback_status)
+            )
+            if item.due_date is not None:
+                lines.append(
+                    "   - Due: "
+                    + _action_due_label(item, language=language)
+                )
+            if item.next_action:
+                lines.append(f"   - Next Action: {item.next_action}")
+            if item.feedback_note:
+                lines.append(f"   - Note: {item.feedback_note}")
+            lines.append(
+                "   - Why now: "
+                + "; ".join(
+                    _action_reason_label(reason, language=language)
+                    for reason in item.reasons
+                )
+            )
+            if item.feed_names:
+                lines.append("   - Feeds: " + ", ".join(item.feed_names))
+            lines.append(
+                "   - Coverage: "
+                f"{item.active_days} active days / {item.active_feeds} feeds / "
+                f"{item.appearance_count} appearances"
+            )
+            if item.first_seen is not None and item.last_seen is not None:
+                first_seen = item.first_seen.astimezone(local_tz).strftime(
+                    "%Y-%m-%d %H:%M"
+                )
+                last_seen = item.last_seen.astimezone(local_tz).strftime(
+                    "%Y-%m-%d %H:%M"
+                )
+                lines.append(f"   - Seen Window: {first_seen} -> {last_seen}")
+            lines.append(f"   - Source: {item.source_label}")
+            if item.relevance_score:
+                lines.append(f"   - Relevance: {item.relevance_score}")
+            lines.append(f"   - Summary: {item.summary}")
+        else:
+            lines.append(
+                "   - 反馈状态："
+                + (feedback_label_zh(item.feedback_status) or item.feedback_status)
+            )
+            if item.due_date is not None:
+                lines.append(
+                    "   - 最晚处理："
+                    + _action_due_label(item, language=language)
+                )
+            if item.next_action:
+                lines.append(f"   - 下一步：{item.next_action}")
+            if item.feedback_note:
+                lines.append(f"   - 备注：{item.feedback_note}")
+            lines.append(
+                "   - 为什么现在看："
+                + "；".join(
+                    _action_reason_label(reason, language=language)
+                    for reason in item.reasons
+                )
+            )
+            if item.feed_names:
+                lines.append("   - 覆盖分组：" + "、".join(item.feed_names))
+            lines.append(
+                "   - 覆盖跨度："
+                f"{item.active_days} 天 / {item.active_feeds} 个 feed / "
+                f"{item.appearance_count} 次命中"
+            )
+            if item.first_seen is not None and item.last_seen is not None:
+                first_seen = item.first_seen.astimezone(local_tz).strftime(
+                    "%Y-%m-%d %H:%M"
+                )
+                last_seen = item.last_seen.astimezone(local_tz).strftime(
+                    "%Y-%m-%d %H:%M"
+                )
+                lines.append(f"   - 历史窗口：{first_seen} -> {last_seen}")
+            lines.append(f"   - 来源：{item.source_label}")
+            if item.relevance_score:
+                lines.append(f"   - 相关性分数：{item.relevance_score}")
+            lines.append(f"   - 摘要：{item.summary}")
+        lines.append("")
+    return lines
+
+
 def _focus_reason_label(reason: str, *, language: str) -> str:
     labels = {
         "new_starred": {
@@ -580,6 +749,47 @@ def _focus_reason_label(reason: str, *, language: str) -> str:
     return labels.get(reason, {}).get(language, reason)
 
 
+def _action_reason_label(reason: str, *, language: str) -> str:
+    labels = {
+        "overdue": {
+            "en": "already overdue",
+            "zh": "已经逾期",
+        },
+        "due_soon": {
+            "en": "due within 3 days",
+            "zh": "3 天内到期",
+        },
+        "next_action_pending": {
+            "en": "next action is set but not started",
+            "zh": "已设下一步动作但还没开始",
+        },
+    }
+    return labels.get(reason, {}).get(language, reason)
+
+
+def _action_due_label(item: ActionItem, *, language: str) -> str:
+    if item.due_date is None:
+        return ""
+    base = item.due_date.isoformat()
+    if item.days_until_due is None:
+        return base
+    if item.days_until_due < 0:
+        overdue_days = abs(item.days_until_due)
+        if language == "en":
+            suffix = f"overdue by {overdue_days} day(s)"
+        else:
+            suffix = f"已逾期 {overdue_days} 天"
+        return f"{base} ({suffix})"
+    if item.days_until_due == 0:
+        suffix = "due today" if language == "en" else "今天到期"
+        return f"{base} ({suffix})"
+    if language == "en":
+        suffix = f"due in {item.days_until_due} day(s)"
+    else:
+        suffix = f"{item.days_until_due} 天后到期"
+    return f"{base} ({suffix})"
+
+
 def summarize_focus_items(digest: DigestRun) -> str:
     if not digest.focus_items:
         return "Focus=0"
@@ -592,6 +802,28 @@ def summarize_focus_items(digest: DigestRun) -> str:
         parts.append(f"star={starred}")
     if follow_up:
         parts.append(f"follow_up={follow_up}")
+    return ", ".join(parts)
+
+
+def summarize_action_items(digest: DigestRun) -> str:
+    if not digest.action_items:
+        return "Actions=0"
+    overdue = sum(
+        1 for item in digest.action_items if "overdue" in item.reasons
+    )
+    due_soon = sum(
+        1 for item in digest.action_items if "due_soon" in item.reasons
+    )
+    next_action = sum(
+        1 for item in digest.action_items if "next_action_pending" in item.reasons
+    )
+    parts = [f"Actions={len(digest.action_items)}"]
+    if overdue:
+        parts.append(f"overdue={overdue}")
+    if due_soon:
+        parts.append(f"due_soon={due_soon}")
+    if next_action:
+        parts.append(f"next_action={next_action}")
     return ", ".join(parts)
 
 

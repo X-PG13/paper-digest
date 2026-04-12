@@ -17,12 +17,14 @@ from .config import (
     WeComWebhookConfig,
 )
 from .digest import (
+    ActionItem,
     DigestRun,
     FeedDigest,
     FocusItem,
     TopicDigest,
     digest_has_papers,
     render_notification_markdown,
+    summarize_action_items,
     summarize_digest,
     summarize_focus_items,
 )
@@ -69,11 +71,17 @@ def build_notification_messages(
     focus_digest = _filter_focus_for_delivery(digest, delivery)
 
     if feedback_only:
-        if not _include_focus(delivery):
+        feedback_digest = (
+            focus_digest
+            if _include_focus(delivery)
+            else _digest_without_focus(focus_digest)
+        )
+        if _skip_if_empty(delivery) and not _digest_has_notification_content(
+            feedback_digest,
+            feedback_only=True,
+        ):
             return []
-        if _skip_if_empty(delivery) and not focus_digest.focus_items:
-            return []
-        return [_build_focus_notification_message(delivery, focus_digest)]
+        return [_build_focus_notification_message(delivery, feedback_digest)]
 
     digest_for_digest = _digest_without_focus(focus_digest)
     if _include_focus(delivery) and _focus_target(delivery) == "digest":
@@ -171,6 +179,7 @@ def _digest_without_focus(digest: DigestRun) -> DigestRun:
     return _clone_digest(
         digest,
         focus_items=[],
+        action_items=list(digest.action_items),
     )
 
 
@@ -178,6 +187,7 @@ def _clone_digest(
     digest: DigestRun,
     *,
     focus_items: list[FocusItem],
+    action_items: list[ActionItem],
 ) -> DigestRun:
     return DigestRun(
         generated_at=digest.generated_at,
@@ -194,6 +204,7 @@ def _clone_digest(
         ],
         highlights=list(digest.highlights),
         focus_items=list(focus_items),
+        action_items=list(action_items),
         topic_sections=list(digest.topic_sections),
         template=digest.template,
         default_sort_by=digest.default_sort_by,
@@ -232,7 +243,11 @@ def _filter_focus_for_delivery(
 
     if filtered_items == digest.focus_items:
         return digest
-    return _clone_digest(digest, focus_items=filtered_items)
+    return _clone_digest(
+        digest,
+        focus_items=filtered_items,
+        action_items=list(digest.action_items),
+    )
 
 
 def send_configured_deliveries(config: AppConfig, digest: DigestRun) -> list[str]:
@@ -301,6 +316,7 @@ def _single_feed_digest(digest: DigestRun, feed: FeedDigest) -> DigestRun:
         ],
         highlights=highlights,
         focus_items=_filter_focus_items_for_feed(digest.focus_items, feed.name),
+        action_items=_filter_action_items_for_feed(digest.action_items, feed.name),
         topic_sections=topic_sections,
         template=digest.template,
         default_sort_by=digest.default_sort_by,
@@ -348,6 +364,13 @@ def _filter_focus_items_for_feed(
     return [item for item in focus_items if feed_name in item.feed_names]
 
 
+def _filter_action_items_for_feed(
+    action_items: list[ActionItem],
+    feed_name: str,
+) -> list[ActionItem]:
+    return [item for item in action_items if feed_name in item.feed_names]
+
+
 def _format_topic_highlight(topic: TopicDigest) -> str:
     title_label = "、".join(f"《{title}》" for title in topic.paper_titles[:2])
     return (
@@ -374,11 +397,21 @@ def _notification_summary(
     include_focus: bool,
 ) -> str:
     focus_summary = summarize_focus_items(digest)
+    action_summary = summarize_action_items(digest)
     digest_summary = summarize_digest(digest)
     if feedback_only:
-        return focus_summary
+        parts: list[str] = []
+        if digest.focus_items:
+            parts.append(focus_summary)
+        if digest.action_items:
+            parts.append(action_summary)
+        return " | ".join(parts) if parts else focus_summary
+    if include_focus and digest.focus_items and digest.action_items:
+        return f"{digest_summary} | {focus_summary} | {action_summary}"
     if include_focus and digest.focus_items:
         return f"{digest_summary} | {focus_summary}"
+    if digest.action_items:
+        return f"{digest_summary} | {action_summary}"
     return digest_summary
 
 
@@ -388,8 +421,8 @@ def _digest_has_notification_content(
     feedback_only: bool,
 ) -> bool:
     if feedback_only:
-        return bool(digest.focus_items)
-    return digest_has_papers(digest) or bool(digest.focus_items)
+        return bool(digest.focus_items or digest.action_items)
+    return digest_has_papers(digest) or bool(digest.focus_items or digest.action_items)
 
 
 def _send_messages(

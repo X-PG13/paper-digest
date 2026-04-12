@@ -7,14 +7,20 @@ import json
 import re
 import shutil
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from email.utils import format_datetime
 from html import escape
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from .config import FeedbackStatus
-from .feedback import FeedbackState, feedback_command_snippet, feedback_label_zh
+from .feedback import (
+    FeedbackState,
+    feedback_action_command_snippet,
+    feedback_command_snippet,
+    feedback_due_command_snippet,
+    feedback_label_zh,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -49,6 +55,8 @@ class PaperArchive:
     updated_at: datetime
     feedback_status: FeedbackStatus | None
     feedback_note: str | None
+    feedback_next_action: str | None
+    feedback_due_date: date | None
     search_text: str
 
 
@@ -174,6 +182,8 @@ class PaperDetail:
     feedback_status: FeedbackStatus | None
     feedback_updated_at: datetime | None
     feedback_note: str | None
+    feedback_next_action: str | None
+    feedback_due_date: date | None
     related_papers: list[RelatedPaper]
 
 
@@ -483,6 +493,10 @@ def _parse_papers(
                     raw_paper.get("feedback_status")
                 ),
                 feedback_note=_optional_clean_string(raw_paper.get("feedback_note")),
+                feedback_next_action=_optional_clean_string(
+                    raw_paper.get("feedback_next_action")
+                ),
+                feedback_due_date=_optional_date(raw_paper.get("feedback_due_date")),
                 search_text=_normalize_search(
                     " ".join(
                         [
@@ -691,6 +705,16 @@ def _build_paper_details(
                 representative.feedback_note,
                 feedback_state,
             ),
+            feedback_next_action=_resolve_feedback_next_action(
+                canonical_id,
+                representative.feedback_next_action,
+                feedback_state,
+            ),
+            feedback_due_date=_resolve_feedback_due_date(
+                canonical_id,
+                representative.feedback_due_date,
+                feedback_state,
+            ),
             related_papers=[],
         )
 
@@ -712,6 +736,8 @@ def _build_paper_details(
             feedback_status=detail.feedback_status,
             feedback_updated_at=detail.feedback_updated_at,
             feedback_note=detail.feedback_note,
+            feedback_next_action=detail.feedback_next_action,
+            feedback_due_date=detail.feedback_due_date,
             related_papers=related,
         )
 
@@ -1142,6 +1168,19 @@ def _render_rising_paper_card(
             f"备注：{escape(_truncate(detail.feedback_note, 160))}"
             "</p>"
         )
+    action_html = ""
+    if detail.feedback_next_action:
+        action_html += (
+            '<p class="resource-copy note-copy">'
+            f"下一步：{escape(_truncate(detail.feedback_next_action, 160))}"
+            "</p>"
+        )
+    if detail.feedback_due_date is not None:
+        action_html += (
+            '<p class="resource-copy note-copy">'
+            f"最晚处理：{escape(_format_due_date(detail.feedback_due_date))}"
+            "</p>"
+        )
     return (
         f'<a class="resource-card" href="{detail_link}">'
         f'<p class="resource-kicker">{escape(kicker)}</p>'
@@ -1149,6 +1188,7 @@ def _render_rising_paper_card(
         f'<h3 class="resource-title">{escape(detail.paper.title)}</h3>'
         f'<p class="resource-copy">{escape(_truncate(detail.paper.summary, 220))}</p>'
         f"{note_html}"
+        f"{action_html}"
         '<div class="resource-meta">'
         f"<span>{detail.active_days} 天</span>"
         f"<span>{detail.active_feeds} 个 feed</span>"
@@ -1344,6 +1384,64 @@ def _build_review_queue_sections(
     if anchor is None:
         return []
 
+    today = anchor.date()
+
+    overdue = [
+        detail
+        for detail in paper_details
+        if detail.feedback_status in {"star", "follow_up", "reading"}
+        and detail.feedback_due_date is not None
+        and detail.feedback_due_date < today
+    ]
+    overdue.sort(
+        key=lambda detail: (
+            detail.feedback_due_date or date.max,
+            _feedback_stage_priority(detail.feedback_status),
+            -detail.paper.relevance_score,
+            detail.paper.title.lower(),
+        )
+    )
+
+    due_soon = [
+        detail
+        for detail in paper_details
+        if detail.feedback_status in {"star", "follow_up", "reading"}
+        and detail.feedback_due_date is not None
+        and 0 <= (detail.feedback_due_date - today).days <= 3
+    ]
+    due_soon.sort(
+        key=lambda detail: (
+            detail.feedback_due_date or date.max,
+            _feedback_stage_priority(detail.feedback_status),
+            -detail.paper.relevance_score,
+            detail.paper.title.lower(),
+        )
+    )
+
+    scheduled_ids = {
+        detail.paper.canonical_id for detail in [*overdue, *due_soon]
+    }
+
+    action_planned = [
+        detail
+        for detail in paper_details
+        if detail.feedback_status in {"star", "follow_up"}
+        and detail.feedback_next_action
+        and detail.paper.canonical_id not in scheduled_ids
+    ]
+    action_planned.sort(
+        key=lambda detail: (
+            _feedback_stage_priority(detail.feedback_status),
+            -(detail.feedback_updated_at or detail.last_seen).timestamp(),
+            -detail.paper.relevance_score,
+            detail.paper.title.lower(),
+        )
+    )
+
+    queued_ids = {
+        detail.paper.canonical_id for detail in [*overdue, *due_soon, *action_planned]
+    }
+
     unreviewed = [
         detail
         for detail in paper_details
@@ -1364,6 +1462,7 @@ def _build_review_queue_sections(
         if detail.feedback_status == "follow_up"
         and _is_same_iso_week(detail.last_seen, anchor)
         and (detail.active_days > 1 or detail.active_feeds > 1)
+        and detail.paper.canonical_id not in queued_ids
     ]
     resurfaced_follow_up.sort(
         key=lambda detail: (
@@ -1376,7 +1475,10 @@ def _build_review_queue_sections(
     )
 
     starred_backlog = [
-        detail for detail in paper_details if detail.feedback_status == "star"
+        detail
+        for detail in paper_details
+        if detail.feedback_status == "star"
+        and detail.paper.canonical_id not in queued_ids
     ]
     starred_backlog.sort(
         key=lambda detail: (
@@ -1387,6 +1489,30 @@ def _build_review_queue_sections(
     )
 
     sections: list[WeeklyReviewSection] = []
+    if overdue:
+        sections.append(
+            WeeklyReviewSection(
+                label="已过期",
+                description="已经超过计划处理日期的论文，应该优先清掉积压。",
+                items=overdue[:12],
+            )
+        )
+    if due_soon:
+        sections.append(
+            WeeklyReviewSection(
+                label="3 天内到期",
+                description="已经设定了最晚处理日期，而且将在 3 天内到期的论文。",
+                items=due_soon[:12],
+            )
+        )
+    if action_planned:
+        sections.append(
+            WeeklyReviewSection(
+                label="已设下一步动作",
+                description="已经写下下一步动作、但还没推进到阅读中或完成阶段的论文。",
+                items=action_planned[:12],
+            )
+        )
     if unreviewed:
         sections.append(
             WeeklyReviewSection(
@@ -1437,40 +1563,40 @@ def _render_review_queue_page(paper_details: list[PaperDetail]) -> str:
         if sections
         else _render_empty_state("当前还没有需要进入 review queue 的论文。")
     )
-    pending_count = next(
-        (len(section.items) for section in sections if section.label == "标星待处理"),
+    overdue_count = next(
+        (len(section.items) for section in sections if section.label == "已过期"),
         0,
     )
-    unreviewed_count = next(
+    due_soon_count = next(
         (
             len(section.items)
             for section in sections
-            if section.label == "新出现且未标记"
+            if section.label == "3 天内到期"
         ),
         0,
     )
-    resurfaced_count = next(
+    action_count = next(
         (
             len(section.items)
             for section in sections
-            if section.label == "待跟进再次出现"
+            if section.label == "已设下一步动作"
         ),
         0,
     )
     stats = [
         ArchiveStats(
-            "待判断",
-            unreviewed_count,
-            "篇高相关论文",
-            pending_count,
-            "篇标星待处理",
+            "优先处理",
+            overdue_count,
+            "篇已过期论文",
+            due_soon_count,
+            "篇 3 天内到期",
         ),
         ArchiveStats(
-            "再次出现",
-            resurfaced_count,
-            "篇待跟进论文",
-            len(sections),
-            "个队列区块",
+            "下一步已设",
+            action_count,
+            "篇待推进论文",
+            sum(1 for detail in paper_details if detail.feedback_next_action),
+            "篇带行动计划",
         ),
         ArchiveStats(
             "阅读推进",
@@ -1486,7 +1612,7 @@ def _render_review_queue_page(paper_details: list[PaperDetail]) -> str:
         + "</section>"
         + _render_section(
             "行动队列",
-            "把未标记高相关论文、再次出现的待跟进论文，以及仍待处理的标星论文集中起来。",
+            "优先看已过期、3 天内到期，以及已经写下下一步动作但还没推进的论文。",
             section_blocks,
         )
     )
@@ -1751,6 +1877,18 @@ def _render_paper_page(detail: PaperDetail) -> str:
                     feedback_label_zh(detail.feedback_status) or "未设置",
                 )
                 + _render_meta_block(
+                    "下一步",
+                    detail.feedback_next_action or "未设置",
+                )
+                + _render_meta_block(
+                    "最晚处理",
+                    (
+                        _format_due_date(detail.feedback_due_date)
+                        if detail.feedback_due_date is not None
+                        else "未设置"
+                    ),
+                )
+                + _render_meta_block(
                     "个人备注",
                     detail.feedback_note or "未设置",
                 )
@@ -1762,16 +1900,32 @@ def _render_paper_page(detail: PaperDetail) -> str:
             ),
         )
         + _render_section(
-            "个人备注",
+            "个人反馈",
             "把你为什么标记这篇论文、接下来准备怎么处理，直接挂在规范化详情页上。",
             (
                 '<div class="detail-grid">'
-                + _render_meta_block("备注内容", detail.feedback_note or "")
+                + _render_meta_block("备注内容", detail.feedback_note or "未设置")
+                + _render_meta_block(
+                    "下一步",
+                    detail.feedback_next_action or "未设置",
+                )
+                + _render_meta_block(
+                    "最晚处理",
+                    (
+                        _format_due_date(detail.feedback_due_date)
+                        if detail.feedback_due_date is not None
+                        else "未设置"
+                    ),
+                )
                 + "</div>"
-                if detail.feedback_note
+                if (
+                    detail.feedback_note
+                    or detail.feedback_next_action
+                    or detail.feedback_due_date is not None
+                )
                 else (
                     '<div class="empty">'
-                    "当前还没有个人备注，可以先用本地 feedback CLI 补上。"
+                    "当前还没有个人反馈，可以先用本地 feedback CLI 补上。"
                     "</div>"
                 )
             ),
@@ -1877,6 +2031,8 @@ def _render_feedback_actions(detail: PaperDetail) -> str:
         "python -m paper_digest feedback note "
         f"'{canonical_id}' 'TODO: add note' --config config.toml"
     )
+    action_command = feedback_action_command_snippet(canonical_id)
+    due_command = feedback_due_command_snippet(canonical_id)
     buttons = [
         ("复制 canonical_id", canonical_id),
         ("复制标星命令", feedback_command_snippet(canonical_id, "star")),
@@ -1888,6 +2044,8 @@ def _render_feedback_actions(detail: PaperDetail) -> str:
         ("复制已完成命令", feedback_command_snippet(canonical_id, "done")),
         ("复制忽略命令", feedback_command_snippet(canonical_id, "ignore")),
         ("复制备注命令", note_command),
+        ("复制下一步命令", action_command),
+        ("复制到期命令", due_command),
     ]
     return (
         '<div class="chip-cloud">'
@@ -2428,8 +2586,8 @@ def _group_keyword_matches(
         if match.date not in order:
             order.append(match.date)
         bucket.append(match)
-    for date in order:
-        groups.append((date, seen_dates[date]))
+    for day_label in order:
+        groups.append((day_label, seen_dates[day_label]))
     return groups
 
 
@@ -3313,6 +3471,10 @@ def _format_seen_label(value: datetime) -> str:
     return f"{value.strftime('%Y-%m-%d %H:%M:%S')} ({timezone})"
 
 
+def _format_due_date(value: date) -> str:
+    return value.isoformat()
+
+
 def _sum_counts(points: list[CountPoint], limit: int) -> int:
     return sum(point.count for point in points[:limit])
 
@@ -3350,6 +3512,16 @@ def _optional_clean_string(value: object) -> str | None:
         return None
     cleaned = value.strip()
     return cleaned or None
+
+
+def _optional_date(value: object) -> date | None:
+    cleaned = _optional_clean_string(value)
+    if cleaned is None:
+        return None
+    try:
+        return date.fromisoformat(cleaned)
+    except ValueError:
+        return None
 
 
 def _optional_feedback_status(value: object) -> FeedbackStatus | None:
@@ -3450,6 +3622,30 @@ def _resolve_feedback_note(
         if entry is not None and entry.note is not None:
             return entry.note
     return archived_note
+
+
+def _resolve_feedback_next_action(
+    canonical_id: str,
+    archived_next_action: str | None,
+    feedback_state: FeedbackState | None,
+) -> str | None:
+    if feedback_state is not None:
+        entry = feedback_state.papers.get(canonical_id)
+        if entry is not None and entry.next_action is not None:
+            return entry.next_action
+    return archived_next_action
+
+
+def _resolve_feedback_due_date(
+    canonical_id: str,
+    archived_due_date: date | None,
+    feedback_state: FeedbackState | None,
+) -> date | None:
+    if feedback_state is not None:
+        entry = feedback_state.papers.get(canonical_id)
+        if entry is not None and entry.due_date is not None:
+            return entry.due_date
+    return archived_due_date
 
 
 def _canonical_id_from_payload(

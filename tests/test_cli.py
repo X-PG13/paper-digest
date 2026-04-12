@@ -338,3 +338,115 @@ class CliTests(unittest.TestCase):
             payload = json.loads(feedback_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["papers"], {})
             self.assertIn("Cleared doi:10.5555/example", stdout.getvalue())
+
+    def test_feedback_action_and_due_round_trip(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = self._write_feedback_config(root)
+            feedback_path = root / ".paper-digest-state" / "feedback.json"
+
+            exit_code = main(
+                [
+                    "feedback",
+                    "set",
+                    "doi:10.5555/example",
+                    "star",
+                    "--config",
+                    str(config_path),
+                ]
+            )
+            self.assertEqual(exit_code, 0)
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "feedback",
+                        "action",
+                        "set",
+                        "doi:10.5555/example",
+                        "compare baseline table",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(feedback_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                payload["papers"]["doi:10.5555/example"]["next_action"],
+                "compare baseline table",
+            )
+            self.assertIn(
+                "Updated next action for doi:10.5555/example",
+                stdout.getvalue(),
+            )
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "feedback",
+                        "due",
+                        "set",
+                        "doi:10.5555/example",
+                        "2026-04-18",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(feedback_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                payload["papers"]["doi:10.5555/example"]["due_date"],
+                "2026-04-18",
+            )
+            self.assertIn(
+                "Updated due date for doi:10.5555/example -> 2026-04-18",
+                stdout.getvalue(),
+            )
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(["feedback", "list", "--config", str(config_path)])
+
+            self.assertEqual(exit_code, 0)
+            self.assertIn("2026-04-18", stdout.getvalue())
+            self.assertIn("compare baseline table", stdout.getvalue())
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "feedback",
+                        "action",
+                        "clear",
+                        "doi:10.5555/example",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+            self.assertEqual(exit_code, 0)
+            self.assertIn(
+                "Cleared next action for doi:10.5555/example",
+                stdout.getvalue(),
+            )
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "feedback",
+                        "due",
+                        "clear",
+                        "doi:10.5555/example",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+            self.assertEqual(exit_code, 0)
+            self.assertIn(
+                "Cleared due date for doi:10.5555/example",
+                stdout.getvalue(),
+            )

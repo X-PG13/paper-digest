@@ -6,7 +6,7 @@ import re
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from urllib.parse import urlencode
 from urllib.request import Request
 
@@ -64,6 +64,8 @@ class Paper:
     match_reasons: list[str] = field(default_factory=list)
     feedback_status: FeedbackStatus | None = None
     feedback_note: str | None = None
+    feedback_next_action: str | None = None
+    feedback_due_date: date | None = None
 
     def __post_init__(self) -> None:
         self.doi = (
@@ -96,12 +98,19 @@ class Paper:
             self.relevance_score = self.base_relevance_score
         self.match_reasons = _merge_unique_strings(self.match_reasons)
         self.feedback_note = _normalize_optional_note(self.feedback_note)
+        self.feedback_next_action = _normalize_optional_note(self.feedback_next_action)
+        self.feedback_due_date = _normalize_optional_date(self.feedback_due_date)
 
     def to_dict(self) -> dict[str, object]:
         data = asdict(self)
         data.pop("base_relevance_score", None)
         data["published_at"] = self.published_at.isoformat()
         data["updated_at"] = self.updated_at.isoformat()
+        data["feedback_due_date"] = (
+            self.feedback_due_date.isoformat()
+            if self.feedback_due_date is not None
+            else None
+        )
         data["canonical_id"] = self.canonical_id()
         return data
 
@@ -157,6 +166,12 @@ class Paper:
         self.relevance_score = max(self.relevance_score, other.relevance_score)
         self.feedback_status = preferred.feedback_status or secondary.feedback_status
         self.feedback_note = preferred.feedback_note or secondary.feedback_note
+        self.feedback_next_action = (
+            preferred.feedback_next_action or secondary.feedback_next_action
+        )
+        self.feedback_due_date = (
+            preferred.feedback_due_date or secondary.feedback_due_date
+        )
         self.match_reasons = _merge_unique_strings(
             [*self.match_reasons, *other.match_reasons]
         )
@@ -334,6 +349,21 @@ def _normalize_optional_note(value: str | None) -> str | None:
         return None
     normalized = value.strip()
     return normalized or None
+
+
+def _normalize_optional_date(value: object) -> date | None:
+    if value is None:
+        return None
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    if not isinstance(value, str):
+        return None
+    try:
+        return date.fromisoformat(value.strip())
+    except ValueError:
+        return None
 
 
 def _normalize_source_urls(

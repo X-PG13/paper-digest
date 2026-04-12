@@ -208,17 +208,19 @@ hide_ignored = true
 - `star`, `follow_up`, and `reading` boost ranking; `done` lowers priority;
   `ignore` either hides papers or down-ranks them, depending on
   `hide_ignored`.
-- Each feedback entry can also carry a free-form `note`, so you can record why
-  you starred a paper or what to check next.
+- Each feedback entry can also carry a free-form `note`, a concrete
+  `next_action`, and an optional `due_date`, so you can record both why you
+  marked a paper and what should happen next.
 - The archive site exposes a dedicated `output/site/reading-list.html` page
   that aggregates starred, follow-up, and in-progress papers.
 - The archive site also exposes `output/site/weekly-review.html`, which groups
   papers into pending, in-progress, completed, and resurfaced buckets.
 - The archive site exposes `output/site/review-queue.html`, which highlights
-  newly surfaced unmarked papers, resurfaced follow-ups, and starred papers
-  that still need action.
-- Paper detail pages, reading lists, weekly review sections, and Focus outputs
-  all surface those feedback notes once they are present.
+  overdue items, papers due within 3 days, queued next actions, newly surfaced
+  unmarked papers, and resurfaced follow-ups.
+- Paper detail pages, reading lists, weekly review sections, review queues, and
+  Focus outputs all surface those feedback notes, next actions, and due dates
+  once they are present.
 
 Notification focus:
 
@@ -239,6 +241,9 @@ max_focus_items = 5
 - Focus items explain why they were pushed, preserve the paper's
   `star` / `follow_up` status, and surface coverage context such as active days,
   feed span, and appearance count.
+- Daily digests now also include a dedicated "本周该处理什么" section for
+  overdue items, papers due within 3 days, and queued next actions on
+  `star` / `follow_up` / `reading` papers.
 
 Example feedback file:
 
@@ -266,6 +271,10 @@ python -m paper_digest feedback set 'doi:10.5555/paper-circle' reading --config 
 python -m paper_digest feedback set 'doi:10.5555/paper-circle' done --config config.toml
 python -m paper_digest feedback set 'doi:10.5555/paper-circle' star --note 'anchor paper for review' --config config.toml
 python -m paper_digest feedback note 'doi:10.5555/paper-circle' 'compare section 4 with baseline table' --config config.toml
+python -m paper_digest feedback action set 'doi:10.5555/paper-circle' 'compare baseline table' --config config.toml
+python -m paper_digest feedback due set 'doi:10.5555/paper-circle' 2026-04-18 --config config.toml
+python -m paper_digest feedback action clear 'doi:10.5555/paper-circle' --config config.toml
+python -m paper_digest feedback due clear 'doi:10.5555/paper-circle' --config config.toml
 python -m paper_digest feedback clear-note 'doi:10.5555/paper-circle' --config config.toml
 python -m paper_digest feedback clear 'doi:10.5555/paper-circle' --config config.toml
 python -m paper_digest feedback list --config config.toml

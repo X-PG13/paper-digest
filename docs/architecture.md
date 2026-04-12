@@ -71,8 +71,10 @@ scale as new paper sources and output channels are added.
 
 - Loads a local per-paper feedback map keyed by canonical paper identity.
 - Persists feedback updates back to disk for CLI-driven workflows.
-- Applies `star`, `follow_up`, and `ignore` signals before final digest
-  ranking.
+- Applies `star`, `follow_up`, `reading`, `done`, and `ignore` signals before
+  final digest ranking.
+- Carries optional per-paper notes, next actions, and due dates so the local
+  feedback file can act as a lightweight research task queue.
 - Keeps user feedback policy out of the source clients and renderers.
 
 ### `paper_digest.archive_site`
@@ -90,6 +92,9 @@ scale as new paper sources and output channels are added.
   can highlight papers that keep resurfacing across runs.
 - Builds a dedicated reading-list view from local feedback signals so starred
   and follow-up papers stay visible as a personal research queue.
+- Prioritizes overdue items, papers due within 3 days, and queued next actions
+  in the review queue so the archive site can double as a lightweight action
+  board.
 - Builds a weekly-review view and copyable feedback command affordances so the
   static site can feed back into the local feedback file without becoming a
   dynamic web app.
@@ -166,11 +171,16 @@ scale as new paper sources and output channels are added.
 - Supports deferred state persistence so failed deliveries do not drop papers.
 - Applies local feedback signals before cross-run deduplication and final
   scoring.
+- Builds both `Focus` items and review-action items so notifications can say
+  not just why a paper matters today, but also what should be handled this
+  week.
 
 ### `paper_digest.cli`
 
 - Handles argument parsing and exit codes.
 - Supports both digest generation and local feedback-state management commands.
+- Exposes nested feedback subcommands for note, next-action, and due-date
+  management without requiring direct JSON edits.
 - Converts domain errors into concise user-facing messages.
 
 ## Extension Strategy

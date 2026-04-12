@@ -21,7 +21,13 @@ from paper_digest.delivery import (
     build_notification_messages,
     send_configured_deliveries,
 )
-from paper_digest.digest import DigestRun, FeedDigest, FocusItem, TopicDigest
+from paper_digest.digest import (
+    ActionItem,
+    DigestRun,
+    FeedDigest,
+    FocusItem,
+    TopicDigest,
+)
 
 
 def build_digest() -> DigestRun:
@@ -162,6 +168,45 @@ class DeliveryTests(unittest.TestCase):
         self.assertIn("Focus=1, star=1", messages[0].title)
         self.assertIn("# Daily Paper Focus", messages[0].body)
         self.assertIn("Why it was pushed", messages[0].body)
+
+    def test_build_notification_messages_supports_feedback_only_action_digest(
+        self,
+    ) -> None:
+        delivery = FeishuWebhookConfig(
+            webhook_url="https://open.feishu.cn/example",
+            title_prefix="[Robot]",
+            skip_if_empty=True,
+            target="digest",
+            include_focus=False,
+        )
+        digest = DigestRun(
+            generated_at=datetime(2026, 4, 8, 10, 0, tzinfo=UTC),
+            timezone="UTC",
+            lookback_hours=24,
+            feeds=[FeedDigest(name="LLM", papers=[])],
+            action_items=[
+                ActionItem(
+                    canonical_id="arxiv:2604.06170",
+                    title="Paper Circle",
+                    abstract_url="https://arxiv.org/abs/2604.06170v1",
+                    summary="Framework summary",
+                    source_label="arxiv",
+                    feedback_status="star",
+                    next_action="compare planner design",
+                    due_date=datetime(2026, 4, 10, tzinfo=UTC).date(),
+                    days_until_due=2,
+                    reasons=["due_soon", "next_action_pending"],
+                    feed_names=["LLM"],
+                )
+            ],
+        )
+
+        messages = build_notification_messages(delivery, digest, feedback_only=True)
+
+        self.assertEqual(len(messages), 1)
+        self.assertIn("Actions=1, due_soon=1, next_action=1", messages[0].title)
+        self.assertIn("## What To Review This Week", messages[0].body)
+        self.assertNotIn("## Focus", messages[0].body)
 
     def test_build_notification_messages_can_exclude_focus_from_delivery(self) -> None:
         delivery = FeishuWebhookConfig(
