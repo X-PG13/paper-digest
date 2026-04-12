@@ -264,12 +264,28 @@ def render_notification_markdown(
     feedback_only: bool,
 ) -> str:
     if feedback_only:
-        if digest.template == "zh_daily_brief":
-            return _render_zh_focus_only_brief(digest)
-        return _render_default_focus_only_markdown(digest)
+        return render_feedback_brief_markdown(digest)
     if digest.template == "zh_daily_brief":
         return _render_zh_daily_brief(digest)
     return _render_default_markdown(digest)
+
+
+def render_feedback_brief_markdown(digest: DigestRun) -> str:
+    if digest.template == "zh_daily_brief":
+        return _render_zh_focus_only_brief(digest)
+    return _render_default_focus_only_markdown(digest)
+
+
+def render_focus_brief_markdown(digest: DigestRun) -> str:
+    if digest.template == "zh_daily_brief":
+        return _render_zh_focus_brief_only(digest)
+    return _render_default_focus_brief_only(digest)
+
+
+def render_action_brief_markdown(digest: DigestRun) -> str:
+    if digest.template == "zh_daily_brief":
+        return _render_zh_action_only_brief(digest)
+    return _render_default_action_only_markdown(digest)
 
 
 def _render_default_markdown(digest: DigestRun) -> str:
@@ -509,6 +525,33 @@ def _render_default_focus_only_markdown(digest: DigestRun) -> str:
     return "\n".join(lines).strip() + "\n"
 
 
+def _render_default_focus_brief_only(digest: DigestRun) -> str:
+    local_tz = ZoneInfo(digest.timezone)
+    generated_at = digest.generated_at.astimezone(local_tz).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+    lines = [
+        "# Daily Paper Focus",
+        "",
+        f"- Generated at: {generated_at} ({digest.timezone})",
+        f"- Lookback window: last {digest.lookback_hours} hours",
+        f"- Focus summary: {summarize_focus_items(digest)}",
+        "",
+    ]
+    focus_lines = _render_focus_lines(digest, language="en")
+    if focus_lines:
+        lines.extend(focus_lines)
+    else:
+        lines.extend(
+            [
+                "## Focus",
+                "",
+                "No feedback-triggered papers for this run.",
+            ]
+        )
+    return "\n".join(lines).strip() + "\n"
+
+
 def _render_zh_focus_only_brief(digest: DigestRun) -> str:
     local_tz = ZoneInfo(digest.timezone)
     generated_at = digest.generated_at.astimezone(local_tz).strftime(
@@ -536,6 +579,87 @@ def _render_zh_focus_only_brief(digest: DigestRun) -> str:
                 "## Focus 区块",
                 "",
                 "本次没有触发反馈驱动的关注论文。",
+            ]
+        )
+    return "\n".join(lines).strip() + "\n"
+
+
+def _render_zh_focus_brief_only(digest: DigestRun) -> str:
+    local_tz = ZoneInfo(digest.timezone)
+    generated_at = digest.generated_at.astimezone(local_tz).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+    lines = [
+        "# 每日关注清单",
+        "",
+        f"- 生成时间：{generated_at} ({digest.timezone})",
+        f"- 检索窗口：最近 {digest.lookback_hours} 小时",
+        f"- Focus 概览：{summarize_focus_items(digest)}",
+        "",
+    ]
+    focus_lines = _render_focus_lines(digest, language="zh")
+    if focus_lines:
+        lines.extend(focus_lines)
+    else:
+        lines.extend(
+            [
+                "## Focus 区块",
+                "",
+                "本次没有触发反馈驱动的关注论文。",
+            ]
+        )
+    return "\n".join(lines).strip() + "\n"
+
+
+def _render_default_action_only_markdown(digest: DigestRun) -> str:
+    local_tz = ZoneInfo(digest.timezone)
+    generated_at = digest.generated_at.astimezone(local_tz).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+    lines = [
+        "# Daily Action Brief",
+        "",
+        f"- Generated at: {generated_at} ({digest.timezone})",
+        f"- Lookback window: last {digest.lookback_hours} hours",
+        f"- Action summary: {summarize_action_items(digest)}",
+        "",
+    ]
+    action_lines = _render_action_lines(digest, language="en")
+    if action_lines:
+        lines.extend(action_lines)
+    else:
+        lines.extend(
+            [
+                "## What To Review This Week",
+                "",
+                "No action reminders for this run.",
+            ]
+        )
+    return "\n".join(lines).strip() + "\n"
+
+
+def _render_zh_action_only_brief(digest: DigestRun) -> str:
+    local_tz = ZoneInfo(digest.timezone)
+    generated_at = digest.generated_at.astimezone(local_tz).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+    lines = [
+        "# 每日行动简报",
+        "",
+        f"- 生成时间：{generated_at} ({digest.timezone})",
+        f"- 检索窗口：最近 {digest.lookback_hours} 小时",
+        f"- 行动概览：{summarize_action_items(digest)}",
+        "",
+    ]
+    action_lines = _render_action_lines(digest, language="zh")
+    if action_lines:
+        lines.extend(action_lines)
+    else:
+        lines.extend(
+            [
+                "## 本周该处理什么",
+                "",
+                "本次没有触发行动提醒。",
             ]
         )
     return "\n".join(lines).strip() + "\n"

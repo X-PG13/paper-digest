@@ -194,6 +194,8 @@ class LoadConfigTests(unittest.TestCase):
                     focus_statuses = ["star"]
                     focus_reasons = ["new_starred"]
                     focus_max_items = 2
+                    include_actions = true
+                    action_target = "separate"
 
                     [[deliveries]]
                     type = "wecom_webhook"
@@ -202,6 +204,7 @@ class LoadConfigTests(unittest.TestCase):
                     skip_if_empty = false
                     target = "digest"
                     focus_target = "separate"
+                    action_only = true
 
                     [[deliveries]]
                     type = "slack_webhook"
@@ -242,7 +245,10 @@ class LoadConfigTests(unittest.TestCase):
         self.assertEqual(config.deliveries[1].focus_statuses, ["star"])
         self.assertEqual(config.deliveries[1].focus_reasons, ["new_starred"])
         self.assertEqual(config.deliveries[1].focus_max_items, 2)
+        self.assertTrue(config.deliveries[1].include_actions)
+        self.assertEqual(config.deliveries[1].action_target, "separate")
         self.assertEqual(config.deliveries[2].focus_target, "separate")
+        self.assertTrue(config.deliveries[2].action_only)
 
     def test_load_config_reads_analysis_settings(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -743,6 +749,9 @@ class LoadConfigTests(unittest.TestCase):
                     include_follow_up_resurfaced = true
                     include_starred_momentum = false
                     max_focus_items = 7
+                    max_action_items = 4
+                    action_overdue_only = true
+                    action_due_within_days = 2
                     """
                 ).strip(),
                 encoding="utf-8",
@@ -755,3 +764,6 @@ class LoadConfigTests(unittest.TestCase):
         self.assertTrue(config.notify.include_follow_up_resurfaced)
         self.assertFalse(config.notify.include_starred_momentum)
         self.assertEqual(config.notify.max_focus_items, 7)
+        self.assertEqual(config.notify.max_action_items, 4)
+        self.assertTrue(config.notify.action_overdue_only)
+        self.assertEqual(config.notify.action_due_within_days, 2)

@@ -14,6 +14,7 @@ from paper_digest.config import (
     DigestConfig,
     FeedbackConfig,
     FeedConfig,
+    NotifyConfig,
     RankingConfig,
     RankingWeights,
     StateConfig,
@@ -949,3 +950,187 @@ class GenerateDigestTests(unittest.TestCase):
             digest.action_items[1].next_action,
             "compare planner design",
         )
+
+    @patch("paper_digest.service.fetch_feed_papers")
+    def test_generate_digest_can_filter_action_items_by_due_window(
+        self,
+        mock_fetch_feed_papers,
+    ) -> None:
+        now = datetime(2026, 4, 9, 9, 30, tzinfo=ZoneInfo("UTC"))
+        feed = FeedConfig(
+            name="LLM",
+            categories=["cs.AI"],
+            keywords=["agent"],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+        )
+        papers = [
+            Paper(
+                title="Overdue Reading",
+                summary="Agent paper with an overdue task.",
+                authors=["Alice"],
+                categories=["cs.AI"],
+                paper_id="http://arxiv.org/abs/2604.00001v1",
+                abstract_url="https://arxiv.org/abs/2604.00001v1",
+                pdf_url="https://arxiv.org/pdf/2604.00001v1",
+                published_at=datetime(2026, 4, 9, 1, 0, tzinfo=ZoneInfo("UTC")),
+                updated_at=datetime(2026, 4, 9, 1, 0, tzinfo=ZoneInfo("UTC")),
+            ),
+            Paper(
+                title="Due Soon Planning",
+                summary="Agent paper with a due-soon action.",
+                authors=["Bob"],
+                categories=["cs.AI"],
+                paper_id="http://arxiv.org/abs/2604.06170v1",
+                abstract_url="https://arxiv.org/abs/2604.06170v1",
+                pdf_url="https://arxiv.org/pdf/2604.06170v1",
+                published_at=datetime(2026, 4, 9, 0, 30, tzinfo=ZoneInfo("UTC")),
+                updated_at=datetime(2026, 4, 9, 0, 30, tzinfo=ZoneInfo("UTC")),
+            ),
+            Paper(
+                title="Far Future Follow Up",
+                summary="Agent paper with a later due date.",
+                authors=["Carol"],
+                categories=["cs.AI"],
+                paper_id="http://arxiv.org/abs/2604.00002v1",
+                abstract_url="https://arxiv.org/abs/2604.00002v1",
+                pdf_url="https://arxiv.org/pdf/2604.00002v1",
+                published_at=datetime(2026, 4, 9, 2, 0, tzinfo=ZoneInfo("UTC")),
+                updated_at=datetime(2026, 4, 9, 2, 0, tzinfo=ZoneInfo("UTC")),
+            ),
+        ]
+        mock_fetch_feed_papers.return_value = papers
+
+        with TemporaryDirectory() as temp_dir:
+            config = AppConfig(
+                timezone="UTC",
+                lookback_hours=24,
+                output_dir=Path(temp_dir) / "output",
+                request_delay_seconds=0.0,
+                feeds=[feed],
+                state=StateConfig(
+                    enabled=True,
+                    path=Path(temp_dir) / "state.json",
+                    retention_days=90,
+                ),
+                notify=NotifyConfig(
+                    action_due_within_days=3,
+                    max_action_items=5,
+                ),
+            )
+            feedback_state = FeedbackState(
+                papers={
+                    "arxiv:2604.00001": FeedbackEntry(
+                        status="reading",
+                        updated_at=datetime(2026, 4, 8, 8, 0, tzinfo=ZoneInfo("UTC")),
+                        due_date=date(2026, 4, 8),
+                    ),
+                    "arxiv:2604.06170": FeedbackEntry(
+                        status="star",
+                        updated_at=datetime(2026, 4, 9, 8, 0, tzinfo=ZoneInfo("UTC")),
+                        next_action="compare planner design",
+                        due_date=date(2026, 4, 11),
+                    ),
+                    "arxiv:2604.00002": FeedbackEntry(
+                        status="follow_up",
+                        updated_at=datetime(2026, 4, 8, 10, 0, tzinfo=ZoneInfo("UTC")),
+                        next_action="schedule a re-check",
+                        due_date=date(2026, 4, 20),
+                    ),
+                }
+            )
+
+            digest = generate_digest(
+                config,
+                now=now,
+                state=DigestState(seen_papers={}),
+                feedback_state=feedback_state,
+            )
+
+        self.assertEqual(
+            [item.canonical_id for item in digest.action_items],
+            ["arxiv:2604.00001", "arxiv:2604.06170"],
+        )
+
+    @patch("paper_digest.service.fetch_feed_papers")
+    def test_generate_digest_can_limit_action_items_to_overdue_only(
+        self,
+        mock_fetch_feed_papers,
+    ) -> None:
+        now = datetime(2026, 4, 9, 9, 30, tzinfo=ZoneInfo("UTC"))
+        feed = FeedConfig(
+            name="LLM",
+            categories=["cs.AI"],
+            keywords=["agent"],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+        )
+        mock_fetch_feed_papers.return_value = [
+            Paper(
+                title="Overdue Reading",
+                summary="Agent paper with an overdue task.",
+                authors=["Alice"],
+                categories=["cs.AI"],
+                paper_id="http://arxiv.org/abs/2604.00001v1",
+                abstract_url="https://arxiv.org/abs/2604.00001v1",
+                pdf_url="https://arxiv.org/pdf/2604.00001v1",
+                published_at=datetime(2026, 4, 9, 1, 0, tzinfo=ZoneInfo("UTC")),
+                updated_at=datetime(2026, 4, 9, 1, 0, tzinfo=ZoneInfo("UTC")),
+            ),
+            Paper(
+                title="Due Soon Planning",
+                summary="Agent paper with a due-soon action.",
+                authors=["Bob"],
+                categories=["cs.AI"],
+                paper_id="http://arxiv.org/abs/2604.06170v1",
+                abstract_url="https://arxiv.org/abs/2604.06170v1",
+                pdf_url="https://arxiv.org/pdf/2604.06170v1",
+                published_at=datetime(2026, 4, 9, 0, 30, tzinfo=ZoneInfo("UTC")),
+                updated_at=datetime(2026, 4, 9, 0, 30, tzinfo=ZoneInfo("UTC")),
+            ),
+        ]
+
+        with TemporaryDirectory() as temp_dir:
+            config = AppConfig(
+                timezone="UTC",
+                lookback_hours=24,
+                output_dir=Path(temp_dir) / "output",
+                request_delay_seconds=0.0,
+                feeds=[feed],
+                state=StateConfig(
+                    enabled=True,
+                    path=Path(temp_dir) / "state.json",
+                    retention_days=90,
+                ),
+                notify=NotifyConfig(
+                    action_overdue_only=True,
+                    max_action_items=5,
+                ),
+            )
+            feedback_state = FeedbackState(
+                papers={
+                    "arxiv:2604.00001": FeedbackEntry(
+                        status="reading",
+                        updated_at=datetime(2026, 4, 8, 8, 0, tzinfo=ZoneInfo("UTC")),
+                        due_date=date(2026, 4, 8),
+                    ),
+                    "arxiv:2604.06170": FeedbackEntry(
+                        status="star",
+                        updated_at=datetime(2026, 4, 9, 8, 0, tzinfo=ZoneInfo("UTC")),
+                        next_action="compare planner design",
+                        due_date=date(2026, 4, 11),
+                    ),
+                }
+            )
+
+            digest = generate_digest(
+                config,
+                now=now,
+                state=DigestState(seen_papers={}),
+                feedback_state=feedback_state,
+            )
+
+        self.assertEqual(len(digest.action_items), 1)
+        self.assertEqual(digest.action_items[0].canonical_id, "arxiv:2604.00001")

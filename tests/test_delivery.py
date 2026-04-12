@@ -268,6 +268,88 @@ class DeliveryTests(unittest.TestCase):
         self.assertIn("## Focus 区块", messages[1].body)
         self.assertIn("Focus Brief", messages[1].title)
 
+    def test_build_notification_messages_can_send_separate_action_brief(self) -> None:
+        delivery = FeishuWebhookConfig(
+            webhook_url="https://open.feishu.cn/example",
+            title_prefix="[Robot]",
+            skip_if_empty=True,
+            target="digest",
+            include_actions=True,
+            action_target="separate",
+        )
+        digest = build_digest()
+        digest.action_items = [
+            ActionItem(
+                canonical_id="arxiv:2604.06170",
+                title="Paper Circle",
+                abstract_url="https://arxiv.org/abs/2604.06170v1",
+                summary="Framework summary",
+                source_label="arxiv",
+                feedback_status="star",
+                feedback_note="anchor paper",
+                next_action="compare planner design",
+                due_date=datetime(2026, 4, 10, tzinfo=UTC).date(),
+                days_until_due=2,
+                reasons=["due_soon", "next_action_pending"],
+                feed_names=["LLM"],
+            )
+        ]
+
+        messages = build_notification_messages(delivery, digest)
+
+        self.assertEqual(len(messages), 2)
+        self.assertEqual(messages[0].kind, "digest")
+        self.assertEqual(messages[1].kind, "action")
+        self.assertNotIn("## 本周该处理什么", messages[0].body)
+        self.assertIn("## 本周该处理什么", messages[1].body)
+        self.assertIn("Action Brief", messages[1].title)
+
+    def test_build_notification_messages_can_send_action_only_delivery(self) -> None:
+        delivery = FeishuWebhookConfig(
+            webhook_url="https://open.feishu.cn/example",
+            title_prefix="[Robot]",
+            skip_if_empty=True,
+            target="digest",
+            include_focus=False,
+            include_actions=True,
+            action_only=True,
+        )
+        digest = build_digest()
+        digest.focus_items = [
+            FocusItem(
+                canonical_id="arxiv:2604.06170",
+                title="Paper Circle",
+                abstract_url="https://arxiv.org/abs/2604.06170v1",
+                summary="Framework summary",
+                source_label="arxiv",
+                feedback_status="star",
+                reasons=["new_starred"],
+                feed_names=["LLM"],
+            )
+        ]
+        digest.action_items = [
+            ActionItem(
+                canonical_id="arxiv:2604.06170",
+                title="Paper Circle",
+                abstract_url="https://arxiv.org/abs/2604.06170v1",
+                summary="Framework summary",
+                source_label="arxiv",
+                feedback_status="star",
+                next_action="compare planner design",
+                due_date=datetime(2026, 4, 10, tzinfo=UTC).date(),
+                days_until_due=2,
+                reasons=["due_soon", "next_action_pending"],
+                feed_names=["LLM"],
+            )
+        ]
+
+        messages = build_notification_messages(delivery, digest)
+
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0].kind, "action")
+        self.assertIn("## 本周该处理什么", messages[0].body)
+        self.assertNotIn("## Focus", messages[0].body)
+
     def test_build_notification_messages_filters_focus_by_delivery_rules(self) -> None:
         delivery = FeishuWebhookConfig(
             webhook_url="https://open.feishu.cn/example",

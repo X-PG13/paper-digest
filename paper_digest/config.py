@@ -16,6 +16,7 @@ class ConfigError(ValueError):
 FeedSource = Literal["arxiv", "crossref", "pubmed", "semantic_scholar", "openalex"]
 DeliveryTarget = Literal["digest", "per_feed"]
 DeliveryFocusTarget = Literal["digest", "separate"]
+DeliveryActionTarget = Literal["digest", "separate"]
 DeliveryType = Literal[
     "email",
     "feishu_webhook",
@@ -64,6 +65,9 @@ class EmailConfig:
     focus_statuses: list[FeedbackStatus] = field(default_factory=list)
     focus_reasons: list[FocusReason] = field(default_factory=list)
     focus_max_items: int | None = None
+    include_actions: bool = True
+    action_target: DeliveryActionTarget = "digest"
+    action_only: bool = False
 
 
 @dataclass(slots=True, frozen=True)
@@ -77,6 +81,9 @@ class FeishuWebhookConfig:
     focus_statuses: list[FeedbackStatus] = field(default_factory=list)
     focus_reasons: list[FocusReason] = field(default_factory=list)
     focus_max_items: int | None = None
+    include_actions: bool = True
+    action_target: DeliveryActionTarget = "digest"
+    action_only: bool = False
 
 
 @dataclass(slots=True, frozen=True)
@@ -90,6 +97,9 @@ class WeComWebhookConfig:
     focus_statuses: list[FeedbackStatus] = field(default_factory=list)
     focus_reasons: list[FocusReason] = field(default_factory=list)
     focus_max_items: int | None = None
+    include_actions: bool = True
+    action_target: DeliveryActionTarget = "digest"
+    action_only: bool = False
 
 
 @dataclass(slots=True, frozen=True)
@@ -103,6 +113,9 @@ class SlackWebhookConfig:
     focus_statuses: list[FeedbackStatus] = field(default_factory=list)
     focus_reasons: list[FocusReason] = field(default_factory=list)
     focus_max_items: int | None = None
+    include_actions: bool = True
+    action_target: DeliveryActionTarget = "digest"
+    action_only: bool = False
 
 
 @dataclass(slots=True, frozen=True)
@@ -116,6 +129,9 @@ class DiscordWebhookConfig:
     focus_statuses: list[FeedbackStatus] = field(default_factory=list)
     focus_reasons: list[FocusReason] = field(default_factory=list)
     focus_max_items: int | None = None
+    include_actions: bool = True
+    action_target: DeliveryActionTarget = "digest"
+    action_only: bool = False
 
 
 @dataclass(slots=True, frozen=True)
@@ -130,6 +146,9 @@ class TelegramBotConfig:
     focus_statuses: list[FeedbackStatus] = field(default_factory=list)
     focus_reasons: list[FocusReason] = field(default_factory=list)
     focus_max_items: int | None = None
+    include_actions: bool = True
+    action_target: DeliveryActionTarget = "digest"
+    action_only: bool = False
 
 
 DeliveryConfig = (
@@ -168,6 +187,9 @@ class NotifyConfig:
     include_follow_up_resurfaced: bool = True
     include_starred_momentum: bool = True
     max_focus_items: int = 5
+    max_action_items: int = 5
+    action_overdue_only: bool = False
+    action_due_within_days: int | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -448,6 +470,18 @@ def _load_notify(value: Any) -> NotifyConfig:
             notify.get("max_focus_items", 5),
             "notify.max_focus_items",
         ),
+        max_action_items=_positive_int(
+            notify.get("max_action_items", 5),
+            "notify.max_action_items",
+        ),
+        action_overdue_only=_bool(
+            notify.get("action_overdue_only", False),
+            "notify.action_overdue_only",
+        ),
+        action_due_within_days=_optional_non_negative_int(
+            notify.get("action_due_within_days"),
+            "notify.action_due_within_days",
+        ),
     )
 
 
@@ -640,7 +674,7 @@ def _build_email_config(value: dict[str, Any], field_name: str) -> EmailConfig:
             f"{field_name}.to_addresses must not be empty when email is enabled"
         )
 
-    return EmailConfig(
+    config = EmailConfig(
         smtp_host=_required_string(value.get("smtp_host"), f"{field_name}.smtp_host"),
         smtp_port=_positive_int(value.get("smtp_port", 465), f"{field_name}.smtp_port"),
         username=username,
@@ -685,14 +719,28 @@ def _build_email_config(value: dict[str, Any], field_name: str) -> EmailConfig:
             value.get("focus_max_items"),
             f"{field_name}.focus_max_items",
         ),
+        include_actions=_bool(
+            value.get("include_actions", True),
+            f"{field_name}.include_actions",
+        ),
+        action_target=_delivery_action_target(
+            value.get("action_target", "digest"),
+            f"{field_name}.action_target",
+        ),
+        action_only=_bool(
+            value.get("action_only", False),
+            f"{field_name}.action_only",
+        ),
     )
+    _validate_delivery_action_config(config, field_name)
+    return config
 
 
 def _build_feishu_webhook_config(
     value: dict[str, Any],
     field_name: str,
 ) -> FeishuWebhookConfig:
-    return FeishuWebhookConfig(
+    config = FeishuWebhookConfig(
         webhook_url=_required_string(
             value.get("webhook_url"), f"{field_name}.webhook_url"
         ),
@@ -729,14 +777,28 @@ def _build_feishu_webhook_config(
             value.get("focus_max_items"),
             f"{field_name}.focus_max_items",
         ),
+        include_actions=_bool(
+            value.get("include_actions", True),
+            f"{field_name}.include_actions",
+        ),
+        action_target=_delivery_action_target(
+            value.get("action_target", "digest"),
+            f"{field_name}.action_target",
+        ),
+        action_only=_bool(
+            value.get("action_only", False),
+            f"{field_name}.action_only",
+        ),
     )
+    _validate_delivery_action_config(config, field_name)
+    return config
 
 
 def _build_wecom_webhook_config(
     value: dict[str, Any],
     field_name: str,
 ) -> WeComWebhookConfig:
-    return WeComWebhookConfig(
+    config = WeComWebhookConfig(
         webhook_url=_required_string(
             value.get("webhook_url"), f"{field_name}.webhook_url"
         ),
@@ -773,14 +835,28 @@ def _build_wecom_webhook_config(
             value.get("focus_max_items"),
             f"{field_name}.focus_max_items",
         ),
+        include_actions=_bool(
+            value.get("include_actions", True),
+            f"{field_name}.include_actions",
+        ),
+        action_target=_delivery_action_target(
+            value.get("action_target", "digest"),
+            f"{field_name}.action_target",
+        ),
+        action_only=_bool(
+            value.get("action_only", False),
+            f"{field_name}.action_only",
+        ),
     )
+    _validate_delivery_action_config(config, field_name)
+    return config
 
 
 def _build_slack_webhook_config(
     value: dict[str, Any],
     field_name: str,
 ) -> SlackWebhookConfig:
-    return SlackWebhookConfig(
+    config = SlackWebhookConfig(
         webhook_url=_required_string(
             value.get("webhook_url"), f"{field_name}.webhook_url"
         ),
@@ -817,14 +893,28 @@ def _build_slack_webhook_config(
             value.get("focus_max_items"),
             f"{field_name}.focus_max_items",
         ),
+        include_actions=_bool(
+            value.get("include_actions", True),
+            f"{field_name}.include_actions",
+        ),
+        action_target=_delivery_action_target(
+            value.get("action_target", "digest"),
+            f"{field_name}.action_target",
+        ),
+        action_only=_bool(
+            value.get("action_only", False),
+            f"{field_name}.action_only",
+        ),
     )
+    _validate_delivery_action_config(config, field_name)
+    return config
 
 
 def _build_discord_webhook_config(
     value: dict[str, Any],
     field_name: str,
 ) -> DiscordWebhookConfig:
-    return DiscordWebhookConfig(
+    config = DiscordWebhookConfig(
         webhook_url=_required_string(
             value.get("webhook_url"), f"{field_name}.webhook_url"
         ),
@@ -861,14 +951,28 @@ def _build_discord_webhook_config(
             value.get("focus_max_items"),
             f"{field_name}.focus_max_items",
         ),
+        include_actions=_bool(
+            value.get("include_actions", True),
+            f"{field_name}.include_actions",
+        ),
+        action_target=_delivery_action_target(
+            value.get("action_target", "digest"),
+            f"{field_name}.action_target",
+        ),
+        action_only=_bool(
+            value.get("action_only", False),
+            f"{field_name}.action_only",
+        ),
     )
+    _validate_delivery_action_config(config, field_name)
+    return config
 
 
 def _build_telegram_bot_config(
     value: dict[str, Any],
     field_name: str,
 ) -> TelegramBotConfig:
-    return TelegramBotConfig(
+    config = TelegramBotConfig(
         bot_token=_required_string(value.get("bot_token"), f"{field_name}.bot_token"),
         chat_id=_required_string(value.get("chat_id"), f"{field_name}.chat_id"),
         title_prefix=_default_prefixed_string(
@@ -904,7 +1008,21 @@ def _build_telegram_bot_config(
             value.get("focus_max_items"),
             f"{field_name}.focus_max_items",
         ),
+        include_actions=_bool(
+            value.get("include_actions", True),
+            f"{field_name}.include_actions",
+        ),
+        action_target=_delivery_action_target(
+            value.get("action_target", "digest"),
+            f"{field_name}.action_target",
+        ),
+        action_only=_bool(
+            value.get("action_only", False),
+            f"{field_name}.action_only",
+        ),
     )
+    _validate_delivery_action_config(config, field_name)
+    return config
 
 
 def _string_list(value: Any, field_name: str) -> list[str]:
@@ -1038,6 +1156,29 @@ def _delivery_focus_target(value: Any, field_name: str) -> DeliveryFocusTarget:
     return "separate"
 
 
+def _delivery_action_target(value: Any, field_name: str) -> DeliveryActionTarget:
+    if not isinstance(value, str):
+        raise ConfigError(f"{field_name} must be 'digest' or 'separate'")
+
+    normalized = value.strip().lower()
+    if normalized not in {"digest", "separate"}:
+        raise ConfigError(f"{field_name} must be 'digest' or 'separate'")
+    if normalized == "digest":
+        return "digest"
+    return "separate"
+
+
+def _validate_delivery_action_config(
+    config: DeliveryConfig,
+    field_name: str,
+) -> None:
+    if config.action_only and not config.include_actions:
+        raise ConfigError(
+            f"{field_name}.action_only cannot be true when "
+            f"{field_name}.include_actions is false"
+        )
+
+
 def _focus_status_list(value: Any, field_name: str) -> list[FeedbackStatus]:
     items = _string_list(value, field_name)
     statuses: list[FeedbackStatus] = []
@@ -1156,6 +1297,12 @@ def _optional_positive_int(value: Any, field_name: str) -> int | None:
     if value is None:
         return None
     return _positive_int(value, field_name)
+
+
+def _optional_non_negative_int(value: Any, field_name: str) -> int | None:
+    if value is None:
+        return None
+    return _non_negative_int(value, field_name)
 
 
 def _positive_int(value: Any, field_name: str) -> int:

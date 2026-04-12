@@ -53,6 +53,12 @@ include_follow_up_resurfaced = true
 include_starred_momentum = true
 # Maximum number of Focus items to render into notifications.
 max_focus_items = 5
+# Maximum number of action reminders to render into notifications.
+max_action_items = 5
+# Restrict action reminders to overdue items only.
+action_overdue_only = false
+# Optional cap for reminders due within N days. Leave commented to disable.
+# action_due_within_days = 7
 
 [digest]
 # Rendering style for Markdown, email, and Feishu output.
@@ -198,6 +204,9 @@ max_items = 10
 # focus_statuses = ["star", "follow_up"]
 # focus_reasons = ["new_starred", "follow_up_resurfaced", "starred_momentum"]
 # focus_max_items = 5
+# include_actions = true
+# action_target = "digest"
+# action_only = false
 
 # Example Feishu webhook delivery:
 # [[deliveries]]
@@ -211,6 +220,9 @@ max_items = 10
 # focus_statuses = ["star"]
 # focus_reasons = ["new_starred", "starred_momentum"]
 # focus_max_items = 3
+# include_actions = true
+# action_target = "separate"
+# action_only = false
 
 # Example WeCom webhook delivery:
 # [[deliveries]]
@@ -224,6 +236,9 @@ max_items = 10
 # focus_statuses = []
 # focus_reasons = []
 # focus_max_items = 5
+# include_actions = true
+# action_target = "digest"
+# action_only = false
 
 # Example Slack webhook delivery:
 # [[deliveries]]
@@ -237,6 +252,9 @@ max_items = 10
 # focus_statuses = ["follow_up"]
 # focus_reasons = ["follow_up_resurfaced"]
 # focus_max_items = 2
+# include_actions = true
+# action_target = "separate"
+# action_only = false
 
 # Example Discord webhook delivery:
 # [[deliveries]]
@@ -250,6 +268,9 @@ max_items = 10
 # focus_statuses = ["star"]
 # focus_reasons = ["starred_momentum"]
 # focus_max_items = 2
+# include_actions = true
+# action_target = "digest"
+# action_only = false
 
 # Example Telegram bot delivery:
 # [[deliveries]]
@@ -264,6 +285,9 @@ max_items = 10
 # focus_statuses = ["star", "follow_up"]
 # focus_reasons = ["new_starred", "follow_up_resurfaced"]
 # focus_max_items = 4
+# include_actions = true
+# action_target = "digest"
+# action_only = false
 
 # Legacy email configuration is still supported:
 # [email]
@@ -284,3 +308,6 @@ max_items = 10
 # focus_statuses = ["star", "follow_up"]
 # focus_reasons = ["new_starred", "follow_up_resurfaced", "starred_momentum"]
 # focus_max_items = 5
+# include_actions = true
+# action_target = "digest"
+# action_only = false

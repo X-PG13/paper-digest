@@ -358,6 +358,8 @@ def _build_action_items(
     now: datetime,
 ) -> list[ActionItem]:
     actionable_statuses = {"star", "follow_up", "reading"}
+    due_within_days = config.notify.action_due_within_days
+    overdue_only = config.notify.action_overdue_only
     actionable_ids = {
         canonical_id
         for canonical_id, entry in feedback_state.papers.items()
@@ -396,6 +398,12 @@ def _build_action_items(
         if entry.next_action is not None and entry.status in {"star", "follow_up"}:
             reason_codes.append("next_action_pending")
         if not reason_codes:
+            continue
+        if overdue_only and "overdue" not in reason_codes:
+            continue
+        if due_within_days is not None and (
+            days_until_due is None or days_until_due > due_within_days
+        ):
             continue
 
         merged_stats = _merge_snapshot_with_candidate(
@@ -442,7 +450,7 @@ def _build_action_items(
         )
 
     action_items.sort(key=lambda item: item[0])
-    return [item for _, item in action_items[: config.notify.max_focus_items]]
+    return [item for _, item in action_items[: config.notify.max_action_items]]
 
 
 def _load_history_snapshots(
