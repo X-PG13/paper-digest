@@ -31,6 +31,7 @@ DigestTemplate = Literal["default", "zh_daily_brief"]
 SortMode = Literal["relevance", "published_at", "hybrid"]
 FeedbackStatus = Literal["star", "follow_up", "reading", "done", "ignore"]
 FocusReason = Literal["new_starred", "follow_up_resurfaced", "starred_momentum"]
+ActionReason = Literal["overdue", "due_soon", "next_action_pending"]
 
 
 @dataclass(slots=True, frozen=True)
@@ -68,6 +69,11 @@ class EmailConfig:
     include_actions: bool = True
     action_target: DeliveryActionTarget = "digest"
     action_only: bool = False
+    action_statuses: list[FeedbackStatus] = field(default_factory=list)
+    action_reasons: list[ActionReason] = field(default_factory=list)
+    action_max_items: int | None = None
+    action_overdue_only: bool = False
+    action_due_within_days: int | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -84,6 +90,11 @@ class FeishuWebhookConfig:
     include_actions: bool = True
     action_target: DeliveryActionTarget = "digest"
     action_only: bool = False
+    action_statuses: list[FeedbackStatus] = field(default_factory=list)
+    action_reasons: list[ActionReason] = field(default_factory=list)
+    action_max_items: int | None = field(default=None)
+    action_overdue_only: bool = False
+    action_due_within_days: int | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -100,6 +111,11 @@ class WeComWebhookConfig:
     include_actions: bool = True
     action_target: DeliveryActionTarget = "digest"
     action_only: bool = False
+    action_statuses: list[FeedbackStatus] = field(default_factory=list)
+    action_reasons: list[ActionReason] = field(default_factory=list)
+    action_max_items: int | None = None
+    action_overdue_only: bool = False
+    action_due_within_days: int | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -116,6 +132,11 @@ class SlackWebhookConfig:
     include_actions: bool = True
     action_target: DeliveryActionTarget = "digest"
     action_only: bool = False
+    action_statuses: list[FeedbackStatus] = field(default_factory=list)
+    action_reasons: list[ActionReason] = field(default_factory=list)
+    action_max_items: int | None = None
+    action_overdue_only: bool = False
+    action_due_within_days: int | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -132,6 +153,11 @@ class DiscordWebhookConfig:
     include_actions: bool = True
     action_target: DeliveryActionTarget = "digest"
     action_only: bool = False
+    action_statuses: list[FeedbackStatus] = field(default_factory=list)
+    action_reasons: list[ActionReason] = field(default_factory=list)
+    action_max_items: int | None = None
+    action_overdue_only: bool = False
+    action_due_within_days: int | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -149,6 +175,11 @@ class TelegramBotConfig:
     include_actions: bool = True
     action_target: DeliveryActionTarget = "digest"
     action_only: bool = False
+    action_statuses: list[FeedbackStatus] = field(default_factory=list)
+    action_reasons: list[ActionReason] = field(default_factory=list)
+    action_max_items: int | None = None
+    action_overdue_only: bool = False
+    action_due_within_days: int | None = None
 
 
 DeliveryConfig = (
@@ -731,6 +762,26 @@ def _build_email_config(value: dict[str, Any], field_name: str) -> EmailConfig:
             value.get("action_only", False),
             f"{field_name}.action_only",
         ),
+        action_statuses=_action_status_list(
+            value.get("action_statuses", []),
+            f"{field_name}.action_statuses",
+        ),
+        action_reasons=_action_reason_list(
+            value.get("action_reasons", []),
+            f"{field_name}.action_reasons",
+        ),
+        action_max_items=_optional_positive_int(
+            value.get("action_max_items"),
+            f"{field_name}.action_max_items",
+        ),
+        action_overdue_only=_bool(
+            value.get("action_overdue_only", False),
+            f"{field_name}.action_overdue_only",
+        ),
+        action_due_within_days=_optional_non_negative_int(
+            value.get("action_due_within_days"),
+            f"{field_name}.action_due_within_days",
+        ),
     )
     _validate_delivery_action_config(config, field_name)
     return config
@@ -788,6 +839,26 @@ def _build_feishu_webhook_config(
         action_only=_bool(
             value.get("action_only", False),
             f"{field_name}.action_only",
+        ),
+        action_statuses=_action_status_list(
+            value.get("action_statuses", []),
+            f"{field_name}.action_statuses",
+        ),
+        action_reasons=_action_reason_list(
+            value.get("action_reasons", []),
+            f"{field_name}.action_reasons",
+        ),
+        action_max_items=_optional_positive_int(
+            value.get("action_max_items"),
+            f"{field_name}.action_max_items",
+        ),
+        action_overdue_only=_bool(
+            value.get("action_overdue_only", False),
+            f"{field_name}.action_overdue_only",
+        ),
+        action_due_within_days=_optional_non_negative_int(
+            value.get("action_due_within_days"),
+            f"{field_name}.action_due_within_days",
         ),
     )
     _validate_delivery_action_config(config, field_name)
@@ -847,6 +918,26 @@ def _build_wecom_webhook_config(
             value.get("action_only", False),
             f"{field_name}.action_only",
         ),
+        action_statuses=_action_status_list(
+            value.get("action_statuses", []),
+            f"{field_name}.action_statuses",
+        ),
+        action_reasons=_action_reason_list(
+            value.get("action_reasons", []),
+            f"{field_name}.action_reasons",
+        ),
+        action_max_items=_optional_positive_int(
+            value.get("action_max_items"),
+            f"{field_name}.action_max_items",
+        ),
+        action_overdue_only=_bool(
+            value.get("action_overdue_only", False),
+            f"{field_name}.action_overdue_only",
+        ),
+        action_due_within_days=_optional_non_negative_int(
+            value.get("action_due_within_days"),
+            f"{field_name}.action_due_within_days",
+        ),
     )
     _validate_delivery_action_config(config, field_name)
     return config
@@ -904,6 +995,26 @@ def _build_slack_webhook_config(
         action_only=_bool(
             value.get("action_only", False),
             f"{field_name}.action_only",
+        ),
+        action_statuses=_action_status_list(
+            value.get("action_statuses", []),
+            f"{field_name}.action_statuses",
+        ),
+        action_reasons=_action_reason_list(
+            value.get("action_reasons", []),
+            f"{field_name}.action_reasons",
+        ),
+        action_max_items=_optional_positive_int(
+            value.get("action_max_items"),
+            f"{field_name}.action_max_items",
+        ),
+        action_overdue_only=_bool(
+            value.get("action_overdue_only", False),
+            f"{field_name}.action_overdue_only",
+        ),
+        action_due_within_days=_optional_non_negative_int(
+            value.get("action_due_within_days"),
+            f"{field_name}.action_due_within_days",
         ),
     )
     _validate_delivery_action_config(config, field_name)
@@ -963,6 +1074,26 @@ def _build_discord_webhook_config(
             value.get("action_only", False),
             f"{field_name}.action_only",
         ),
+        action_statuses=_action_status_list(
+            value.get("action_statuses", []),
+            f"{field_name}.action_statuses",
+        ),
+        action_reasons=_action_reason_list(
+            value.get("action_reasons", []),
+            f"{field_name}.action_reasons",
+        ),
+        action_max_items=_optional_positive_int(
+            value.get("action_max_items"),
+            f"{field_name}.action_max_items",
+        ),
+        action_overdue_only=_bool(
+            value.get("action_overdue_only", False),
+            f"{field_name}.action_overdue_only",
+        ),
+        action_due_within_days=_optional_non_negative_int(
+            value.get("action_due_within_days"),
+            f"{field_name}.action_due_within_days",
+        ),
     )
     _validate_delivery_action_config(config, field_name)
     return config
@@ -1019,6 +1150,26 @@ def _build_telegram_bot_config(
         action_only=_bool(
             value.get("action_only", False),
             f"{field_name}.action_only",
+        ),
+        action_statuses=_action_status_list(
+            value.get("action_statuses", []),
+            f"{field_name}.action_statuses",
+        ),
+        action_reasons=_action_reason_list(
+            value.get("action_reasons", []),
+            f"{field_name}.action_reasons",
+        ),
+        action_max_items=_optional_positive_int(
+            value.get("action_max_items"),
+            f"{field_name}.action_max_items",
+        ),
+        action_overdue_only=_bool(
+            value.get("action_overdue_only", False),
+            f"{field_name}.action_overdue_only",
+        ),
+        action_due_within_days=_optional_non_negative_int(
+            value.get("action_due_within_days"),
+            f"{field_name}.action_due_within_days",
         ),
     )
     _validate_delivery_action_config(config, field_name)
@@ -1179,6 +1330,22 @@ def _validate_delivery_action_config(
         )
 
 
+def _action_status_list(value: Any, field_name: str) -> list[FeedbackStatus]:
+    items = _string_list(value, field_name)
+    statuses: list[FeedbackStatus] = []
+    for item in items:
+        statuses.append(_action_feedback_status_value(item, field_name))
+    return statuses
+
+
+def _action_reason_list(value: Any, field_name: str) -> list[ActionReason]:
+    items = _string_list(value, field_name)
+    reasons: list[ActionReason] = []
+    for item in items:
+        reasons.append(_action_reason_value(item, field_name))
+    return reasons
+
+
 def _focus_status_list(value: Any, field_name: str) -> list[FeedbackStatus]:
     items = _string_list(value, field_name)
     statuses: list[FeedbackStatus] = []
@@ -1218,6 +1385,33 @@ def _focus_reason_value(value: str, field_name: str) -> FocusReason:
     if normalized == "follow_up_resurfaced":
         return "follow_up_resurfaced"
     return "starred_momentum"
+
+
+def _action_feedback_status_value(value: str, field_name: str) -> FeedbackStatus:
+    normalized = value.strip().lower()
+    if normalized not in {"star", "follow_up", "reading"}:
+        raise ConfigError(
+            f"{field_name} must contain only 'star', 'follow_up', or 'reading'"
+        )
+    if normalized == "star":
+        return "star"
+    if normalized == "follow_up":
+        return "follow_up"
+    return "reading"
+
+
+def _action_reason_value(value: str, field_name: str) -> ActionReason:
+    normalized = value.strip().lower()
+    if normalized not in {"overdue", "due_soon", "next_action_pending"}:
+        raise ConfigError(
+            f"{field_name} must contain only 'overdue', 'due_soon', "
+            "or 'next_action_pending'"
+        )
+    if normalized == "overdue":
+        return "overdue"
+    if normalized == "due_soon":
+        return "due_soon"
+    return "next_action_pending"
 
 
 def _analysis_provider(value: Any, field_name: str) -> AnalysisProvider:

@@ -252,6 +252,8 @@ action_overdue_only = false
   items.
 - `action_due_within_days = 7` is the lighter-weight alternative when you want
   to keep only near-term action reminders.
+- These `[notify]` action settings define the global action pool before any
+  delivery-specific filters are applied.
 
 Example feedback file:
 
@@ -329,6 +331,11 @@ focus_max_items = 5
 include_actions = true
 action_target = "digest"
 action_only = false
+action_statuses = ["star", "follow_up", "reading"]
+action_reasons = ["overdue", "due_soon", "next_action_pending"]
+action_max_items = 5
+action_overdue_only = false
+action_due_within_days = 7
 
 [[deliveries]]
 type = "feishu_webhook"
@@ -344,6 +351,11 @@ focus_max_items = 3
 include_actions = true
 action_target = "separate"
 action_only = false
+action_statuses = ["reading"]
+action_reasons = ["overdue"]
+action_max_items = 2
+action_overdue_only = true
+action_due_within_days = 3
 
 [[deliveries]]
 type = "wecom_webhook"
@@ -356,6 +368,11 @@ focus_target = "digest"
 include_actions = true
 action_target = "digest"
 action_only = false
+action_statuses = ["follow_up"]
+action_reasons = ["due_soon", "next_action_pending"]
+action_max_items = 3
+action_overdue_only = false
+action_due_within_days = 7
 
 [[deliveries]]
 type = "slack_webhook"
@@ -366,6 +383,11 @@ target = "per_feed"
 include_actions = true
 action_target = "separate"
 action_only = false
+action_statuses = ["follow_up"]
+action_reasons = ["due_soon"]
+action_max_items = 2
+action_overdue_only = false
+action_due_within_days = 3
 
 [[deliveries]]
 type = "discord_webhook"
@@ -376,6 +398,11 @@ target = "per_feed"
 include_actions = true
 action_target = "digest"
 action_only = false
+action_statuses = ["star"]
+action_reasons = ["next_action_pending"]
+action_max_items = 2
+action_overdue_only = false
+action_due_within_days = 14
 
 [[deliveries]]
 type = "telegram_bot"
@@ -387,6 +414,11 @@ target = "per_feed"
 include_actions = true
 action_target = "digest"
 action_only = false
+action_statuses = ["star", "follow_up", "reading"]
+action_reasons = ["overdue", "due_soon", "next_action_pending"]
+action_max_items = 4
+action_overdue_only = false
+action_due_within_days = 7
 ```
 
 Notes:
@@ -424,6 +456,16 @@ Notes:
   message for that delivery when action items exist.
 - `action_only = true` turns one delivery into an action-reminder-only channel
   without suppressing the normal digest for other deliveries.
+- `action_statuses = ["star", "follow_up", "reading"]` narrows action
+  reminders to specific feedback states for that delivery.
+- `action_reasons = ["overdue", "due_soon", "next_action_pending"]` narrows
+  action reminders by why they surfaced.
+- `action_max_items = 2` caps how many action reminders one delivery gets,
+  independent of the global `[notify].max_action_items`.
+- `action_overdue_only = true` keeps one delivery focused on overdue work only.
+- `action_due_within_days = 3` keeps one delivery focused on near-term work.
+- Delivery-level action filters only narrow the global action pool; they do not
+  widen past what `[notify]` already emitted.
 - `focus_statuses = ["star", "follow_up"]` narrows Focus to specific feedback
   states for that delivery. Leave it empty to accept all Focus statuses.
 - `focus_reasons = ["new_starred", "follow_up_resurfaced", "starred_momentum"]`
