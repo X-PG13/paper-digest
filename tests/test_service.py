@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -859,3 +859,93 @@ class GenerateDigestTests(unittest.TestCase):
         )
         self.assertIn("PubMed AI", focus_by_id[follow_up_canonical_id].feed_names)
         self.assertEqual(len(digest.feeds[1].papers), 0)
+
+    @patch("paper_digest.service.fetch_feed_papers")
+    def test_generate_digest_builds_action_items_from_due_dates_and_next_actions(
+        self,
+        mock_fetch_feed_papers,
+    ) -> None:
+        now = datetime(2026, 4, 9, 9, 30, tzinfo=ZoneInfo("UTC"))
+        feed = FeedConfig(
+            name="LLM",
+            categories=["cs.AI"],
+            keywords=["agent"],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+        )
+        starred_paper = Paper(
+            title="Paper Circle",
+            summary="Research discovery framework for agent systems.",
+            authors=["Alice"],
+            categories=["cs.AI"],
+            paper_id="http://arxiv.org/abs/2604.06170v1",
+            abstract_url="https://arxiv.org/abs/2604.06170v1",
+            pdf_url="https://arxiv.org/pdf/2604.06170v1",
+            published_at=datetime(2026, 4, 9, 0, 30, tzinfo=ZoneInfo("UTC")),
+            updated_at=datetime(2026, 4, 9, 0, 30, tzinfo=ZoneInfo("UTC")),
+        )
+        reading_paper = Paper(
+            title="Agent Systems",
+            summary="Another agent paper for the reading queue.",
+            authors=["Bob"],
+            categories=["cs.AI"],
+            paper_id="http://arxiv.org/abs/2604.00001v1",
+            abstract_url="https://arxiv.org/abs/2604.00001v1",
+            pdf_url="https://arxiv.org/pdf/2604.00001v1",
+            published_at=datetime(2026, 4, 9, 1, 0, tzinfo=ZoneInfo("UTC")),
+            updated_at=datetime(2026, 4, 9, 1, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        mock_fetch_feed_papers.return_value = [starred_paper, reading_paper]
+
+        with TemporaryDirectory() as temp_dir:
+            config = AppConfig(
+                timezone="UTC",
+                lookback_hours=24,
+                output_dir=Path(temp_dir) / "output",
+                request_delay_seconds=0.0,
+                feeds=[feed],
+                state=StateConfig(
+                    enabled=True,
+                    path=Path(temp_dir) / "state.json",
+                    retention_days=90,
+                ),
+            )
+            feedback_state = FeedbackState(
+                papers={
+                    "arxiv:2604.06170": FeedbackEntry(
+                        status="star",
+                        updated_at=datetime(2026, 4, 9, 8, 0, tzinfo=ZoneInfo("UTC")),
+                        note="anchor paper",
+                        next_action="compare planner design",
+                        due_date=date(2026, 4, 11),
+                    ),
+                    "arxiv:2604.00001": FeedbackEntry(
+                        status="reading",
+                        updated_at=datetime(2026, 4, 8, 8, 0, tzinfo=ZoneInfo("UTC")),
+                        note="finish sections 3 and 4",
+                        due_date=date(2026, 4, 8),
+                    ),
+                }
+            )
+
+            digest = generate_digest(
+                config,
+                now=now,
+                state=DigestState(seen_papers={}),
+                feedback_state=feedback_state,
+            )
+
+        self.assertEqual(len(digest.action_items), 2)
+        self.assertEqual(digest.action_items[0].canonical_id, "arxiv:2604.00001")
+        self.assertEqual(digest.action_items[0].reasons, ["overdue"])
+        self.assertEqual(digest.action_items[0].days_until_due, -1)
+        self.assertEqual(digest.action_items[1].canonical_id, "arxiv:2604.06170")
+        self.assertEqual(
+            digest.action_items[1].reasons,
+            ["due_soon", "next_action_pending"],
+        )
+        self.assertEqual(
+            digest.action_items[1].next_action,
+            "compare planner design",
+        )

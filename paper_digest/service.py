@@ -6,7 +6,7 @@ import json
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import cast
 from zoneinfo import ZoneInfo
@@ -15,6 +15,7 @@ from .analysis import apply_digest_briefing, enrich_digest_with_analysis
 from .arxiv_client import Paper
 from .config import AppConfig, FeedbackStatus
 from .digest import (
+    ActionItem,
     DigestRun,
     FeedDigest,
     FocusItem,
@@ -178,6 +179,16 @@ def generate_digest(
         config=config,
         feedback_state=managed_feedback,
         focus_candidates=focus_candidates,
+        current_papers=papers_by_canonical_id,
+        current_feed_names=_current_feed_names(digest),
+        now=local_now,
+    )
+    digest.action_items = _build_action_items(
+        digest,
+        config=config,
+        feedback_state=managed_feedback,
+        current_papers=papers_by_canonical_id,
+        current_feed_names=_current_feed_names(digest),
         now=local_now,
     )
     return digest
@@ -229,6 +240,8 @@ def _build_focus_items(
     config: AppConfig,
     feedback_state: FeedbackState,
     focus_candidates: dict[str, _CurrentFocusCandidate],
+    current_papers: dict[str, Paper],
+    current_feed_names: dict[str, set[str]],
     now: datetime,
 ) -> list[FocusItem]:
     if not feedback_state.papers:
@@ -253,7 +266,10 @@ def _build_focus_items(
         paper = (
             candidate.paper
             if candidate is not None
-            else (snapshot.paper if snapshot else None)
+            else (
+                current_papers.get(canonical_id)
+                or (snapshot.paper if snapshot else None)
+            )
         )
         if paper is None:
             continue
@@ -290,6 +306,8 @@ def _build_focus_items(
         merged_stats = _merge_snapshot_with_candidate(
             snapshot,
             candidate,
+            current_paper=current_papers.get(canonical_id),
+            current_feed_names=current_feed_names.get(canonical_id, set()),
             current_date=current_date,
             current_seen_at=now,
         )
@@ -328,6 +346,103 @@ def _build_focus_items(
         item
         for _, item in focus_items[: config.notify.max_focus_items]
     ]
+
+
+def _build_action_items(
+    digest: DigestRun,
+    *,
+    config: AppConfig,
+    feedback_state: FeedbackState,
+    current_papers: dict[str, Paper],
+    current_feed_names: dict[str, set[str]],
+    now: datetime,
+) -> list[ActionItem]:
+    actionable_statuses = {"star", "follow_up", "reading"}
+    actionable_ids = {
+        canonical_id
+        for canonical_id, entry in feedback_state.papers.items()
+        if entry.status in actionable_statuses
+        and (entry.next_action is not None or entry.due_date is not None)
+    }
+    if not actionable_ids:
+        return []
+
+    history = _load_history_snapshots(config.output_dir, actionable_ids)
+    current_date = now.astimezone(ZoneInfo(config.timezone)).date().isoformat()
+    today = now.astimezone(ZoneInfo(config.timezone)).date()
+    action_items: list[tuple[tuple[int, int, int, str], ActionItem]] = []
+
+    for canonical_id, entry in feedback_state.papers.items():
+        if entry.status not in actionable_statuses:
+            continue
+        if entry.next_action is None and entry.due_date is None:
+            continue
+
+        snapshot = history.get(canonical_id)
+        paper = current_papers.get(canonical_id) or (
+            snapshot.paper if snapshot else None
+        )
+        if paper is None:
+            continue
+
+        reason_codes: list[str] = []
+        days_until_due: int | None = None
+        if entry.due_date is not None:
+            days_until_due = (entry.due_date - today).days
+            if days_until_due < 0:
+                reason_codes.append("overdue")
+            elif days_until_due <= 3:
+                reason_codes.append("due_soon")
+        if entry.next_action is not None and entry.status in {"star", "follow_up"}:
+            reason_codes.append("next_action_pending")
+        if not reason_codes:
+            continue
+
+        merged_stats = _merge_snapshot_with_candidate(
+            snapshot,
+            None,
+            current_paper=current_papers.get(canonical_id),
+            current_feed_names=current_feed_names.get(canonical_id, set()),
+            current_date=current_date,
+            current_seen_at=now,
+        )
+        action_item = ActionItem(
+            canonical_id=paper.canonical_id(),
+            title=paper.title,
+            abstract_url=paper.abstract_url,
+            summary=paper.summary,
+            source_label=paper.source_label(),
+            feedback_status=entry.status,
+            feedback_note=entry.note,
+            next_action=entry.next_action,
+            due_date=entry.due_date,
+            days_until_due=days_until_due,
+            reasons=reason_codes,
+            feed_names=sorted(merged_stats.feed_names),
+            relevance_score=paper.relevance_score,
+            active_days=len(merged_stats.active_days),
+            active_feeds=len(merged_stats.feed_names),
+            appearance_count=merged_stats.appearance_count,
+            first_seen=merged_stats.first_seen,
+            last_seen=merged_stats.last_seen,
+        )
+        priority = _action_priority(reason_codes)
+        due_sort = days_until_due if days_until_due is not None else 9999
+        status_priority = _action_status_priority(entry.status)
+        action_items.append(
+            (
+                (
+                    priority,
+                    due_sort,
+                    status_priority,
+                    paper.title.casefold(),
+                ),
+                action_item,
+            )
+        )
+
+    action_items.sort(key=lambda item: item[0])
+    return [item for _, item in action_items[: config.notify.max_focus_items]]
 
 
 def _load_history_snapshots(
@@ -419,6 +534,9 @@ def _paper_from_payload(payload: dict[str, object]) -> Paper | None:
         relevance_score=_optional_int(payload.get("relevance_score")) or 0,
         match_reasons=_string_list(payload.get("match_reasons")),
         feedback_status=_feedback_status(payload.get("feedback_status")),
+        feedback_note=_optional_string(payload.get("feedback_note")),
+        feedback_next_action=_optional_string(payload.get("feedback_next_action")),
+        feedback_due_date=_optional_date(payload.get("feedback_due_date")),
     )
 
 
@@ -426,20 +544,26 @@ def _merge_snapshot_with_candidate(
     snapshot: _HistorySnapshot | None,
     candidate: _CurrentFocusCandidate | None,
     *,
+    current_paper: Paper | None,
+    current_feed_names: set[str],
     current_date: str,
     current_seen_at: datetime,
 ) -> _HistorySnapshot:
-    if snapshot is None and candidate is None:
-        raise ValueError("snapshot or candidate must be provided")
+    if snapshot is None and candidate is None and current_paper is None:
+        raise ValueError("snapshot, candidate, or current_paper must be provided")
     if snapshot is None:
-        assert candidate is not None
+        current = candidate.paper if candidate is not None else current_paper
+        feed_names = (
+            candidate.feed_names if candidate is not None else current_feed_names
+        )
+        assert current is not None
         return _HistorySnapshot(
-            paper=candidate.paper,
-            feed_names=set(candidate.feed_names),
+            paper=current,
+            feed_names=set(feed_names),
             first_seen=current_seen_at,
             last_seen=current_seen_at,
             active_days={current_date},
-            appearance_count=max(len(candidate.feed_names), 1),
+            appearance_count=max(len(feed_names), 1),
         )
 
     merged = _HistorySnapshot(
@@ -450,13 +574,20 @@ def _merge_snapshot_with_candidate(
         active_days=set(snapshot.active_days),
         appearance_count=snapshot.appearance_count,
     )
-    if candidate is None:
+    if candidate is None and current_paper is None:
         return merged
 
-    merged.paper.merge_duplicate(candidate.paper)
-    merged.feed_names.update(candidate.feed_names)
+    current = candidate.paper if candidate is not None else current_paper
+    assert current is not None
+    merged.paper.merge_duplicate(current)
+    merged.feed_names.update(
+        candidate.feed_names if candidate is not None else current_feed_names
+    )
     merged.active_days.add(current_date)
-    merged.appearance_count += max(len(candidate.feed_names), 1)
+    merged.appearance_count += max(
+        len(candidate.feed_names if candidate is not None else current_feed_names),
+        1,
+    )
     if merged.first_seen is None or current_seen_at < merged.first_seen:
         merged.first_seen = current_seen_at
     if merged.last_seen is None or current_seen_at > merged.last_seen:
@@ -476,6 +607,8 @@ def _entered_momentum(
         _merge_snapshot_with_candidate(
             snapshot,
             candidate,
+            current_paper=None,
+            current_feed_names=set(),
             current_date=current_date,
             current_seen_at=current_seen_at,
         )
@@ -495,6 +628,25 @@ def _focus_priority(reason_codes: Sequence[str]) -> int:
     if "follow_up_resurfaced" in reason_codes:
         return 1
     return 2
+
+
+def _action_priority(reason_codes: Sequence[str]) -> int:
+    if "overdue" in reason_codes:
+        return 0
+    if "due_soon" in reason_codes:
+        return 1
+    return 2
+
+
+def _action_status_priority(status: FeedbackStatus) -> int:
+    priority = {
+        "star": 0,
+        "follow_up": 1,
+        "reading": 2,
+        "done": 3,
+        "ignore": 4,
+    }
+    return priority[status]
 
 
 def _is_recent_feedback(entry: FeedbackEntry, *, cutoff: datetime) -> bool:
@@ -544,6 +696,15 @@ def _optional_int(value: object) -> int | None:
     return value
 
 
+def _optional_date(value: object) -> date | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return date.fromisoformat(value.strip())
+    except ValueError:
+        return None
+
+
 def _feedback_status(value: object) -> FeedbackStatus | None:
     if not isinstance(value, str):
         return None
@@ -551,3 +712,11 @@ def _feedback_status(value: object) -> FeedbackStatus | None:
     if normalized not in {"star", "follow_up", "reading", "done", "ignore"}:
         return None
     return cast(FeedbackStatus, normalized)
+
+
+def _current_feed_names(digest: DigestRun) -> dict[str, set[str]]:
+    feed_names: dict[str, set[str]] = {}
+    for feed in digest.feeds:
+        for paper in feed.papers:
+            feed_names.setdefault(paper.canonical_id(), set()).add(feed.name)
+    return feed_names

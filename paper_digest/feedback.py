@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import cast
 
@@ -17,6 +17,8 @@ class FeedbackEntry:
     status: FeedbackStatus
     updated_at: datetime | None = None
     note: str | None = None
+    next_action: str | None = None
+    due_date: date | None = None
 
 
 @dataclass(slots=True)
@@ -93,6 +95,8 @@ def set_feedback_status(
         status=status,
         updated_at=updated_at or datetime.now(UTC),
         note=normalized_note,
+        next_action=existing.next_action if existing is not None else None,
+        due_date=existing.due_date if existing is not None else None,
     )
     feedback_state.papers[normalized_id] = entry
     return entry
@@ -113,6 +117,52 @@ def set_feedback_note(
         status=existing.status,
         updated_at=updated_at or datetime.now(UTC),
         note=_normalize_note(note),
+        next_action=existing.next_action,
+        due_date=existing.due_date,
+    )
+    feedback_state.papers[normalized_id] = entry
+    return entry
+
+
+def set_feedback_action(
+    feedback_state: FeedbackState,
+    *,
+    canonical_id: str,
+    next_action: str,
+    updated_at: datetime | None = None,
+) -> FeedbackEntry | None:
+    normalized_id = normalize_feedback_canonical_id(canonical_id)
+    existing = feedback_state.papers.get(normalized_id)
+    if existing is None:
+        return None
+    entry = FeedbackEntry(
+        status=existing.status,
+        updated_at=updated_at or datetime.now(UTC),
+        note=existing.note,
+        next_action=_normalize_action(next_action),
+        due_date=existing.due_date,
+    )
+    feedback_state.papers[normalized_id] = entry
+    return entry
+
+
+def set_feedback_due_date(
+    feedback_state: FeedbackState,
+    *,
+    canonical_id: str,
+    due_date: date,
+    updated_at: datetime | None = None,
+) -> FeedbackEntry | None:
+    normalized_id = normalize_feedback_canonical_id(canonical_id)
+    existing = feedback_state.papers.get(normalized_id)
+    if existing is None:
+        return None
+    entry = FeedbackEntry(
+        status=existing.status,
+        updated_at=updated_at or datetime.now(UTC),
+        note=existing.note,
+        next_action=existing.next_action,
+        due_date=due_date,
     )
     feedback_state.papers[normalized_id] = entry
     return entry
@@ -141,6 +191,48 @@ def clear_feedback_note(
         status=existing.status,
         updated_at=updated_at or datetime.now(UTC),
         note=None,
+        next_action=existing.next_action,
+        due_date=existing.due_date,
+    )
+    return True
+
+
+def clear_feedback_action(
+    feedback_state: FeedbackState,
+    *,
+    canonical_id: str,
+    updated_at: datetime | None = None,
+) -> bool:
+    normalized_id = normalize_feedback_canonical_id(canonical_id)
+    existing = feedback_state.papers.get(normalized_id)
+    if existing is None or existing.next_action is None:
+        return False
+    feedback_state.papers[normalized_id] = FeedbackEntry(
+        status=existing.status,
+        updated_at=updated_at or datetime.now(UTC),
+        note=existing.note,
+        next_action=None,
+        due_date=existing.due_date,
+    )
+    return True
+
+
+def clear_feedback_due_date(
+    feedback_state: FeedbackState,
+    *,
+    canonical_id: str,
+    updated_at: datetime | None = None,
+) -> bool:
+    normalized_id = normalize_feedback_canonical_id(canonical_id)
+    existing = feedback_state.papers.get(normalized_id)
+    if existing is None or existing.due_date is None:
+        return False
+    feedback_state.papers[normalized_id] = FeedbackEntry(
+        status=existing.status,
+        updated_at=updated_at or datetime.now(UTC),
+        note=existing.note,
+        next_action=existing.next_action,
+        due_date=None,
     )
     return True
 
@@ -184,6 +276,8 @@ def apply_feedback_to_papers(
 
         paper.feedback_status = entry.status
         paper.feedback_note = entry.note
+        paper.feedback_next_action = entry.next_action
+        paper.feedback_due_date = entry.due_date
         if entry.status == "ignore" and config.hide_ignored:
             continue
         if entry.status == "star":
@@ -249,6 +343,30 @@ def feedback_command_snippet(
     )
 
 
+def feedback_action_command_snippet(
+    canonical_id: str,
+    *,
+    action: str = "TODO: next action",
+    config_path: str = "config.toml",
+) -> str:
+    return (
+        "python -m paper_digest feedback action set "
+        f"'{canonical_id}' '{action}' --config {config_path}"
+    )
+
+
+def feedback_due_command_snippet(
+    canonical_id: str,
+    *,
+    due_date: str = "YYYY-MM-DD",
+    config_path: str = "config.toml",
+) -> str:
+    return (
+        "python -m paper_digest feedback due set "
+        f"'{canonical_id}' {due_date} --config {config_path}"
+    )
+
+
 def _parse_feedback_entry(value: object) -> FeedbackEntry | None:
     if isinstance(value, str):
         status = _feedback_status(value)
@@ -265,6 +383,8 @@ def _parse_feedback_entry(value: object) -> FeedbackEntry | None:
         status=status,
         updated_at=updated_at,
         note=_normalize_note(value.get("note")),
+        next_action=_normalize_action(value.get("next_action")),
+        due_date=_parse_optional_date(value.get("due_date")),
     )
 
 
@@ -289,8 +409,22 @@ def _parse_optional_datetime(value: object) -> datetime | None:
     return parsed
 
 
+def _parse_optional_date(value: object) -> date | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
 def _serialize_feedback_entry(entry: FeedbackEntry) -> object:
-    if entry.updated_at is None and entry.note is None:
+    if (
+        entry.updated_at is None
+        and entry.note is None
+        and entry.next_action is None
+        and entry.due_date is None
+    ):
         return entry.status
     payload: dict[str, object] = {
         "status": entry.status,
@@ -299,6 +433,10 @@ def _serialize_feedback_entry(entry: FeedbackEntry) -> object:
         payload["updated_at"] = entry.updated_at.isoformat()
     if entry.note is not None:
         payload["note"] = entry.note
+    if entry.next_action is not None:
+        payload["next_action"] = entry.next_action
+    if entry.due_date is not None:
+        payload["due_date"] = entry.due_date.isoformat()
     return payload
 
 
@@ -315,3 +453,7 @@ def _normalize_note(value: object) -> str | None:
         return None
     normalized = value.strip()
     return normalized or None
+
+
+def _normalize_action(value: object) -> str | None:
+    return _normalize_note(value)

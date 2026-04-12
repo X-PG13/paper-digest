@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from argparse import ArgumentParser
 from collections.abc import Sequence
+from datetime import date
 from pathlib import Path
 
 from . import __version__
@@ -16,12 +17,16 @@ from .crossref_client import CrossrefClientError
 from .delivery import DeliveryError, send_configured_deliveries
 from .digest import summarize_digest, write_outputs
 from .feedback import (
+    clear_feedback_action,
+    clear_feedback_due_date,
     clear_feedback_note,
     clear_feedback_status,
     list_feedback_entries,
     load_feedback,
     load_feedback_file,
     save_feedback,
+    set_feedback_action,
+    set_feedback_due_date,
     set_feedback_note,
     set_feedback_status,
 )
@@ -108,6 +113,70 @@ def build_feedback_parser() -> ArgumentParser:
         parents=[common],
     )
     clear_note_parser.add_argument("canonical_id", help="Canonical paper identifier.")
+
+    action_parser = subparsers.add_parser(
+        "action",
+        help="Set or clear the next action for an existing feedback entry.",
+        parents=[common],
+    )
+    action_subparsers = action_parser.add_subparsers(
+        dest="feedback_action_command",
+        required=True,
+    )
+    action_set_parser = action_subparsers.add_parser(
+        "set",
+        help="Store the next action for an existing feedback entry.",
+        parents=[common],
+    )
+    action_set_parser.add_argument(
+        "canonical_id",
+        help="Canonical paper identifier.",
+    )
+    action_set_parser.add_argument(
+        "next_action",
+        help="Next action text.",
+    )
+    action_clear_parser = action_subparsers.add_parser(
+        "clear",
+        help="Clear the next action for an existing feedback entry.",
+        parents=[common],
+    )
+    action_clear_parser.add_argument(
+        "canonical_id",
+        help="Canonical paper identifier.",
+    )
+
+    due_parser = subparsers.add_parser(
+        "due",
+        help="Set or clear the due date for an existing feedback entry.",
+        parents=[common],
+    )
+    due_subparsers = due_parser.add_subparsers(
+        dest="feedback_due_command",
+        required=True,
+    )
+    due_set_parser = due_subparsers.add_parser(
+        "set",
+        help="Store the due date for an existing feedback entry.",
+        parents=[common],
+    )
+    due_set_parser.add_argument(
+        "canonical_id",
+        help="Canonical paper identifier.",
+    )
+    due_set_parser.add_argument(
+        "due_date",
+        help="Due date in YYYY-MM-DD format.",
+    )
+    due_clear_parser = due_subparsers.add_parser(
+        "clear",
+        help="Clear the due date for an existing feedback entry.",
+        parents=[common],
+    )
+    due_clear_parser.add_argument(
+        "canonical_id",
+        help="Canonical paper identifier.",
+    )
 
     subparsers.add_parser(
         "list",
@@ -245,6 +314,83 @@ def _main_feedback(argv: Sequence[str]) -> int:
                     f"No note for {args.canonical_id.strip()} in {feedback_path}"
                 )
             return 0
+        if args.feedback_command == "action":
+            if args.feedback_action_command == "set":
+                action_entry = set_feedback_action(
+                    feedback_state,
+                    canonical_id=args.canonical_id,
+                    next_action=args.next_action,
+                )
+                if action_entry is None:
+                    print(
+                        f"No entry for {args.canonical_id.strip()} in {feedback_path}",
+                        file=sys.stderr,
+                    )
+                    return 1
+                save_feedback(config.feedback, feedback_state)
+                print(
+                    "Updated next action for "
+                    f"{args.canonical_id.strip()} in {feedback_path}"
+                )
+                return 0
+            removed = clear_feedback_action(
+                feedback_state,
+                canonical_id=args.canonical_id,
+            )
+            save_feedback(config.feedback, feedback_state)
+            if removed:
+                print(
+                    "Cleared next action for "
+                    f"{args.canonical_id.strip()} in {feedback_path}"
+                )
+            else:
+                print(
+                    f"No next action for {args.canonical_id.strip()} in {feedback_path}"
+                )
+            return 0
+        if args.feedback_command == "due":
+            if args.feedback_due_command == "set":
+                try:
+                    due_date = date.fromisoformat(args.due_date)
+                except ValueError:
+                    print(
+                        "Error: due_date must use YYYY-MM-DD format",
+                        file=sys.stderr,
+                    )
+                    return 1
+                due_entry = set_feedback_due_date(
+                    feedback_state,
+                    canonical_id=args.canonical_id,
+                    due_date=due_date,
+                )
+                if due_entry is None:
+                    print(
+                        f"No entry for {args.canonical_id.strip()} in {feedback_path}",
+                        file=sys.stderr,
+                    )
+                    return 1
+                save_feedback(config.feedback, feedback_state)
+                print(
+                    "Updated due date for "
+                    f"{args.canonical_id.strip()} -> {due_date.isoformat()} "
+                    f"in {feedback_path}"
+                )
+                return 0
+            removed = clear_feedback_due_date(
+                feedback_state,
+                canonical_id=args.canonical_id,
+            )
+            save_feedback(config.feedback, feedback_state)
+            if removed:
+                print(
+                    "Cleared due date for "
+                    f"{args.canonical_id.strip()} in {feedback_path}"
+                )
+            else:
+                print(
+                    f"No due date for {args.canonical_id.strip()} in {feedback_path}"
+                )
+            return 0
 
         entries = list_feedback_entries(feedback_state)
         if not entries:
@@ -256,8 +402,15 @@ def _main_feedback(argv: Sequence[str]) -> int:
                 if entry.updated_at is not None
                 else "n/a"
             )
+            due_date_label = (
+                entry.due_date.isoformat() if entry.due_date is not None else ""
+            )
+            next_action = entry.next_action or ""
             note = entry.note or ""
-            print(f"{entry.status}\t{canonical_id}\t{updated_at}\t{note}")
+            print(
+                f"{entry.status}\t{canonical_id}\t{updated_at}\t"
+                f"{due_date_label}\t{next_action}\t{note}"
+            )
         return 0
     except ConfigError as exc:
         print(f"Error: {exc}", file=sys.stderr)

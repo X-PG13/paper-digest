@@ -68,7 +68,20 @@ class ArchiveSiteTests(unittest.TestCase):
                                 "topics": ["Agent"],
                                 "relevance_score": 88,
                                 "match_reasons": ['title matched "agent"'],
-                            }
+                            },
+                            {
+                                "title": "Action Planner",
+                                "abstract_url": "https://arxiv.org/abs/2604.08888v1",
+                                "canonical_id": "arxiv:2604.08888",
+                                "summary": (
+                                    "A starred paper with a queued next action."
+                                ),
+                                "authors": ["Drew"],
+                                "tags": ["方法"],
+                                "topics": ["Agent"],
+                                "relevance_score": 77,
+                                "match_reasons": ['title matched "agent"'],
+                            },
                         ],
                     },
                     {
@@ -145,6 +158,8 @@ class ArchiveSiteTests(unittest.TestCase):
                                 "2026-04-09T08:30:00+08:00"
                             ),
                             note="anchor paper for the review queue",
+                            next_action="compare planner design",
+                            due_date=datetime(2026, 4, 11).date(),
                         ),
                         "arxiv:2604.00001": FeedbackEntry(
                             status="reading",
@@ -152,6 +167,7 @@ class ArchiveSiteTests(unittest.TestCase):
                                 "2026-04-09T09:15:00+08:00"
                             ),
                             note="read sections 3 and 4 carefully",
+                            due_date=datetime(2026, 4, 8).date(),
                         ),
                         "arxiv:2604.00002": FeedbackEntry(
                             status="done",
@@ -159,6 +175,14 @@ class ArchiveSiteTests(unittest.TestCase):
                                 "2026-04-09T10:00:00+08:00"
                             ),
                             note="already summarized in weekly notes",
+                        ),
+                        "arxiv:2604.08888": FeedbackEntry(
+                            status="star",
+                            updated_at=datetime.fromisoformat(
+                                "2026-04-09T08:45:00+08:00"
+                            ),
+                            note="keep this in the action queue",
+                            next_action="compare baseline table",
                         ),
                     }
                 ),
@@ -213,21 +237,31 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn("Paper Circle", weekly_review_html)
             self.assertIn("Agent Systems", weekly_review_html)
             self.assertIn("Benchmark Design", weekly_review_html)
+            self.assertIn("Action Planner", weekly_review_html)
             self.assertIn("read sections 3 and 4 carefully", weekly_review_html)
             self.assertIn("Reading List", reading_list_html)
             self.assertIn("阅读清单", reading_list_html)
             self.assertIn("Paper Circle", reading_list_html)
             self.assertIn("Agent Systems", reading_list_html)
+            self.assertIn("Action Planner", reading_list_html)
             self.assertIn("anchor paper for the review queue", reading_list_html)
+            self.assertIn("compare planner design", reading_list_html)
+            self.assertIn("compare baseline table", reading_list_html)
             self.assertIn("papers/", reading_list_html)
             self.assertNotIn("Benchmark Design", reading_list_html)
             self.assertIn("Review Queue", review_queue_html)
             self.assertIn("行动队列", review_queue_html)
+            self.assertIn("已过期", review_queue_html)
+            self.assertIn("3 天内到期", review_queue_html)
+            self.assertIn("已设下一步动作", review_queue_html)
             self.assertIn("新出现且未标记", review_queue_html)
-            self.assertIn("标星待处理", review_queue_html)
             self.assertIn("Fresh Agent Note", review_queue_html)
             self.assertIn("Paper Circle", review_queue_html)
+            self.assertIn("Action Planner", review_queue_html)
             self.assertIn("anchor paper for the review queue", review_queue_html)
+            self.assertIn("compare planner design", review_queue_html)
+            self.assertIn("compare baseline table", review_queue_html)
+            self.assertIn("2026-04-11", review_queue_html)
             self.assertIn("LLM 固定订阅页", llm_html)
             self.assertIn('type="application/rss+xml"', llm_html)
             self.assertIn("订阅 RSS", llm_html)
@@ -253,11 +287,17 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn("Agent Systems", paper_detail)
             self.assertIn("反馈状态", paper_detail)
             self.assertIn("标星", paper_detail)
+            self.assertIn("下一步", paper_detail)
+            self.assertIn("最晚处理", paper_detail)
+            self.assertIn("compare planner design", paper_detail)
+            self.assertIn("2026-04-11", paper_detail)
             self.assertIn("复制 canonical_id", paper_detail)
             self.assertIn("复制标星命令", paper_detail)
             self.assertIn("复制阅读中命令", paper_detail)
             self.assertIn("复制已完成命令", paper_detail)
             self.assertIn("复制备注命令", paper_detail)
+            self.assertIn("复制下一步命令", paper_detail)
+            self.assertIn("复制到期命令", paper_detail)
             self.assertIn("python -m paper_digest feedback set", paper_detail)
             self.assertIn("python -m paper_digest feedback note", paper_detail)
             self.assertIn("anchor paper for the review queue", paper_detail)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -12,11 +12,15 @@ from paper_digest.feedback import (
     FeedbackEntry,
     FeedbackState,
     apply_feedback_to_papers,
+    clear_feedback_action,
+    clear_feedback_due_date,
     clear_feedback_note,
     clear_feedback_status,
     list_feedback_entries,
     load_feedback,
     save_feedback_file,
+    set_feedback_action,
+    set_feedback_due_date,
     set_feedback_note,
     set_feedback_status,
 )
@@ -54,6 +58,8 @@ class FeedbackTests(unittest.TestCase):
                                 "status": "reading",
                                 "updated_at": "2026-04-10T09:15:00+08:00",
                                 "note": "compare with clinical baselines",
+                                "next_action": "replicate the evaluation table",
+                                "due_date": "2026-04-18",
                             },
                             "title:ignored-entry": {
                                 "status": "unsupported",
@@ -80,6 +86,14 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(
             state.papers["doi:10.5555/example"].note,
             "compare with clinical baselines",
+        )
+        self.assertEqual(
+            state.papers["doi:10.5555/example"].next_action,
+            "replicate the evaluation table",
+        )
+        self.assertEqual(
+            state.papers["doi:10.5555/example"].due_date,
+            date(2026, 4, 18),
         )
         self.assertNotIn("title:ignored-entry", state.papers)
 
@@ -179,6 +193,8 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(reading.feedback_status, "reading")
         self.assertEqual(done.feedback_status, "done")
         self.assertEqual(done.feedback_note, "already reviewed last week")
+        self.assertIsNone(done.feedback_next_action)
+        self.assertIsNone(done.feedback_due_date)
         self.assertEqual(reading.base_relevance_score, 62)
         self.assertEqual(done.base_relevance_score, 25)
         self.assertIn("feedback: reading", reading.match_reasons)
@@ -207,6 +223,38 @@ class FeedbackTests(unittest.TestCase):
         self.assertIsNotNone(updated)
         assert updated is not None
         self.assertEqual(updated.note, "secondary note")
+        action = set_feedback_action(
+            state,
+            canonical_id="doi:10.5555/example",
+            next_action="compare baseline table",
+            updated_at=datetime.fromisoformat("2026-04-10T11:00:00+00:00"),
+        )
+        self.assertIsNotNone(action)
+        assert action is not None
+        self.assertEqual(action.next_action, "compare baseline table")
+        due = set_feedback_due_date(
+            state,
+            canonical_id="doi:10.5555/example",
+            due_date=date(2026, 4, 18),
+            updated_at=datetime.fromisoformat("2026-04-10T12:00:00+00:00"),
+        )
+        self.assertIsNotNone(due)
+        assert due is not None
+        self.assertEqual(due.due_date, date(2026, 4, 18))
+        self.assertTrue(
+            clear_feedback_action(
+                state,
+                canonical_id="doi:10.5555/example",
+            )
+        )
+        self.assertIsNone(state.papers["doi:10.5555/example"].next_action)
+        self.assertTrue(
+            clear_feedback_due_date(
+                state,
+                canonical_id="doi:10.5555/example",
+            )
+        )
+        self.assertIsNone(state.papers["doi:10.5555/example"].due_date)
         self.assertTrue(
             clear_feedback_note(
                 state,
@@ -233,6 +281,8 @@ class FeedbackTests(unittest.TestCase):
                             "2026-04-10T09:15:00+08:00"
                         ),
                         note="finished and archived",
+                        next_action="write a short summary note",
+                        due_date=date(2026, 4, 18),
                     )
                 }
             )
@@ -249,6 +299,14 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(
             loaded.papers["doi:10.5555/example"].note,
             "finished and archived",
+        )
+        self.assertEqual(
+            loaded.papers["doi:10.5555/example"].next_action,
+            "write a short summary note",
+        )
+        self.assertEqual(
+            loaded.papers["doi:10.5555/example"].due_date,
+            date(2026, 4, 18),
         )
         listed = list_feedback_entries(loaded)
         self.assertEqual(listed[0][0], "doi:10.5555/example")

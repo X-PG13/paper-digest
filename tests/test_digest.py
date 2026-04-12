@@ -16,6 +16,7 @@ from paper_digest.config import (
     StateConfig,
 )
 from paper_digest.digest import (
+    ActionItem,
     DigestRun,
     FeedDigest,
     FocusItem,
@@ -23,6 +24,7 @@ from paper_digest.digest import (
     filter_papers,
     render_markdown,
     render_notification_markdown,
+    summarize_action_items,
     summarize_digest,
     summarize_focus_items,
     write_outputs,
@@ -282,6 +284,44 @@ class DigestTests(unittest.TestCase):
         self.assertIn("推送原因：待跟进论文今天再次出现", markdown)
         self.assertNotIn("## 论文速览", markdown)
 
+    def test_render_markdown_includes_review_action_section(self) -> None:
+        digest = DigestRun(
+            generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
+            timezone="Asia/Shanghai",
+            lookback_hours=24,
+            feeds=[FeedDigest(name="LLM", papers=[])],
+            template="zh_daily_brief",
+            action_items=[
+                ActionItem(
+                    canonical_id="arxiv:2604.06170",
+                    title="Paper Circle",
+                    abstract_url="https://arxiv.org/abs/2604.06170v1",
+                    summary="Framework summary",
+                    source_label="arxiv",
+                    feedback_status="star",
+                    feedback_note="anchor paper",
+                    next_action="compare planner design",
+                    due_date=datetime(2026, 4, 10, tzinfo=UTC).date(),
+                    days_until_due=2,
+                    reasons=["due_soon", "next_action_pending"],
+                    feed_names=["LLM"],
+                    relevance_score=88,
+                    active_days=2,
+                    active_feeds=1,
+                    appearance_count=2,
+                    first_seen=datetime(2026, 4, 8, 9, 0, tzinfo=UTC),
+                    last_seen=datetime(2026, 4, 9, 9, 0, tzinfo=UTC),
+                )
+            ],
+        )
+
+        markdown = render_markdown(digest)
+
+        self.assertIn("## 本周该处理什么", markdown)
+        self.assertIn("最晚处理：2026-04-10 (2 天后到期)", markdown)
+        self.assertIn("下一步：compare planner design", markdown)
+        self.assertIn("为什么现在看：3 天内到期；已设下一步动作但还没开始", markdown)
+
     def test_summarize_focus_items_reports_counts(self) -> None:
         digest = DigestRun(
             generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
@@ -311,6 +351,39 @@ class DigestTests(unittest.TestCase):
         )
 
         self.assertEqual(summarize_focus_items(digest), "Focus=2, star=1, follow_up=1")
+
+    def test_summarize_action_items_reports_counts(self) -> None:
+        digest = DigestRun(
+            generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
+            timezone="UTC",
+            lookback_hours=24,
+            feeds=[],
+            action_items=[
+                ActionItem(
+                    canonical_id="a",
+                    title="A",
+                    abstract_url="https://example.com/a",
+                    summary="A",
+                    source_label="arxiv",
+                    feedback_status="star",
+                    reasons=["overdue"],
+                ),
+                ActionItem(
+                    canonical_id="b",
+                    title="B",
+                    abstract_url="https://example.com/b",
+                    summary="B",
+                    source_label="PubMed",
+                    feedback_status="follow_up",
+                    reasons=["due_soon", "next_action_pending"],
+                ),
+            ],
+        )
+
+        self.assertEqual(
+            summarize_action_items(digest),
+            "Actions=2, overdue=1, due_soon=1, next_action=1",
+        )
 
     def test_render_markdown_supports_zh_daily_brief_template(self) -> None:
         analyzed_paper = build_paper(
