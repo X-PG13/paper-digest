@@ -49,6 +49,8 @@ Versioning.
   or run as an action-only reminder channel.
 - Deliveries can now further narrow action reminders by feedback status,
   trigger reason, due window, overdue-only mode, and per-channel item caps.
+- The feedback CLI now supports `sync-github-secret`, so local feedback state
+  can be pushed into `PAPER_DIGEST_FEEDBACK_JSON` without hand-copying JSON.
 - The manual `Daily Digest` workflow now accepts a temporary `config.toml`
   override input and isolates those validation runs from caches and Pages
   deployment.
