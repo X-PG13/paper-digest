@@ -30,6 +30,11 @@ from .feedback import (
     set_feedback_note,
     set_feedback_status,
 )
+from .github_feedback import (
+    DEFAULT_FEEDBACK_SECRET_NAME,
+    GitHubFeedbackSyncError,
+    sync_feedback_to_github_secret,
+)
 from .openalex_client import OpenAlexClientError
 from .pubmed_client import PubMedClientError
 from .semantic_scholar_client import SemanticScholarClientError
@@ -182,6 +187,20 @@ def build_feedback_parser() -> ArgumentParser:
         "list",
         help="List configured feedback entries.",
         parents=[common],
+    )
+    sync_parser = subparsers.add_parser(
+        "sync-github-secret",
+        help="Sync the local feedback.json into a GitHub Actions repository secret.",
+        parents=[common],
+    )
+    sync_parser.add_argument(
+        "--repo",
+        help="Optional owner/repo override. Defaults to the current git origin remote.",
+    )
+    sync_parser.add_argument(
+        "--secret-name",
+        default=DEFAULT_FEEDBACK_SECRET_NAME,
+        help="GitHub Actions secret name to update.",
     )
     return parser
 
@@ -391,6 +410,19 @@ def _main_feedback(argv: Sequence[str]) -> int:
                     f"No due date for {args.canonical_id.strip()} in {feedback_path}"
                 )
             return 0
+        if args.feedback_command == "sync-github-secret":
+            save_feedback(config.feedback, feedback_state)
+            repo = sync_feedback_to_github_secret(
+                feedback_state,
+                cwd=Path(args.config).resolve().parent,
+                repo=args.repo,
+                secret_name=args.secret_name,
+            )
+            print(
+                f"Synced {feedback_path} to GitHub Actions secret "
+                f"{args.secret_name} for {repo}"
+            )
+            return 0
 
         entries = list_feedback_entries(feedback_state)
         if not entries:
@@ -412,7 +444,7 @@ def _main_feedback(argv: Sequence[str]) -> int:
                 f"{due_date_label}\t{next_action}\t{note}"
             )
         return 0
-    except ConfigError as exc:
+    except (ConfigError, GitHubFeedbackSyncError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 

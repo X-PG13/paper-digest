@@ -286,9 +286,26 @@ python -m paper_digest feedback due set 'doi:10.5555/paper-circle' 2026-04-18 --
 python -m paper_digest feedback action clear 'doi:10.5555/paper-circle' --config config.toml
 python -m paper_digest feedback due clear 'doi:10.5555/paper-circle' --config config.toml
 python -m paper_digest feedback clear-note 'doi:10.5555/paper-circle' --config config.toml
+python -m paper_digest feedback sync-github-secret --config config.toml
 python -m paper_digest feedback clear 'doi:10.5555/paper-circle' --config config.toml
 python -m paper_digest feedback list --config config.toml
 ```
+
+To sync your local feedback state into GitHub Actions without hand-copying JSON:
+
+```bash
+python -m paper_digest feedback sync-github-secret --config config.toml
+python -m paper_digest feedback sync-github-secret --repo X-PG13/paper-digest --secret-name PAPER_DIGEST_FEEDBACK_JSON --config config.toml
+```
+
+Notes:
+
+- `feedback sync-github-secret` writes the current local feedback payload into a
+  GitHub Actions repository secret by calling `gh secret set`.
+- If `--repo` is omitted, the command derives `owner/repo` from the current git
+  `origin` remote.
+- Pulling the secret value back from GitHub is intentionally not supported
+  because GitHub Actions secrets are write-only.
 
 Analysis notes:
 

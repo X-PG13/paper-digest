@@ -450,3 +450,41 @@ class CliTests(unittest.TestCase):
                 "Cleared due date for doi:10.5555/example",
                 stdout.getvalue(),
             )
+
+    @patch("paper_digest.cli.sync_feedback_to_github_secret")
+    def test_feedback_sync_github_secret_prints_target_repo(
+        self,
+        mock_sync_feedback_to_github_secret,
+    ) -> None:
+        mock_sync_feedback_to_github_secret.return_value = "X-PG13/paper-digest"
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = self._write_feedback_config(root)
+
+            main(
+                [
+                    "feedback",
+                    "set",
+                    "doi:10.5555/example",
+                    "star",
+                    "--config",
+                    str(config_path),
+                ]
+            )
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "feedback",
+                        "sync-github-secret",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn(
+            "GitHub Actions secret PAPER_DIGEST_FEEDBACK_JSON for X-PG13/paper-digest",
+            stdout.getvalue(),
+        )

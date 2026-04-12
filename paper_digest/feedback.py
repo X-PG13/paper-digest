@@ -62,6 +62,13 @@ def save_feedback(config: FeedbackConfig, feedback_state: FeedbackState) -> None
 def save_feedback_file(path: object, feedback_state: FeedbackState) -> None:
     feedback_path = _coerce_feedback_path(path)
     feedback_path.parent.mkdir(parents=True, exist_ok=True)
+    feedback_path.write_text(
+        serialize_feedback_state(feedback_state),
+        encoding="utf-8",
+    )
+
+
+def serialize_feedback_state(feedback_state: FeedbackState) -> str:
     papers = {
         canonical_id: _serialize_feedback_entry(entry)
         for canonical_id, entry in sorted(feedback_state.papers.items())
@@ -70,10 +77,7 @@ def save_feedback_file(path: object, feedback_state: FeedbackState) -> None:
         "version": 1,
         "papers": papers,
     }
-    feedback_path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 def set_feedback_status(
