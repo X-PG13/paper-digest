@@ -31,7 +31,15 @@ DigestTemplate = Literal["default", "zh_daily_brief"]
 SortMode = Literal["relevance", "published_at", "hybrid"]
 FeedbackStatus = Literal["star", "follow_up", "reading", "done", "ignore"]
 FocusReason = Literal["new_starred", "follow_up_resurfaced", "starred_momentum"]
-ActionReason = Literal["overdue", "due_soon", "next_action_pending"]
+ActionReason = Literal[
+    "overdue",
+    "overdue_1d",
+    "overdue_3d",
+    "overdue_7d",
+    "due_soon",
+    "next_action_pending",
+    "recurring_review",
+]
 
 
 @dataclass(slots=True, frozen=True)
@@ -1402,15 +1410,32 @@ def _action_feedback_status_value(value: str, field_name: str) -> FeedbackStatus
 
 def _action_reason_value(value: str, field_name: str) -> ActionReason:
     normalized = value.strip().lower()
-    if normalized not in {"overdue", "due_soon", "next_action_pending"}:
+    if normalized not in {
+        "overdue",
+        "overdue_1d",
+        "overdue_3d",
+        "overdue_7d",
+        "due_soon",
+        "next_action_pending",
+        "recurring_review",
+    }:
         raise ConfigError(
-            f"{field_name} must contain only 'overdue', 'due_soon', "
-            "or 'next_action_pending'"
+            f"{field_name} must contain only 'overdue', 'overdue_1d', "
+            "'overdue_3d', 'overdue_7d', 'due_soon', "
+            "'next_action_pending', or 'recurring_review'"
         )
     if normalized == "overdue":
         return "overdue"
+    if normalized == "overdue_1d":
+        return "overdue_1d"
+    if normalized == "overdue_3d":
+        return "overdue_3d"
+    if normalized == "overdue_7d":
+        return "overdue_7d"
     if normalized == "due_soon":
         return "due_soon"
+    if normalized == "recurring_review":
+        return "recurring_review"
     return "next_action_pending"
 
 

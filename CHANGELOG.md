@@ -51,6 +51,10 @@ Versioning.
   trigger reason, due window, overdue-only mode, and per-channel item caps.
 - The feedback CLI now supports `sync-github-secret`, so local feedback state
   can be pushed into `PAPER_DIGEST_FEEDBACK_JSON` without hand-copying JSON.
+- Feedback entries now also support `snoozed_until` and
+  `review_interval_days`, with CLI support, recurring-review due dates,
+  overdue escalation tiers, and archive views that hide snoozed items from the
+  active review queue while surfacing snoozed and overdue work separately.
 - The manual `Daily Digest` workflow now accepts a temporary `config.toml`
   override input and isolates those validation runs from caches and Pages
   deployment.

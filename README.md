@@ -209,8 +209,9 @@ hide_ignored = true
   `ignore` either hides papers or down-ranks them, depending on
   `hide_ignored`.
 - Each feedback entry can also carry a free-form `note`, a concrete
-  `next_action`, and an optional `due_date`, so you can record both why you
-  marked a paper and what should happen next.
+  `next_action`, an optional `due_date`, a temporary `snoozed_until`, and an
+  optional `review_interval_days`, so you can record both why you marked a
+  paper and how it should re-enter your workflow later.
 - The archive site exposes a dedicated `output/site/reading-list.html` page
   that aggregates starred, follow-up, and in-progress papers.
 - The archive site also exposes `output/site/weekly-review.html`, which groups
@@ -283,8 +284,12 @@ python -m paper_digest feedback set 'doi:10.5555/paper-circle' star --note 'anch
 python -m paper_digest feedback note 'doi:10.5555/paper-circle' 'compare section 4 with baseline table' --config config.toml
 python -m paper_digest feedback action set 'doi:10.5555/paper-circle' 'compare baseline table' --config config.toml
 python -m paper_digest feedback due set 'doi:10.5555/paper-circle' 2026-04-18 --config config.toml
+python -m paper_digest feedback snooze set 'doi:10.5555/paper-circle' 2026-04-20 --config config.toml
+python -m paper_digest feedback interval set 'doi:10.5555/paper-circle' 14 --config config.toml
 python -m paper_digest feedback action clear 'doi:10.5555/paper-circle' --config config.toml
 python -m paper_digest feedback due clear 'doi:10.5555/paper-circle' --config config.toml
+python -m paper_digest feedback snooze clear 'doi:10.5555/paper-circle' --config config.toml
+python -m paper_digest feedback interval clear 'doi:10.5555/paper-circle' --config config.toml
 python -m paper_digest feedback clear-note 'doi:10.5555/paper-circle' --config config.toml
 python -m paper_digest feedback sync-github-secret --config config.toml
 python -m paper_digest feedback clear 'doi:10.5555/paper-circle' --config config.toml
@@ -475,8 +480,8 @@ Notes:
   without suppressing the normal digest for other deliveries.
 - `action_statuses = ["star", "follow_up", "reading"]` narrows action
   reminders to specific feedback states for that delivery.
-- `action_reasons = ["overdue", "due_soon", "next_action_pending"]` narrows
-  action reminders by why they surfaced.
+- `action_reasons = ["overdue", "overdue_7d", "due_soon", "next_action_pending", "recurring_review"]`
+  narrows action reminders by why they surfaced.
 - `action_max_items = 2` caps how many action reminders one delivery gets,
   independent of the global `[notify].max_action_items`.
 - `action_overdue_only = true` keeps one delivery focused on overdue work only.
@@ -652,12 +657,14 @@ The CLI also rebuilds `output/site/index.html` on every run. That static site:
 - emits a `output/site/reading-list.html` view for papers you have starred or
   marked as follow-up or reading in the local feedback state
 - emits a `output/site/review-queue.html` view for actionable review work:
-  new high-signal unmarked papers, resurfaced follow-ups, and starred papers
-  that still need attention
+  new high-signal unmarked papers, resurfaced follow-ups, starred papers that
+  still need attention, and recurring reviews ordered by effective due date
 - emits a `output/site/weekly-review.html` view that groups papers into
-  pending, reading, completed, and resurfaced weekly review sections
+  overdue, snoozed, pending, reading, completed, and resurfaced weekly review sections
 - surfaces personal feedback notes across detail pages, the reading list,
   review queue, weekly review, and feedback-driven Focus blocks
+- surfaces `snoozed_until`, recurring review intervals, next actions, and
+  effective due dates across detail pages and feedback-centric archive views
 - emits fixed feed pages under `output/site/feeds/`
 - emits feed RSS files under `output/site/feeds/*.xml`
 - emits keyword tracking pages under `output/site/topics/` from configured feed keywords

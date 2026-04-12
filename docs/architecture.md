@@ -73,8 +73,9 @@ scale as new paper sources and output channels are added.
 - Persists feedback updates back to disk for CLI-driven workflows.
 - Applies `star`, `follow_up`, `reading`, `done`, and `ignore` signals before
   final digest ranking.
-- Carries optional per-paper notes, next actions, and due dates so the local
-  feedback file can act as a lightweight research task queue.
+- Carries optional per-paper notes, next actions, due dates, snooze windows,
+  and recurring review intervals so the local feedback file can act as a
+  lightweight research task queue.
 - Keeps user feedback policy out of the source clients and renderers.
 
 ### `paper_digest.archive_site`
@@ -95,6 +96,9 @@ scale as new paper sources and output channels are added.
 - Prioritizes overdue items, papers due within 3 days, and queued next actions
   in the review queue so the archive site can double as a lightweight action
   board.
+- Hides snoozed papers from the active review queue, shows snoozed and overdue
+  papers as separate weekly-review sections, and surfaces recurring-review
+  cadence on detail and queue pages.
 - Builds a weekly-review view and copyable feedback command affordances so the
   static site can feed back into the local feedback file without becoming a
   dynamic web app.
@@ -174,13 +178,16 @@ scale as new paper sources and output channels are added.
 - Builds both `Focus` items and review-action items so notifications can say
   not just why a paper matters today, but also what should be handled this
   week.
+- Derives effective due dates from explicit deadlines or recurring-review
+  intervals, and suppresses snoozed items until their reminder window opens
+  again.
 
 ### `paper_digest.cli`
 
 - Handles argument parsing and exit codes.
 - Supports both digest generation and local feedback-state management commands.
-- Exposes nested feedback subcommands for note, next-action, and due-date
-  management without requiring direct JSON edits.
+- Exposes nested feedback subcommands for note, next-action, due-date, snooze,
+  and recurring-review management without requiring direct JSON edits.
 - Converts domain errors into concise user-facing messages.
 
 ## Extension Strategy

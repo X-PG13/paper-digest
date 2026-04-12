@@ -93,6 +93,7 @@ class ActionItem:
     next_action: str | None = None
     due_date: date | None = None
     days_until_due: int | None = None
+    review_interval_days: int | None = None
     feed_names: list[str] = field(default_factory=list)
     relevance_score: int = 0
     active_days: int = 1
@@ -115,6 +116,7 @@ class ActionItem:
                 self.due_date.isoformat() if self.due_date is not None else None
             ),
             "days_until_due": self.days_until_due,
+            "review_interval_days": self.review_interval_days,
             "reasons": list(self.reasons),
             "feed_names": list(self.feed_names),
             "relevance_score": self.relevance_score,
@@ -783,6 +785,11 @@ def _render_action_lines(digest: DigestRun, *, language: str) -> list[str]:
                 )
             if item.next_action:
                 lines.append(f"   - Next Action: {item.next_action}")
+            if item.review_interval_days is not None:
+                lines.append(
+                    "   - Review Cadence: "
+                    f"every {item.review_interval_days} day(s)"
+                )
             if item.feedback_note:
                 lines.append(f"   - Note: {item.feedback_note}")
             lines.append(
@@ -823,6 +830,8 @@ def _render_action_lines(digest: DigestRun, *, language: str) -> list[str]:
                 )
             if item.next_action:
                 lines.append(f"   - 下一步：{item.next_action}")
+            if item.review_interval_days is not None:
+                lines.append(f"   - 复查周期：每 {item.review_interval_days} 天")
             if item.feedback_note:
                 lines.append(f"   - 备注：{item.feedback_note}")
             lines.append(
@@ -879,6 +888,18 @@ def _action_reason_label(reason: str, *, language: str) -> str:
             "en": "already overdue",
             "zh": "已经逾期",
         },
+        "overdue_1d": {
+            "en": "overdue for at least 1 day",
+            "zh": "已逾期至少 1 天",
+        },
+        "overdue_3d": {
+            "en": "overdue for at least 3 days",
+            "zh": "已逾期至少 3 天",
+        },
+        "overdue_7d": {
+            "en": "overdue for at least 7 days",
+            "zh": "已逾期至少 7 天",
+        },
         "due_soon": {
             "en": "due within 3 days",
             "zh": "3 天内到期",
@@ -886,6 +907,10 @@ def _action_reason_label(reason: str, *, language: str) -> str:
         "next_action_pending": {
             "en": "next action is set but not started",
             "zh": "已设下一步动作但还没开始",
+        },
+        "recurring_review": {
+            "en": "entered its recurring review window",
+            "zh": "进入周期性复查窗口",
         },
     }
     return labels.get(reason, {}).get(language, reason)
@@ -941,6 +966,9 @@ def summarize_action_items(digest: DigestRun) -> str:
     next_action = sum(
         1 for item in digest.action_items if "next_action_pending" in item.reasons
     )
+    recurring = sum(
+        1 for item in digest.action_items if "recurring_review" in item.reasons
+    )
     parts = [f"Actions={len(digest.action_items)}"]
     if overdue:
         parts.append(f"overdue={overdue}")
@@ -948,6 +976,8 @@ def summarize_action_items(digest: DigestRun) -> str:
         parts.append(f"due_soon={due_soon}")
     if next_action:
         parts.append(f"next_action={next_action}")
+    if recurring:
+        parts.append(f"recurring={recurring}")
     return ", ".join(parts)
 
 

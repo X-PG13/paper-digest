@@ -451,6 +451,118 @@ class CliTests(unittest.TestCase):
                 stdout.getvalue(),
             )
 
+    def test_feedback_snooze_and_interval_round_trip(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = self._write_feedback_config(root)
+            feedback_path = root / ".paper-digest-state" / "feedback.json"
+
+            exit_code = main(
+                [
+                    "feedback",
+                    "set",
+                    "doi:10.5555/example",
+                    "reading",
+                    "--config",
+                    str(config_path),
+                ]
+            )
+            self.assertEqual(exit_code, 0)
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "feedback",
+                        "snooze",
+                        "set",
+                        "doi:10.5555/example",
+                        "2026-04-20",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(feedback_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                payload["papers"]["doi:10.5555/example"]["snoozed_until"],
+                "2026-04-20",
+            )
+            self.assertIn(
+                "Updated snoozed-until for doi:10.5555/example -> 2026-04-20",
+                stdout.getvalue(),
+            )
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "feedback",
+                        "interval",
+                        "set",
+                        "doi:10.5555/example",
+                        "14",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(feedback_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                payload["papers"]["doi:10.5555/example"]["review_interval_days"],
+                14,
+            )
+            self.assertIn(
+                "Updated review interval for doi:10.5555/example -> 14 days",
+                stdout.getvalue(),
+            )
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(["feedback", "list", "--config", str(config_path)])
+
+            self.assertEqual(exit_code, 0)
+            self.assertIn("2026-04-20", stdout.getvalue())
+            self.assertIn("\t14\t", stdout.getvalue())
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "feedback",
+                        "snooze",
+                        "clear",
+                        "doi:10.5555/example",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+            self.assertEqual(exit_code, 0)
+            self.assertIn(
+                "Cleared snoozed-until for doi:10.5555/example",
+                stdout.getvalue(),
+            )
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "feedback",
+                        "interval",
+                        "clear",
+                        "doi:10.5555/example",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+            self.assertEqual(exit_code, 0)
+            self.assertIn(
+                "Cleared review interval for doi:10.5555/example",
+                stdout.getvalue(),
+            )
+
     @patch("paper_digest.cli.sync_feedback_to_github_secret")
     def test_feedback_sync_github_secret_prints_target_repo(
         self,

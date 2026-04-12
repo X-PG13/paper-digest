@@ -19,6 +19,8 @@ class FeedbackEntry:
     note: str | None = None
     next_action: str | None = None
     due_date: date | None = None
+    snoozed_until: date | None = None
+    review_interval_days: int | None = None
 
 
 @dataclass(slots=True)
@@ -101,6 +103,10 @@ def set_feedback_status(
         note=normalized_note,
         next_action=existing.next_action if existing is not None else None,
         due_date=existing.due_date if existing is not None else None,
+        snoozed_until=existing.snoozed_until if existing is not None else None,
+        review_interval_days=(
+            existing.review_interval_days if existing is not None else None
+        ),
     )
     feedback_state.papers[normalized_id] = entry
     return entry
@@ -123,6 +129,8 @@ def set_feedback_note(
         note=_normalize_note(note),
         next_action=existing.next_action,
         due_date=existing.due_date,
+        snoozed_until=existing.snoozed_until,
+        review_interval_days=existing.review_interval_days,
     )
     feedback_state.papers[normalized_id] = entry
     return entry
@@ -145,6 +153,8 @@ def set_feedback_action(
         note=existing.note,
         next_action=_normalize_action(next_action),
         due_date=existing.due_date,
+        snoozed_until=existing.snoozed_until,
+        review_interval_days=existing.review_interval_days,
     )
     feedback_state.papers[normalized_id] = entry
     return entry
@@ -167,6 +177,58 @@ def set_feedback_due_date(
         note=existing.note,
         next_action=existing.next_action,
         due_date=due_date,
+        snoozed_until=existing.snoozed_until,
+        review_interval_days=existing.review_interval_days,
+    )
+    feedback_state.papers[normalized_id] = entry
+    return entry
+
+
+def set_feedback_snoozed_until(
+    feedback_state: FeedbackState,
+    *,
+    canonical_id: str,
+    snoozed_until: date,
+    updated_at: datetime | None = None,
+) -> FeedbackEntry | None:
+    normalized_id = normalize_feedback_canonical_id(canonical_id)
+    existing = feedback_state.papers.get(normalized_id)
+    if existing is None:
+        return None
+    entry = FeedbackEntry(
+        status=existing.status,
+        updated_at=updated_at or datetime.now(UTC),
+        note=existing.note,
+        next_action=existing.next_action,
+        due_date=existing.due_date,
+        snoozed_until=snoozed_until,
+        review_interval_days=existing.review_interval_days,
+    )
+    feedback_state.papers[normalized_id] = entry
+    return entry
+
+
+def set_feedback_review_interval_days(
+    feedback_state: FeedbackState,
+    *,
+    canonical_id: str,
+    review_interval_days: int,
+    updated_at: datetime | None = None,
+) -> FeedbackEntry | None:
+    normalized_id = normalize_feedback_canonical_id(canonical_id)
+    existing = feedback_state.papers.get(normalized_id)
+    if existing is None:
+        return None
+    if review_interval_days <= 0:
+        raise ValueError("review_interval_days must be positive")
+    entry = FeedbackEntry(
+        status=existing.status,
+        updated_at=updated_at or datetime.now(UTC),
+        note=existing.note,
+        next_action=existing.next_action,
+        due_date=existing.due_date,
+        snoozed_until=existing.snoozed_until,
+        review_interval_days=review_interval_days,
     )
     feedback_state.papers[normalized_id] = entry
     return entry
@@ -197,6 +259,8 @@ def clear_feedback_note(
         note=None,
         next_action=existing.next_action,
         due_date=existing.due_date,
+        snoozed_until=existing.snoozed_until,
+        review_interval_days=existing.review_interval_days,
     )
     return True
 
@@ -217,6 +281,8 @@ def clear_feedback_action(
         note=existing.note,
         next_action=None,
         due_date=existing.due_date,
+        snoozed_until=existing.snoozed_until,
+        review_interval_days=existing.review_interval_days,
     )
     return True
 
@@ -237,6 +303,52 @@ def clear_feedback_due_date(
         note=existing.note,
         next_action=existing.next_action,
         due_date=None,
+        snoozed_until=existing.snoozed_until,
+        review_interval_days=existing.review_interval_days,
+    )
+    return True
+
+
+def clear_feedback_snoozed_until(
+    feedback_state: FeedbackState,
+    *,
+    canonical_id: str,
+    updated_at: datetime | None = None,
+) -> bool:
+    normalized_id = normalize_feedback_canonical_id(canonical_id)
+    existing = feedback_state.papers.get(normalized_id)
+    if existing is None or existing.snoozed_until is None:
+        return False
+    feedback_state.papers[normalized_id] = FeedbackEntry(
+        status=existing.status,
+        updated_at=updated_at or datetime.now(UTC),
+        note=existing.note,
+        next_action=existing.next_action,
+        due_date=existing.due_date,
+        snoozed_until=None,
+        review_interval_days=existing.review_interval_days,
+    )
+    return True
+
+
+def clear_feedback_review_interval_days(
+    feedback_state: FeedbackState,
+    *,
+    canonical_id: str,
+    updated_at: datetime | None = None,
+) -> bool:
+    normalized_id = normalize_feedback_canonical_id(canonical_id)
+    existing = feedback_state.papers.get(normalized_id)
+    if existing is None or existing.review_interval_days is None:
+        return False
+    feedback_state.papers[normalized_id] = FeedbackEntry(
+        status=existing.status,
+        updated_at=updated_at or datetime.now(UTC),
+        note=existing.note,
+        next_action=existing.next_action,
+        due_date=existing.due_date,
+        snoozed_until=existing.snoozed_until,
+        review_interval_days=None,
     )
     return True
 
@@ -282,6 +394,8 @@ def apply_feedback_to_papers(
         paper.feedback_note = entry.note
         paper.feedback_next_action = entry.next_action
         paper.feedback_due_date = entry.due_date
+        paper.feedback_snoozed_until = entry.snoozed_until
+        paper.feedback_review_interval_days = entry.review_interval_days
         if entry.status == "ignore" and config.hide_ignored:
             continue
         if entry.status == "star":
@@ -371,6 +485,30 @@ def feedback_due_command_snippet(
     )
 
 
+def feedback_snooze_command_snippet(
+    canonical_id: str,
+    *,
+    snoozed_until: str = "YYYY-MM-DD",
+    config_path: str = "config.toml",
+) -> str:
+    return (
+        "python -m paper_digest feedback snooze set "
+        f"'{canonical_id}' {snoozed_until} --config {config_path}"
+    )
+
+
+def feedback_interval_command_snippet(
+    canonical_id: str,
+    *,
+    review_interval_days: int | str = "7",
+    config_path: str = "config.toml",
+) -> str:
+    return (
+        "python -m paper_digest feedback interval set "
+        f"'{canonical_id}' {review_interval_days} --config {config_path}"
+    )
+
+
 def _parse_feedback_entry(value: object) -> FeedbackEntry | None:
     if isinstance(value, str):
         status = _feedback_status(value)
@@ -389,6 +527,10 @@ def _parse_feedback_entry(value: object) -> FeedbackEntry | None:
         note=_normalize_note(value.get("note")),
         next_action=_normalize_action(value.get("next_action")),
         due_date=_parse_optional_date(value.get("due_date")),
+        snoozed_until=_parse_optional_date(value.get("snoozed_until")),
+        review_interval_days=_parse_optional_positive_int(
+            value.get("review_interval_days")
+        ),
     )
 
 
@@ -422,12 +564,22 @@ def _parse_optional_date(value: object) -> date | None:
         return None
 
 
+def _parse_optional_positive_int(value: object) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    if value <= 0:
+        return None
+    return value
+
+
 def _serialize_feedback_entry(entry: FeedbackEntry) -> object:
     if (
         entry.updated_at is None
         and entry.note is None
         and entry.next_action is None
         and entry.due_date is None
+        and entry.snoozed_until is None
+        and entry.review_interval_days is None
     ):
         return entry.status
     payload: dict[str, object] = {
@@ -441,6 +593,10 @@ def _serialize_feedback_entry(entry: FeedbackEntry) -> object:
         payload["next_action"] = entry.next_action
     if entry.due_date is not None:
         payload["due_date"] = entry.due_date.isoformat()
+    if entry.snoozed_until is not None:
+        payload["snoozed_until"] = entry.snoozed_until.isoformat()
+    if entry.review_interval_days is not None:
+        payload["review_interval_days"] = entry.review_interval_days
     return payload
 
 
