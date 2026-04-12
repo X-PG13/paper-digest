@@ -47,6 +47,8 @@ Versioning.
   `action_overdue_only`, `action_due_within_days`, and `max_action_items`, and
   each delivery can either keep actions inline, emit a dedicated `Action Brief`,
   or run as an action-only reminder channel.
+- Deliveries can now further narrow action reminders by feedback status,
+  trigger reason, due window, overdue-only mode, and per-channel item caps.
 - The manual `Daily Digest` workflow now accepts a temporary `config.toml`
   override input and isolates those validation runs from caches and Pages
   deployment.

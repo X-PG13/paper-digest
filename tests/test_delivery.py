@@ -405,6 +405,72 @@ class DeliveryTests(unittest.TestCase):
         self.assertNotIn("New Starred Paper", messages[1].body)
         self.assertNotIn("Follow Up Paper", messages[1].body)
 
+    def test_build_notification_messages_filters_actions_by_delivery_rules(
+        self,
+    ) -> None:
+        delivery = FeishuWebhookConfig(
+            webhook_url="https://open.feishu.cn/example",
+            title_prefix="[Robot]",
+            skip_if_empty=True,
+            target="digest",
+            include_actions=True,
+            action_target="separate",
+            action_statuses=["reading"],
+            action_reasons=["overdue"],
+            action_max_items=1,
+            action_overdue_only=True,
+            action_due_within_days=1,
+        )
+        digest = build_digest()
+        digest.action_items = [
+            ActionItem(
+                canonical_id="doi:star-due-soon",
+                title="Star Due Soon",
+                abstract_url="https://example.com/star-due-soon",
+                summary="A starred paper due soon.",
+                source_label="arxiv",
+                feedback_status="star",
+                next_action="compare planner design",
+                due_date=datetime(2026, 4, 10, tzinfo=UTC).date(),
+                days_until_due=1,
+                reasons=["due_soon", "next_action_pending"],
+                feed_names=["LLM"],
+            ),
+            ActionItem(
+                canonical_id="doi:reading-overdue",
+                title="Reading Overdue",
+                abstract_url="https://example.com/reading-overdue",
+                summary="A reading item that is overdue.",
+                source_label="pubmed",
+                feedback_status="reading",
+                due_date=datetime(2026, 4, 8, tzinfo=UTC).date(),
+                days_until_due=-1,
+                reasons=["overdue"],
+                feed_names=["PubMed AI"],
+            ),
+            ActionItem(
+                canonical_id="doi:reading-overdue-2",
+                title="Reading Overdue 2",
+                abstract_url="https://example.com/reading-overdue-2",
+                summary="Another reading item that is overdue.",
+                source_label="openalex",
+                feedback_status="reading",
+                due_date=datetime(2026, 4, 7, tzinfo=UTC).date(),
+                days_until_due=-2,
+                reasons=["overdue"],
+                feed_names=["OpenAlex AI"],
+            ),
+        ]
+
+        messages = build_notification_messages(delivery, digest)
+
+        self.assertEqual(len(messages), 2)
+        self.assertEqual(messages[1].kind, "action")
+        self.assertIn("Actions=1, overdue=1", messages[1].title)
+        self.assertIn("Reading Overdue", messages[1].body)
+        self.assertNotIn("Star Due Soon", messages[1].body)
+        self.assertNotIn("Reading Overdue 2", messages[1].body)
+
     @patch("paper_digest.delivery.send_wecom_message")
     @patch("paper_digest.delivery.send_slack_message")
     @patch("paper_digest.delivery.send_discord_message")

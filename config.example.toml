@@ -207,6 +207,11 @@ max_items = 10
 # include_actions = true
 # action_target = "digest"
 # action_only = false
+# action_statuses = ["star", "follow_up", "reading"]
+# action_reasons = ["overdue", "due_soon", "next_action_pending"]
+# action_max_items = 5
+# action_overdue_only = false
+# action_due_within_days = 7
 
 # Example Feishu webhook delivery:
 # [[deliveries]]
@@ -223,6 +228,11 @@ max_items = 10
 # include_actions = true
 # action_target = "separate"
 # action_only = false
+# action_statuses = ["reading"]
+# action_reasons = ["overdue"]
+# action_max_items = 2
+# action_overdue_only = true
+# action_due_within_days = 3
 
 # Example WeCom webhook delivery:
 # [[deliveries]]
@@ -239,6 +249,11 @@ max_items = 10
 # include_actions = true
 # action_target = "digest"
 # action_only = false
+# action_statuses = ["follow_up"]
+# action_reasons = ["due_soon", "next_action_pending"]
+# action_max_items = 3
+# action_overdue_only = false
+# action_due_within_days = 7
 
 # Example Slack webhook delivery:
 # [[deliveries]]
@@ -255,6 +270,11 @@ max_items = 10
 # include_actions = true
 # action_target = "separate"
 # action_only = false
+# action_statuses = ["follow_up"]
+# action_reasons = ["due_soon"]
+# action_max_items = 2
+# action_overdue_only = false
+# action_due_within_days = 3
 
 # Example Discord webhook delivery:
 # [[deliveries]]
@@ -271,6 +291,11 @@ max_items = 10
 # include_actions = true
 # action_target = "digest"
 # action_only = false
+# action_statuses = ["star"]
+# action_reasons = ["next_action_pending"]
+# action_max_items = 2
+# action_overdue_only = false
+# action_due_within_days = 14
 
 # Example Telegram bot delivery:
 # [[deliveries]]
@@ -288,6 +313,11 @@ max_items = 10
 # include_actions = true
 # action_target = "digest"
 # action_only = false
+# action_statuses = ["star", "follow_up"]
+# action_reasons = ["due_soon", "next_action_pending"]
+# action_max_items = 4
+# action_overdue_only = false
+# action_due_within_days = 7
 
 # Legacy email configuration is still supported:
 # [email]
@@ -311,3 +341,8 @@ max_items = 10
 # include_actions = true
 # action_target = "digest"
 # action_only = false
+# action_statuses = ["star", "follow_up", "reading"]
+# action_reasons = ["overdue", "due_soon", "next_action_pending"]
+# action_max_items = 5
+# action_overdue_only = false
+# action_due_within_days = 7

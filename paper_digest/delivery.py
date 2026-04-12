@@ -71,7 +71,10 @@ def build_notification_messages(
 ) -> list[NotificationMessage]:
     """Build delivery messages according to channel policy."""
 
-    filtered_digest = _filter_focus_for_delivery(digest, delivery)
+    filtered_digest = _filter_actions_for_delivery(
+        _filter_focus_for_delivery(digest, delivery),
+        delivery,
+    )
 
     if feedback_only:
         feedback_digest = filtered_digest
@@ -304,6 +307,57 @@ def _filter_focus_for_delivery(
         digest,
         focus_items=filtered_items,
         action_items=list(digest.action_items),
+    )
+
+
+def _filter_actions_for_delivery(
+    digest: DigestRun,
+    delivery: DeliveryConfig,
+) -> DigestRun:
+    if not digest.action_items:
+        return digest
+
+    filtered_items = list(digest.action_items)
+    allowed_statuses = set(_action_statuses(delivery))
+    if allowed_statuses:
+        filtered_items = [
+            item for item in filtered_items if item.feedback_status in allowed_statuses
+        ]
+
+    allowed_reasons = set(_action_reasons(delivery))
+    if allowed_reasons:
+        filtered_items = [
+            item
+            for item in filtered_items
+            if any(reason in allowed_reasons for reason in item.reasons)
+        ]
+
+    if _action_overdue_only(delivery):
+        filtered_items = [
+            item for item in filtered_items if "overdue" in item.reasons
+        ]
+
+    due_within_days = _action_due_within_days(delivery)
+    if due_within_days is not None:
+        filtered_items = [
+            item
+            for item in filtered_items
+            if (
+                item.days_until_due is not None
+                and item.days_until_due <= due_within_days
+            )
+        ]
+
+    max_items = _action_max_items(delivery)
+    if max_items is not None:
+        filtered_items = filtered_items[:max_items]
+
+    if filtered_items == digest.action_items:
+        return digest
+    return _clone_digest(
+        digest,
+        focus_items=list(digest.focus_items),
+        action_items=filtered_items,
     )
 
 
@@ -594,6 +648,36 @@ def _action_only(
     delivery: DeliveryConfig,
 ) -> bool:
     return delivery.action_only
+
+
+def _action_statuses(
+    delivery: DeliveryConfig,
+) -> Sequence[str]:
+    return delivery.action_statuses
+
+
+def _action_reasons(
+    delivery: DeliveryConfig,
+) -> Sequence[str]:
+    return delivery.action_reasons
+
+
+def _action_max_items(
+    delivery: DeliveryConfig,
+) -> int | None:
+    return delivery.action_max_items
+
+
+def _action_overdue_only(
+    delivery: DeliveryConfig,
+) -> bool:
+    return delivery.action_overdue_only
+
+
+def _action_due_within_days(
+    delivery: DeliveryConfig,
+) -> int | None:
+    return delivery.action_due_within_days
 
 
 def _focus_statuses(

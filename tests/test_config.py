@@ -196,6 +196,11 @@ class LoadConfigTests(unittest.TestCase):
                     focus_max_items = 2
                     include_actions = true
                     action_target = "separate"
+                    action_statuses = ["reading"]
+                    action_reasons = ["overdue"]
+                    action_max_items = 1
+                    action_overdue_only = true
+                    action_due_within_days = 2
 
                     [[deliveries]]
                     type = "wecom_webhook"
@@ -247,6 +252,11 @@ class LoadConfigTests(unittest.TestCase):
         self.assertEqual(config.deliveries[1].focus_max_items, 2)
         self.assertTrue(config.deliveries[1].include_actions)
         self.assertEqual(config.deliveries[1].action_target, "separate")
+        self.assertEqual(config.deliveries[1].action_statuses, ["reading"])
+        self.assertEqual(config.deliveries[1].action_reasons, ["overdue"])
+        self.assertEqual(config.deliveries[1].action_max_items, 1)
+        self.assertTrue(config.deliveries[1].action_overdue_only)
+        self.assertEqual(config.deliveries[1].action_due_within_days, 2)
         self.assertEqual(config.deliveries[2].focus_target, "separate")
         self.assertTrue(config.deliveries[2].action_only)
 
