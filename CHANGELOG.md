@@ -43,6 +43,10 @@ Versioning.
 - Feedback entries now support structured `next_action` and `due_date` fields,
   the feedback CLI can manage them directly, and digest notifications now
   include a dedicated weekly action section for overdue and soon-due papers.
+- Action reminders can now be narrowed through `[notify]` with
+  `action_overdue_only`, `action_due_within_days`, and `max_action_items`, and
+  each delivery can either keep actions inline, emit a dedicated `Action Brief`,
+  or run as an action-only reminder channel.
 - The manual `Daily Digest` workflow now accepts a temporary `config.toml`
   override input and isolates those validation runs from caches and Pages
   deployment.

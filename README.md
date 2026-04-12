@@ -231,19 +231,27 @@ include_new_starred = true
 include_follow_up_resurfaced = true
 include_starred_momentum = true
 max_focus_items = 5
+max_action_items = 5
+action_overdue_only = false
+# action_due_within_days = 7
 ```
 
 - Notification outputs now include a dedicated `Focus` block when a paper was
   newly starred, a `follow_up` paper resurfaced in the current scan, or a
   starred paper newly entered the momentum view.
 - `feedback_only = true` turns webhook or email notifications into a
-  feedback-driven briefing that only pushes the Focus block.
+  feedback-driven briefing that only pushes the Focus and action sections.
 - Focus items explain why they were pushed, preserve the paper's
   `star` / `follow_up` status, and surface coverage context such as active days,
   feed span, and appearance count.
 - Daily digests now also include a dedicated "本周该处理什么" section for
   overdue items, papers due within 3 days, and queued next actions on
   `star` / `follow_up` / `reading` papers.
+- `max_action_items` caps how many action reminders get rendered into one run.
+- `action_overdue_only = true` narrows action reminders to already overdue
+  items.
+- `action_due_within_days = 7` is the lighter-weight alternative when you want
+  to keep only near-term action reminders.
 
 Example feedback file:
 
@@ -318,6 +326,9 @@ focus_target = "digest"
 focus_statuses = ["star", "follow_up"]
 focus_reasons = ["new_starred", "follow_up_resurfaced", "starred_momentum"]
 focus_max_items = 5
+include_actions = true
+action_target = "digest"
+action_only = false
 
 [[deliveries]]
 type = "feishu_webhook"
@@ -330,6 +341,9 @@ focus_target = "separate"
 focus_statuses = ["star"]
 focus_reasons = ["new_starred", "starred_momentum"]
 focus_max_items = 3
+include_actions = true
+action_target = "separate"
+action_only = false
 
 [[deliveries]]
 type = "wecom_webhook"
@@ -339,6 +353,9 @@ skip_if_empty = true
 target = "per_feed"
 include_focus = false
 focus_target = "digest"
+include_actions = true
+action_target = "digest"
+action_only = false
 
 [[deliveries]]
 type = "slack_webhook"
@@ -346,6 +363,9 @@ webhook_url = "https://hooks.slack.com/services/T000/B000/your-secret"
 title_prefix = "[Paper Digest]"
 skip_if_empty = true
 target = "per_feed"
+include_actions = true
+action_target = "separate"
+action_only = false
 
 [[deliveries]]
 type = "discord_webhook"
@@ -353,6 +373,9 @@ webhook_url = "https://discord.com/api/webhooks/123456789012345678/your-secret"
 title_prefix = "[Paper Digest]"
 skip_if_empty = true
 target = "per_feed"
+include_actions = true
+action_target = "digest"
+action_only = false
 
 [[deliveries]]
 type = "telegram_bot"
@@ -361,6 +384,9 @@ chat_id = "-1001234567890"
 title_prefix = "[Paper Digest]"
 skip_if_empty = true
 target = "per_feed"
+include_actions = true
+action_target = "digest"
+action_only = false
 ```
 
 Notes:
@@ -391,6 +417,13 @@ Notes:
 - `focus_target = "digest"` keeps Focus inline with the main digest, while
   `focus_target = "separate"` emits a second `Focus Brief` message for that
   delivery when focus items exist.
+- `include_actions = false` keeps one delivery on the normal digest path
+  without the weekly action section.
+- `action_target = "digest"` keeps action reminders inline with the main
+  digest, while `action_target = "separate"` emits a dedicated `Action Brief`
+  message for that delivery when action items exist.
+- `action_only = true` turns one delivery into an action-reminder-only channel
+  without suppressing the normal digest for other deliveries.
 - `focus_statuses = ["star", "follow_up"]` narrows Focus to specific feedback
   states for that delivery. Leave it empty to accept all Focus statuses.
 - `focus_reasons = ["new_starred", "follow_up_resurfaced", "starred_momentum"]`
