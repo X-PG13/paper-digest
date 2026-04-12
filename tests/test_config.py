@@ -305,6 +305,37 @@ class LoadConfigTests(unittest.TestCase):
         self.assertEqual(config.analysis.language, "Chinese")
         self.assertEqual(config.analysis.reasoning_effort, "low")
 
+    def test_load_config_accepts_extended_action_reasons(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text(
+                textwrap.dedent(
+                    """
+                    [app]
+                    timezone = "UTC"
+
+                    [[feeds]]
+                    name = "LLM"
+                    categories = ["cs.AI"]
+
+                    [[deliveries]]
+                    type = "feishu_webhook"
+                    webhook_url = "https://open.feishu.cn/example"
+                    title_prefix = "[Robot]"
+                    skip_if_empty = true
+                    action_reasons = ["overdue_7d", "recurring_review"]
+                    """
+                ).strip(),
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        self.assertEqual(
+            config.deliveries[0].action_reasons,
+            ["overdue_7d", "recurring_review"],
+        )
+
     def test_load_config_reads_ranking_settings_and_feed_sort_override(self) -> None:
         with TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "config.toml"

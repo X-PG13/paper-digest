@@ -247,6 +247,7 @@ def _build_focus_items(
     if not feedback_state.papers:
         return []
 
+    today = now.astimezone(ZoneInfo(config.timezone)).date()
     history_ids = {
         canonical_id
         for canonical_id, entry in feedback_state.papers.items()
@@ -259,6 +260,8 @@ def _build_focus_items(
 
     for canonical_id, entry in feedback_state.papers.items():
         if entry.status not in {"star", "follow_up"}:
+            continue
+        if _entry_is_snoozed(entry, today=today):
             continue
 
         candidate = focus_candidates.get(canonical_id)
@@ -364,7 +367,11 @@ def _build_action_items(
         canonical_id
         for canonical_id, entry in feedback_state.papers.items()
         if entry.status in actionable_statuses
-        and (entry.next_action is not None or entry.due_date is not None)
+        and (
+            entry.next_action is not None
+            or entry.due_date is not None
+            or entry.review_interval_days is not None
+        )
     }
     if not actionable_ids:
         return []
@@ -377,7 +384,10 @@ def _build_action_items(
     for canonical_id, entry in feedback_state.papers.items():
         if entry.status not in actionable_statuses:
             continue
-        if entry.next_action is None and entry.due_date is None:
+        effective_due_date = _effective_due_date_from_entry(entry)
+        if entry.next_action is None and effective_due_date is None:
+            continue
+        if _entry_is_snoozed(entry, today=today):
             continue
 
         snapshot = history.get(canonical_id)
@@ -389,14 +399,13 @@ def _build_action_items(
 
         reason_codes: list[str] = []
         days_until_due: int | None = None
-        if entry.due_date is not None:
-            days_until_due = (entry.due_date - today).days
-            if days_until_due < 0:
-                reason_codes.append("overdue")
-            elif days_until_due <= 3:
-                reason_codes.append("due_soon")
-        if entry.next_action is not None and entry.status in {"star", "follow_up"}:
-            reason_codes.append("next_action_pending")
+        if effective_due_date is not None:
+            days_until_due = (effective_due_date - today).days
+        reason_codes = _action_reason_codes(
+            entry,
+            effective_due_date=effective_due_date,
+            days_until_due=days_until_due,
+        )
         if not reason_codes:
             continue
         if overdue_only and "overdue" not in reason_codes:
@@ -423,8 +432,9 @@ def _build_action_items(
             feedback_status=entry.status,
             feedback_note=entry.note,
             next_action=entry.next_action,
-            due_date=entry.due_date,
+            due_date=effective_due_date,
             days_until_due=days_until_due,
+            review_interval_days=entry.review_interval_days,
             reasons=reason_codes,
             feed_names=sorted(merged_stats.feed_names),
             relevance_score=paper.relevance_score,
@@ -545,6 +555,10 @@ def _paper_from_payload(payload: dict[str, object]) -> Paper | None:
         feedback_note=_optional_string(payload.get("feedback_note")),
         feedback_next_action=_optional_string(payload.get("feedback_next_action")),
         feedback_due_date=_optional_date(payload.get("feedback_due_date")),
+        feedback_snoozed_until=_optional_date(payload.get("feedback_snoozed_until")),
+        feedback_review_interval_days=_optional_positive_int(
+            payload.get("feedback_review_interval_days")
+        ),
     )
 
 
@@ -639,11 +653,19 @@ def _focus_priority(reason_codes: Sequence[str]) -> int:
 
 
 def _action_priority(reason_codes: Sequence[str]) -> int:
-    if "overdue" in reason_codes:
+    if "overdue_7d" in reason_codes:
         return 0
-    if "due_soon" in reason_codes:
+    if "overdue_3d" in reason_codes:
         return 1
-    return 2
+    if "overdue_1d" in reason_codes:
+        return 2
+    if "overdue" in reason_codes:
+        return 3
+    if "due_soon" in reason_codes:
+        return 4
+    if "recurring_review" in reason_codes:
+        return 5
+    return 6
 
 
 def _action_status_priority(status: FeedbackStatus) -> int:
@@ -704,6 +726,13 @@ def _optional_int(value: object) -> int | None:
     return value
 
 
+def _optional_positive_int(value: object) -> int | None:
+    parsed = _optional_int(value)
+    if parsed is None or parsed <= 0:
+        return None
+    return parsed
+
+
 def _optional_date(value: object) -> date | None:
     if not isinstance(value, str):
         return None
@@ -720,6 +749,44 @@ def _feedback_status(value: object) -> FeedbackStatus | None:
     if normalized not in {"star", "follow_up", "reading", "done", "ignore"}:
         return None
     return cast(FeedbackStatus, normalized)
+
+
+def _entry_is_snoozed(entry: FeedbackEntry, *, today: date) -> bool:
+    return entry.snoozed_until is not None and entry.snoozed_until > today
+
+
+def _effective_due_date_from_entry(entry: FeedbackEntry) -> date | None:
+    if entry.due_date is not None:
+        return entry.due_date
+    if entry.review_interval_days is None or entry.updated_at is None:
+        return None
+    return entry.updated_at.date() + timedelta(days=entry.review_interval_days)
+
+
+def _action_reason_codes(
+    entry: FeedbackEntry,
+    *,
+    effective_due_date: date | None,
+    days_until_due: int | None,
+) -> list[str]:
+    reason_codes: list[str] = []
+    if effective_due_date is not None and days_until_due is not None:
+        if days_until_due < 0:
+            reason_codes.append("overdue")
+            overdue_days = abs(days_until_due)
+            if overdue_days >= 7:
+                reason_codes.append("overdue_7d")
+            elif overdue_days >= 3:
+                reason_codes.append("overdue_3d")
+            else:
+                reason_codes.append("overdue_1d")
+        elif days_until_due <= 3:
+            reason_codes.append("due_soon")
+        if entry.review_interval_days is not None and entry.due_date is None:
+            reason_codes.append("recurring_review")
+    if entry.next_action is not None and entry.status in {"star", "follow_up"}:
+        reason_codes.append("next_action_pending")
+    return reason_codes
 
 
 def _current_feed_names(digest: DigestRun) -> dict[str, set[str]]:

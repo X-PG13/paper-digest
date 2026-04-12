@@ -66,6 +66,8 @@ class Paper:
     feedback_note: str | None = None
     feedback_next_action: str | None = None
     feedback_due_date: date | None = None
+    feedback_snoozed_until: date | None = None
+    feedback_review_interval_days: int | None = None
 
     def __post_init__(self) -> None:
         self.doi = (
@@ -100,6 +102,12 @@ class Paper:
         self.feedback_note = _normalize_optional_note(self.feedback_note)
         self.feedback_next_action = _normalize_optional_note(self.feedback_next_action)
         self.feedback_due_date = _normalize_optional_date(self.feedback_due_date)
+        self.feedback_snoozed_until = _normalize_optional_date(
+            self.feedback_snoozed_until
+        )
+        self.feedback_review_interval_days = _normalize_optional_positive_int(
+            self.feedback_review_interval_days
+        )
 
     def to_dict(self) -> dict[str, object]:
         data = asdict(self)
@@ -111,6 +119,12 @@ class Paper:
             if self.feedback_due_date is not None
             else None
         )
+        data["feedback_snoozed_until"] = (
+            self.feedback_snoozed_until.isoformat()
+            if self.feedback_snoozed_until is not None
+            else None
+        )
+        data["feedback_review_interval_days"] = self.feedback_review_interval_days
         data["canonical_id"] = self.canonical_id()
         return data
 
@@ -171,6 +185,13 @@ class Paper:
         )
         self.feedback_due_date = (
             preferred.feedback_due_date or secondary.feedback_due_date
+        )
+        self.feedback_snoozed_until = (
+            preferred.feedback_snoozed_until or secondary.feedback_snoozed_until
+        )
+        self.feedback_review_interval_days = (
+            preferred.feedback_review_interval_days
+            or secondary.feedback_review_interval_days
         )
         self.match_reasons = _merge_unique_strings(
             [*self.match_reasons, *other.match_reasons]
@@ -364,6 +385,14 @@ def _normalize_optional_date(value: object) -> date | None:
         return date.fromisoformat(value.strip())
     except ValueError:
         return None
+
+
+def _normalize_optional_positive_int(value: object) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    if value <= 0:
+        return None
+    return value
 
 
 def _normalize_source_urls(

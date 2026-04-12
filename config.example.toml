@@ -59,6 +59,9 @@ max_action_items = 5
 action_overdue_only = false
 # Optional cap for reminders due within N days. Leave commented to disable.
 # action_due_within_days = 7
+# Supported action reasons include:
+# overdue, overdue_1d, overdue_3d, overdue_7d, due_soon,
+# next_action_pending, recurring_review
 
 [digest]
 # Rendering style for Markdown, email, and Feishu output.
@@ -208,7 +211,7 @@ max_items = 10
 # action_target = "digest"
 # action_only = false
 # action_statuses = ["star", "follow_up", "reading"]
-# action_reasons = ["overdue", "due_soon", "next_action_pending"]
+# action_reasons = ["overdue", "overdue_7d", "due_soon", "next_action_pending", "recurring_review"]
 # action_max_items = 5
 # action_overdue_only = false
 # action_due_within_days = 7
@@ -229,7 +232,7 @@ max_items = 10
 # action_target = "separate"
 # action_only = false
 # action_statuses = ["reading"]
-# action_reasons = ["overdue"]
+# action_reasons = ["overdue", "overdue_7d"]
 # action_max_items = 2
 # action_overdue_only = true
 # action_due_within_days = 3
@@ -250,7 +253,7 @@ max_items = 10
 # action_target = "digest"
 # action_only = false
 # action_statuses = ["follow_up"]
-# action_reasons = ["due_soon", "next_action_pending"]
+# action_reasons = ["due_soon", "next_action_pending", "recurring_review"]
 # action_max_items = 3
 # action_overdue_only = false
 # action_due_within_days = 7

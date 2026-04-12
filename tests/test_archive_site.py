@@ -82,6 +82,20 @@ class ArchiveSiteTests(unittest.TestCase):
                                 "relevance_score": 77,
                                 "match_reasons": ['title matched "agent"'],
                             },
+                            {
+                                "title": "Deferred Agent",
+                                "abstract_url": "https://arxiv.org/abs/2604.07777v1",
+                                "canonical_id": "arxiv:2604.07777",
+                                "summary": (
+                                    "A snoozed paper that should stay out of "
+                                    "the active queue."
+                                ),
+                                "authors": ["Evan"],
+                                "tags": ["方法"],
+                                "topics": ["Agent"],
+                                "relevance_score": 70,
+                                "match_reasons": ['title matched "agent"'],
+                            },
                         ],
                     },
                     {
@@ -160,6 +174,7 @@ class ArchiveSiteTests(unittest.TestCase):
                             note="anchor paper for the review queue",
                             next_action="compare planner design",
                             due_date=datetime(2026, 4, 11).date(),
+                            review_interval_days=14,
                         ),
                         "arxiv:2604.00001": FeedbackEntry(
                             status="reading",
@@ -183,6 +198,14 @@ class ArchiveSiteTests(unittest.TestCase):
                             ),
                             note="keep this in the action queue",
                             next_action="compare baseline table",
+                        ),
+                        "arxiv:2604.07777": FeedbackEntry(
+                            status="follow_up",
+                            updated_at=datetime.fromisoformat(
+                                "2026-04-09T09:30:00+08:00"
+                            ),
+                            note="snooze until the workshop notes arrive",
+                            snoozed_until=datetime(2026, 4, 12).date(),
                         ),
                     }
                 ),
@@ -238,14 +261,18 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn("Agent Systems", weekly_review_html)
             self.assertIn("Benchmark Design", weekly_review_html)
             self.assertIn("Action Planner", weekly_review_html)
+            self.assertIn("已搁置", weekly_review_html)
+            self.assertIn("Deferred Agent", weekly_review_html)
             self.assertIn("read sections 3 and 4 carefully", weekly_review_html)
             self.assertIn("Reading List", reading_list_html)
             self.assertIn("阅读清单", reading_list_html)
             self.assertIn("Paper Circle", reading_list_html)
             self.assertIn("Agent Systems", reading_list_html)
             self.assertIn("Action Planner", reading_list_html)
+            self.assertIn("Deferred Agent", reading_list_html)
             self.assertIn("anchor paper for the review queue", reading_list_html)
             self.assertIn("compare planner design", reading_list_html)
+            self.assertIn("复查周期：每 14 天", reading_list_html)
             self.assertIn("compare baseline table", reading_list_html)
             self.assertIn("papers/", reading_list_html)
             self.assertNotIn("Benchmark Design", reading_list_html)
@@ -258,8 +285,10 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn("Fresh Agent Note", review_queue_html)
             self.assertIn("Paper Circle", review_queue_html)
             self.assertIn("Action Planner", review_queue_html)
+            self.assertNotIn("Deferred Agent", review_queue_html)
             self.assertIn("anchor paper for the review queue", review_queue_html)
             self.assertIn("compare planner design", review_queue_html)
+            self.assertIn("复查周期：每 14 天", review_queue_html)
             self.assertIn("compare baseline table", review_queue_html)
             self.assertIn("2026-04-11", review_queue_html)
             self.assertIn("LLM 固定订阅页", llm_html)
@@ -291,6 +320,9 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn("最晚处理", paper_detail)
             self.assertIn("compare planner design", paper_detail)
             self.assertIn("2026-04-11", paper_detail)
+            self.assertIn("搁置到", paper_detail)
+            self.assertIn("复查周期", paper_detail)
+            self.assertIn("每 14 天", paper_detail)
             self.assertIn("复制 canonical_id", paper_detail)
             self.assertIn("复制标星命令", paper_detail)
             self.assertIn("复制阅读中命令", paper_detail)
@@ -298,6 +330,8 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn("复制备注命令", paper_detail)
             self.assertIn("复制下一步命令", paper_detail)
             self.assertIn("复制到期命令", paper_detail)
+            self.assertIn("复制搁置命令", paper_detail)
+            self.assertIn("复制复查周期命令", paper_detail)
             self.assertIn("python -m paper_digest feedback set", paper_detail)
             self.assertIn("python -m paper_digest feedback note", paper_detail)
             self.assertIn("anchor paper for the review queue", paper_detail)

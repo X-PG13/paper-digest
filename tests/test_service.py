@@ -939,7 +939,10 @@ class GenerateDigestTests(unittest.TestCase):
 
         self.assertEqual(len(digest.action_items), 2)
         self.assertEqual(digest.action_items[0].canonical_id, "arxiv:2604.00001")
-        self.assertEqual(digest.action_items[0].reasons, ["overdue"])
+        self.assertEqual(
+            digest.action_items[0].reasons,
+            ["overdue", "overdue_1d"],
+        )
         self.assertEqual(digest.action_items[0].days_until_due, -1)
         self.assertEqual(digest.action_items[1].canonical_id, "arxiv:2604.06170")
         self.assertEqual(
@@ -1134,3 +1137,125 @@ class GenerateDigestTests(unittest.TestCase):
 
         self.assertEqual(len(digest.action_items), 1)
         self.assertEqual(digest.action_items[0].canonical_id, "arxiv:2604.00001")
+
+    @patch("paper_digest.service.fetch_feed_papers")
+    def test_generate_digest_builds_recurring_review_action_items_and_skips_snoozed(
+        self,
+        mock_fetch_feed_papers,
+    ) -> None:
+        now = datetime(2026, 4, 9, 9, 30, tzinfo=ZoneInfo("UTC"))
+        feed = FeedConfig(
+            name="LLM",
+            categories=["cs.AI"],
+            keywords=["agent"],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+        )
+        recurring_due_soon = Paper(
+            title="Recurring Review Paper",
+            summary="Agent paper due for a periodic check-in.",
+            authors=["Alice"],
+            categories=["cs.AI"],
+            paper_id="http://arxiv.org/abs/2604.00008v1",
+            abstract_url="https://arxiv.org/abs/2604.00008v1",
+            pdf_url="https://arxiv.org/pdf/2604.00008v1",
+            published_at=datetime(2026, 4, 9, 1, 0, tzinfo=ZoneInfo("UTC")),
+            updated_at=datetime(2026, 4, 9, 1, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        recurring_overdue = Paper(
+            title="Recurring Overdue Paper",
+            summary="Agent paper that has slipped well past its review interval.",
+            authors=["Bob"],
+            categories=["cs.AI"],
+            paper_id="http://arxiv.org/abs/2604.00009v1",
+            abstract_url="https://arxiv.org/abs/2604.00009v1",
+            pdf_url="https://arxiv.org/pdf/2604.00009v1",
+            published_at=datetime(2026, 4, 9, 2, 0, tzinfo=ZoneInfo("UTC")),
+            updated_at=datetime(2026, 4, 9, 2, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        snoozed = Paper(
+            title="Snoozed Paper",
+            summary="This paper should stay out of current reminders.",
+            authors=["Carol"],
+            categories=["cs.AI"],
+            paper_id="http://arxiv.org/abs/2604.00010v1",
+            abstract_url="https://arxiv.org/abs/2604.00010v1",
+            pdf_url="https://arxiv.org/pdf/2604.00010v1",
+            published_at=datetime(2026, 4, 9, 3, 0, tzinfo=ZoneInfo("UTC")),
+            updated_at=datetime(2026, 4, 9, 3, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        mock_fetch_feed_papers.return_value = [
+            recurring_due_soon,
+            recurring_overdue,
+            snoozed,
+        ]
+
+        with TemporaryDirectory() as temp_dir:
+            config = AppConfig(
+                timezone="UTC",
+                lookback_hours=24,
+                output_dir=Path(temp_dir) / "output",
+                request_delay_seconds=0.0,
+                feeds=[feed],
+                state=StateConfig(
+                    enabled=True,
+                    path=Path(temp_dir) / "state.json",
+                    retention_days=90,
+                ),
+                notify=NotifyConfig(max_action_items=10),
+            )
+            feedback_state = FeedbackState(
+                papers={
+                    "arxiv:2604.00008": FeedbackEntry(
+                        status="reading",
+                        updated_at=datetime(2026, 4, 5, 8, 0, tzinfo=ZoneInfo("UTC")),
+                        review_interval_days=7,
+                    ),
+                    "arxiv:2604.00009": FeedbackEntry(
+                        status="follow_up",
+                        updated_at=datetime(2026, 4, 1, 8, 0, tzinfo=ZoneInfo("UTC")),
+                        next_action="re-check newer baselines",
+                        review_interval_days=1,
+                    ),
+                    "arxiv:2604.00010": FeedbackEntry(
+                        status="star",
+                        updated_at=datetime(2026, 4, 8, 8, 0, tzinfo=ZoneInfo("UTC")),
+                        next_action="read after workshop",
+                        due_date=date(2026, 4, 10),
+                        snoozed_until=date(2026, 4, 15),
+                    ),
+                }
+            )
+
+            digest = generate_digest(
+                config,
+                now=now,
+                state=DigestState(seen_papers={}),
+                feedback_state=feedback_state,
+            )
+
+        self.assertEqual(
+            [item.canonical_id for item in digest.action_items],
+            ["arxiv:2604.00009", "arxiv:2604.00008"],
+        )
+        overdue_item = digest.action_items[0]
+        self.assertEqual(overdue_item.due_date, date(2026, 4, 2))
+        self.assertEqual(overdue_item.days_until_due, -7)
+        self.assertEqual(
+            overdue_item.reasons,
+            ["overdue", "overdue_7d", "recurring_review", "next_action_pending"],
+        )
+        self.assertEqual(overdue_item.review_interval_days, 1)
+        due_soon_item = digest.action_items[1]
+        self.assertEqual(due_soon_item.due_date, date(2026, 4, 12))
+        self.assertEqual(due_soon_item.days_until_due, 3)
+        self.assertEqual(
+            due_soon_item.reasons,
+            ["due_soon", "recurring_review"],
+        )
+        self.assertEqual(due_soon_item.review_interval_days, 7)
+        self.assertNotIn(
+            "arxiv:2604.00010",
+            [item.canonical_id for item in digest.action_items],
+        )

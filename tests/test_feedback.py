@@ -15,6 +15,8 @@ from paper_digest.feedback import (
     clear_feedback_action,
     clear_feedback_due_date,
     clear_feedback_note,
+    clear_feedback_review_interval_days,
+    clear_feedback_snoozed_until,
     clear_feedback_status,
     list_feedback_entries,
     load_feedback,
@@ -22,6 +24,8 @@ from paper_digest.feedback import (
     set_feedback_action,
     set_feedback_due_date,
     set_feedback_note,
+    set_feedback_review_interval_days,
+    set_feedback_snoozed_until,
     set_feedback_status,
 )
 
@@ -60,6 +64,8 @@ class FeedbackTests(unittest.TestCase):
                                 "note": "compare with clinical baselines",
                                 "next_action": "replicate the evaluation table",
                                 "due_date": "2026-04-18",
+                                "snoozed_until": "2026-04-20",
+                                "review_interval_days": 14,
                             },
                             "title:ignored-entry": {
                                 "status": "unsupported",
@@ -94,6 +100,14 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(
             state.papers["doi:10.5555/example"].due_date,
             date(2026, 4, 18),
+        )
+        self.assertEqual(
+            state.papers["doi:10.5555/example"].snoozed_until,
+            date(2026, 4, 20),
+        )
+        self.assertEqual(
+            state.papers["doi:10.5555/example"].review_interval_days,
+            14,
         )
         self.assertNotIn("title:ignored-entry", state.papers)
 
@@ -195,6 +209,8 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(done.feedback_note, "already reviewed last week")
         self.assertIsNone(done.feedback_next_action)
         self.assertIsNone(done.feedback_due_date)
+        self.assertIsNone(done.feedback_snoozed_until)
+        self.assertIsNone(done.feedback_review_interval_days)
         self.assertEqual(reading.base_relevance_score, 62)
         self.assertEqual(done.base_relevance_score, 25)
         self.assertIn("feedback: reading", reading.match_reasons)
@@ -241,6 +257,24 @@ class FeedbackTests(unittest.TestCase):
         self.assertIsNotNone(due)
         assert due is not None
         self.assertEqual(due.due_date, date(2026, 4, 18))
+        snoozed = set_feedback_snoozed_until(
+            state,
+            canonical_id="doi:10.5555/example",
+            snoozed_until=date(2026, 4, 20),
+            updated_at=datetime.fromisoformat("2026-04-10T12:30:00+00:00"),
+        )
+        self.assertIsNotNone(snoozed)
+        assert snoozed is not None
+        self.assertEqual(snoozed.snoozed_until, date(2026, 4, 20))
+        interval = set_feedback_review_interval_days(
+            state,
+            canonical_id="doi:10.5555/example",
+            review_interval_days=14,
+            updated_at=datetime.fromisoformat("2026-04-10T13:00:00+00:00"),
+        )
+        self.assertIsNotNone(interval)
+        assert interval is not None
+        self.assertEqual(interval.review_interval_days, 14)
         self.assertTrue(
             clear_feedback_action(
                 state,
@@ -255,6 +289,22 @@ class FeedbackTests(unittest.TestCase):
             )
         )
         self.assertIsNone(state.papers["doi:10.5555/example"].due_date)
+        self.assertTrue(
+            clear_feedback_snoozed_until(
+                state,
+                canonical_id="doi:10.5555/example",
+            )
+        )
+        self.assertIsNone(state.papers["doi:10.5555/example"].snoozed_until)
+        self.assertTrue(
+            clear_feedback_review_interval_days(
+                state,
+                canonical_id="doi:10.5555/example",
+            )
+        )
+        self.assertIsNone(
+            state.papers["doi:10.5555/example"].review_interval_days
+        )
         self.assertTrue(
             clear_feedback_note(
                 state,
@@ -283,6 +333,8 @@ class FeedbackTests(unittest.TestCase):
                         note="finished and archived",
                         next_action="write a short summary note",
                         due_date=date(2026, 4, 18),
+                        snoozed_until=date(2026, 4, 20),
+                        review_interval_days=21,
                     )
                 }
             )
@@ -307,6 +359,14 @@ class FeedbackTests(unittest.TestCase):
         self.assertEqual(
             loaded.papers["doi:10.5555/example"].due_date,
             date(2026, 4, 18),
+        )
+        self.assertEqual(
+            loaded.papers["doi:10.5555/example"].snoozed_until,
+            date(2026, 4, 20),
+        )
+        self.assertEqual(
+            loaded.papers["doi:10.5555/example"].review_interval_days,
+            21,
         )
         listed = list_feedback_entries(loaded)
         self.assertEqual(listed[0][0], "doi:10.5555/example")

@@ -20,6 +20,8 @@ from .feedback import (
     clear_feedback_action,
     clear_feedback_due_date,
     clear_feedback_note,
+    clear_feedback_review_interval_days,
+    clear_feedback_snoozed_until,
     clear_feedback_status,
     list_feedback_entries,
     load_feedback,
@@ -28,6 +30,8 @@ from .feedback import (
     set_feedback_action,
     set_feedback_due_date,
     set_feedback_note,
+    set_feedback_review_interval_days,
+    set_feedback_snoozed_until,
     set_feedback_status,
 )
 from .github_feedback import (
@@ -179,6 +183,73 @@ def build_feedback_parser() -> ArgumentParser:
         parents=[common],
     )
     due_clear_parser.add_argument(
+        "canonical_id",
+        help="Canonical paper identifier.",
+    )
+
+    snooze_parser = subparsers.add_parser(
+        "snooze",
+        help="Set or clear the snoozed-until date for an existing feedback entry.",
+        parents=[common],
+    )
+    snooze_subparsers = snooze_parser.add_subparsers(
+        dest="feedback_snooze_command",
+        required=True,
+    )
+    snooze_set_parser = snooze_subparsers.add_parser(
+        "set",
+        help="Store the snoozed-until date for an existing feedback entry.",
+        parents=[common],
+    )
+    snooze_set_parser.add_argument(
+        "canonical_id",
+        help="Canonical paper identifier.",
+    )
+    snooze_set_parser.add_argument(
+        "snoozed_until",
+        help="Date in YYYY-MM-DD format.",
+    )
+    snooze_clear_parser = snooze_subparsers.add_parser(
+        "clear",
+        help="Clear the snoozed-until date for an existing feedback entry.",
+        parents=[common],
+    )
+    snooze_clear_parser.add_argument(
+        "canonical_id",
+        help="Canonical paper identifier.",
+    )
+
+    interval_parser = subparsers.add_parser(
+        "interval",
+        help=(
+            "Set or clear the recurring review interval for an existing "
+            "feedback entry."
+        ),
+        parents=[common],
+    )
+    interval_subparsers = interval_parser.add_subparsers(
+        dest="feedback_interval_command",
+        required=True,
+    )
+    interval_set_parser = interval_subparsers.add_parser(
+        "set",
+        help="Store the recurring review interval in days.",
+        parents=[common],
+    )
+    interval_set_parser.add_argument(
+        "canonical_id",
+        help="Canonical paper identifier.",
+    )
+    interval_set_parser.add_argument(
+        "review_interval_days",
+        help="Recurring review interval in days.",
+    )
+    interval_clear_parser = interval_subparsers.add_parser(
+        "clear",
+        help="Clear the recurring review interval for an existing feedback entry.",
+        parents=[common],
+    )
+    interval_clear_parser.add_argument(
         "canonical_id",
         help="Canonical paper identifier.",
     )
@@ -410,6 +481,100 @@ def _main_feedback(argv: Sequence[str]) -> int:
                     f"No due date for {args.canonical_id.strip()} in {feedback_path}"
                 )
             return 0
+        if args.feedback_command == "snooze":
+            if args.feedback_snooze_command == "set":
+                try:
+                    snoozed_until = date.fromisoformat(args.snoozed_until)
+                except ValueError:
+                    print(
+                        "Error: snoozed_until must use YYYY-MM-DD format",
+                        file=sys.stderr,
+                    )
+                    return 1
+                snooze_entry = set_feedback_snoozed_until(
+                    feedback_state,
+                    canonical_id=args.canonical_id,
+                    snoozed_until=snoozed_until,
+                )
+                if snooze_entry is None:
+                    print(
+                        f"No entry for {args.canonical_id.strip()} in {feedback_path}",
+                        file=sys.stderr,
+                    )
+                    return 1
+                save_feedback(config.feedback, feedback_state)
+                print(
+                    "Updated snoozed-until for "
+                    f"{args.canonical_id.strip()} -> {snoozed_until.isoformat()} "
+                    f"in {feedback_path}"
+                )
+                return 0
+            removed = clear_feedback_snoozed_until(
+                feedback_state,
+                canonical_id=args.canonical_id,
+            )
+            save_feedback(config.feedback, feedback_state)
+            if removed:
+                print(
+                    "Cleared snoozed-until for "
+                    f"{args.canonical_id.strip()} in {feedback_path}"
+                )
+            else:
+                print(
+                    "No snoozed-until for "
+                    f"{args.canonical_id.strip()} in {feedback_path}"
+                )
+            return 0
+        if args.feedback_command == "interval":
+            if args.feedback_interval_command == "set":
+                try:
+                    review_interval_days = int(args.review_interval_days)
+                except ValueError:
+                    print(
+                        "Error: review_interval_days must be a positive integer",
+                        file=sys.stderr,
+                    )
+                    return 1
+                if review_interval_days <= 0:
+                    print(
+                        "Error: review_interval_days must be a positive integer",
+                        file=sys.stderr,
+                    )
+                    return 1
+                interval_entry = set_feedback_review_interval_days(
+                    feedback_state,
+                    canonical_id=args.canonical_id,
+                    review_interval_days=review_interval_days,
+                )
+                if interval_entry is None:
+                    print(
+                        f"No entry for {args.canonical_id.strip()} in {feedback_path}",
+                        file=sys.stderr,
+                    )
+                    return 1
+                save_feedback(config.feedback, feedback_state)
+                print(
+                    "Updated review interval for "
+                    f"{args.canonical_id.strip()} -> {review_interval_days} days "
+                    f"in {feedback_path}"
+                )
+                return 0
+            removed = clear_feedback_review_interval_days(
+                feedback_state,
+                canonical_id=args.canonical_id,
+            )
+            save_feedback(config.feedback, feedback_state)
+            if removed:
+                print(
+                    "Cleared review interval for "
+                    f"{args.canonical_id.strip()} in {feedback_path}"
+                )
+            else:
+                print(
+                    "No review interval for "
+                    f"{args.canonical_id.strip()} in {feedback_path}"
+                )
+            return 0
         if args.feedback_command == "sync-github-secret":
             save_feedback(config.feedback, feedback_state)
             repo = sync_feedback_to_github_secret(
@@ -437,11 +602,22 @@ def _main_feedback(argv: Sequence[str]) -> int:
             due_date_label = (
                 entry.due_date.isoformat() if entry.due_date is not None else ""
             )
+            snoozed_until_label = (
+                entry.snoozed_until.isoformat()
+                if entry.snoozed_until is not None
+                else ""
+            )
+            review_interval_label = (
+                str(entry.review_interval_days)
+                if entry.review_interval_days is not None
+                else ""
+            )
             next_action = entry.next_action or ""
             note = entry.note or ""
             print(
                 f"{entry.status}\t{canonical_id}\t{updated_at}\t"
-                f"{due_date_label}\t{next_action}\t{note}"
+                f"{due_date_label}\t{snoozed_until_label}\t"
+                f"{review_interval_label}\t{next_action}\t{note}"
             )
         return 0
     except (ConfigError, GitHubFeedbackSyncError) as exc:
