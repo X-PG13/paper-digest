@@ -37,6 +37,7 @@ from .feedback import (
 from .github_feedback import (
     DEFAULT_FEEDBACK_SECRET_NAME,
     GitHubFeedbackSyncError,
+    pull_feedback_from_github_secret,
     sync_feedback_to_github_secret,
 )
 from .openalex_client import OpenAlexClientError
@@ -259,19 +260,36 @@ def build_feedback_parser() -> ArgumentParser:
         help="List configured feedback entries.",
         parents=[common],
     )
-    sync_parser = subparsers.add_parser(
-        "sync-github-secret",
-        help="Sync the local feedback.json into a GitHub Actions repository secret.",
-        parents=[common],
-    )
-    sync_parser.add_argument(
+    sync_common = ArgumentParser(add_help=False)
+    sync_common.add_argument(
         "--repo",
         help="Optional owner/repo override. Defaults to the current git origin remote.",
     )
-    sync_parser.add_argument(
+    sync_common.add_argument(
         "--secret-name",
         default=DEFAULT_FEEDBACK_SECRET_NAME,
-        help="GitHub Actions secret name to update.",
+        help="GitHub Actions secret name to sync.",
+    )
+    sync_parser = subparsers.add_parser(
+        "sync",
+        help="Push or pull feedback state through a GitHub Actions repository secret.",
+        parents=[common, sync_common],
+    )
+    sync_parser.add_argument(
+        "--direction",
+        choices=["push", "pull"],
+        default="push",
+        help="Sync direction. Push writes the local file; pull restores it locally.",
+    )
+    subparsers.add_parser(
+        "sync-github-secret",
+        help="Legacy alias for 'feedback sync --direction push'.",
+        parents=[common, sync_common],
+    )
+    subparsers.add_parser(
+        "pull-github-secret",
+        help="Legacy alias for 'feedback sync --direction pull'.",
+        parents=[common, sync_common],
     )
     return parser
 
@@ -575,17 +593,36 @@ def _main_feedback(argv: Sequence[str]) -> int:
                     f"{args.canonical_id.strip()} in {feedback_path}"
                 )
             return 0
-        if args.feedback_command == "sync-github-secret":
+        if args.feedback_command in {
+            "sync-github-secret",
+            "pull-github-secret",
+            "sync",
+        }:
             save_feedback(config.feedback, feedback_state)
-            repo = sync_feedback_to_github_secret(
-                feedback_state,
-                cwd=Path(args.config).resolve().parent,
+            direction = _feedback_sync_direction(args)
+            sync_cwd = Path(args.config).resolve().parent
+            if direction == "push":
+                repo = sync_feedback_to_github_secret(
+                    feedback_state,
+                    cwd=sync_cwd,
+                    repo=args.repo,
+                    secret_name=args.secret_name,
+                )
+                print(
+                    f"Synced {feedback_path} to GitHub Actions secret "
+                    f"{args.secret_name} for {repo}"
+                )
+                return 0
+            pull_result = pull_feedback_from_github_secret(
+                cwd=sync_cwd,
                 repo=args.repo,
                 secret_name=args.secret_name,
             )
+            save_feedback(config.feedback, pull_result.feedback_state)
             print(
-                f"Synced {feedback_path} to GitHub Actions secret "
-                f"{args.secret_name} for {repo}"
+                f"Pulled GitHub Actions secret {args.secret_name} for "
+                f"{pull_result.repository} into {feedback_path} "
+                f"(run {pull_result.run_id})"
             )
             return 0
 
@@ -638,6 +675,15 @@ def _tracked_keywords(config: object) -> list[str]:
             seen.add(normalized)
             keywords.append(stripped)
     return keywords
+
+
+def _feedback_sync_direction(args: object) -> str:
+    command = getattr(args, "feedback_command", "")
+    if command == "sync-github-secret":
+        return "push"
+    if command == "pull-github-secret":
+        return "pull"
+    return str(getattr(args, "direction", "push"))
 
 
 if __name__ == "__main__":
