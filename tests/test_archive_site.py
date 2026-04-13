@@ -8,6 +8,7 @@ from tempfile import TemporaryDirectory
 
 from paper_digest.archive_site import build_archive_site
 from paper_digest.feedback import FeedbackEntry, FeedbackState
+from paper_digest.state import DigestState
 
 
 class ArchiveSiteTests(unittest.TestCase):
@@ -209,6 +210,15 @@ class ArchiveSiteTests(unittest.TestCase):
                         ),
                     }
                 ),
+                digest_state=DigestState(
+                    seen_papers={},
+                    action_notifications={
+                        "doi:10.5555/paper-circle": {
+                            "due_soon": "2026-04-09T01:30:00+08:00",
+                            "overdue_3d": "2026-04-12T08:00:00+08:00",
+                        }
+                    },
+                ),
             )
 
             index_html = (site_path / "index.html").read_text(encoding="utf-8")
@@ -332,6 +342,7 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn("复制到期命令", paper_detail)
             self.assertIn("复制搁置命令", paper_detail)
             self.assertIn("复制复查周期命令", paper_detail)
+            self.assertIn("复制重置 Action 通知命令", paper_detail)
             self.assertIn("python -m paper_digest feedback set", paper_detail)
             self.assertIn("python -m paper_digest feedback note", paper_detail)
             self.assertIn("anchor paper for the review queue", paper_detail)
@@ -340,6 +351,10 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn("覆盖跨度", paper_detail)
             self.assertIn("2 个活跃日期 / 2 个 feed / 2 次归档出现", paper_detail)
             self.assertIn("持续升温", paper_detail)
+            self.assertIn("最近行动提醒", paper_detail)
+            self.assertIn("行动提醒状态", paper_detail)
+            self.assertIn("首次进入 3 天内到期", paper_detail)
+            self.assertIn("已逾期至少 3 天", paper_detail)
             self.assertTrue((site_path / "weekly-review.html").exists())
             self.assertTrue((site_path / "reading-list.html").exists())
             self.assertTrue((site_path / "review-queue.html").exists())

@@ -31,6 +31,7 @@ from .feedback import (
     load_feedback,
     load_feedback_file,
     merge_feedback_states,
+    normalize_feedback_canonical_id,
     render_feedback_diff,
     save_feedback,
     set_feedback_action,
@@ -51,11 +52,66 @@ from .openalex_client import OpenAlexClientError
 from .pubmed_client import PubMedClientError
 from .semantic_scholar_client import SemanticScholarClientError
 from .service import generate_digest
-from .state import load_state, save_state
+from .state import (
+    clear_action_notifications,
+    list_action_notifications,
+    load_state,
+    save_state,
+)
 
 
 def build_parser() -> ArgumentParser:
     return build_digest_parser()
+
+
+def build_state_parser() -> ArgumentParser:
+    common = ArgumentParser(add_help=False)
+    common.add_argument(
+        "--config",
+        default="config.toml",
+        help="Path to the TOML configuration file.",
+    )
+    parser = ArgumentParser(
+        description="Inspect or reset local persistent digest state.",
+        parents=[common],
+    )
+    subparsers = parser.add_subparsers(dest="state_command", required=True)
+
+    action_parser = subparsers.add_parser(
+        "action",
+        help="Inspect or reset action notification state.",
+        parents=[common],
+    )
+    action_subparsers = action_parser.add_subparsers(
+        dest="state_action_command",
+        required=True,
+    )
+
+    action_list_parser = action_subparsers.add_parser(
+        "list",
+        help="List remembered action notifications.",
+        parents=[common],
+    )
+    action_list_parser.add_argument(
+        "--canonical-id",
+        help="Optional canonical paper identifier filter.",
+    )
+
+    action_reset_parser = action_subparsers.add_parser(
+        "reset",
+        help="Reset remembered action notifications.",
+        parents=[common],
+    )
+    action_reset_parser.add_argument(
+        "canonical_id",
+        nargs="?",
+        help="Optional canonical paper identifier to reset.",
+    )
+    action_reset_parser.add_argument(
+        "--reason",
+        help="Optional action reason to reset, such as overdue_3d.",
+    )
+    return parser
 
 
 def build_digest_parser() -> ArgumentParser:
@@ -311,6 +367,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args_list = list(argv) if argv is not None else sys.argv[1:]
     if args_list and args_list[0] == "feedback":
         return _main_feedback(args_list[1:])
+    if args_list and args_list[0] == "state":
+        return _main_state(args_list[1:])
     return _main_digest(args_list)
 
 
@@ -330,6 +388,7 @@ def _main_digest(argv: Sequence[str]) -> int:
             config.output_dir,
             tracked_keywords=_tracked_keywords(config),
             feedback_state=feedback_state,
+            digest_state=state,
         )
         delivery_receipts = send_configured_deliveries(config, digest)
         save_feedback(config.feedback, feedback_state)
@@ -732,6 +791,73 @@ def _main_feedback(argv: Sequence[str]) -> int:
     except (ConfigError, GitHubFeedbackSyncError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
+
+
+def _main_state(argv: Sequence[str]) -> int:
+    args = build_state_parser().parse_args(argv)
+    try:
+        config = load_config(args.config)
+        state = load_state(config.state)
+        state_path = Path(config.state.path).resolve()
+        if args.state_command == "action":
+            if args.state_action_command == "list":
+                canonical_id = (
+                    normalize_feedback_canonical_id(args.canonical_id)
+                    if args.canonical_id
+                    else None
+                )
+                records = list_action_notifications(
+                    state,
+                    canonical_id=canonical_id,
+                )
+                if not records:
+                    print(
+                        f"No action notification entries found in {state_path}"
+                    )
+                    return 0
+                for record in records:
+                    print(
+                        f"{record.canonical_id}\t{record.reason}\t"
+                        f"{record.notified_at.isoformat()}"
+                    )
+                return 0
+
+            canonical_id = (
+                normalize_feedback_canonical_id(args.canonical_id)
+                if args.canonical_id
+                else None
+            )
+            if canonical_id is None and args.reason is None:
+                print(
+                    "Error: provide a canonical_id and/or --reason for reset",
+                    file=sys.stderr,
+                )
+                return 1
+            cleared = clear_action_notifications(
+                state,
+                canonical_id=canonical_id,
+                reason=args.reason,
+            )
+            save_state(config.state, state)
+            if cleared:
+                target = canonical_id or "all matching entries"
+                reason_suffix = (
+                    f" with reason {args.reason}"
+                    if args.reason is not None
+                    else ""
+                )
+                print(
+                    f"Cleared {cleared} action notification entr"
+                    f"{'y' if cleared == 1 else 'ies'} for {target}"
+                    f"{reason_suffix} in {state_path}"
+                )
+            else:
+                print(f"No matching action notification entries in {state_path}")
+            return 0
+    except ConfigError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    return 0
 
 
 def _print_feedback_sync_preview(

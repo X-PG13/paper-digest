@@ -68,6 +68,10 @@ Versioning.
 - Feedback sync now also supports `--dry-run` and `--show-diff`, so both push
   and pull workflows can preview field-level changes against the current
   GitHub secret before either side is written.
+- Local state management now exposes `state action list/reset`, and canonical
+  paper detail pages surface the latest remembered action notification reasons
+  so you can inspect or re-arm suppressed `Action Brief` reminders without
+  hand-editing the state file.
 - Action reminders now only emit newly changed action states such as snooze
   resumes, first due-soon transitions, overdue escalations, and recurring
   reviews that have actually come due; notified action reasons are persisted in
