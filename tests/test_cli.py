@@ -707,6 +707,113 @@ class CliTests(unittest.TestCase):
         )
         self.assertIn("merge=local", stdout.getvalue())
 
+    @patch("paper_digest.cli.pull_feedback_from_github_secret")
+    def test_feedback_sync_direction_pull_dry_run_does_not_write_file(
+        self,
+        mock_pull_feedback_from_github_secret,
+    ) -> None:
+        mock_pull_feedback_from_github_secret.return_value = (
+            self._feedback_pull_result()
+        )
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = self._write_feedback_config(root)
+
+            main(
+                [
+                    "feedback",
+                    "set",
+                    "doi:10.5555/example",
+                    "star",
+                    "--note",
+                    "keep local note",
+                    "--config",
+                    str(config_path),
+                ]
+            )
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "feedback",
+                        "sync",
+                        "--direction",
+                        "pull",
+                        "--merge-strategy",
+                        "remote",
+                        "--dry-run",
+                        "--show-diff",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+
+            feedback_path = root / ".paper-digest-state" / "feedback.json"
+            payload = json.loads(feedback_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(
+            payload["papers"]["doi:10.5555/example"]["status"],
+            "star",
+        )
+        self.assertEqual(
+            payload["papers"]["doi:10.5555/example"]["note"],
+            "keep local note",
+        )
+        self.assertIn("Dry run: would pull", stdout.getvalue())
+        self.assertIn("Diff summary:", stdout.getvalue())
+        self.assertIn("status: star -> reading", stdout.getvalue())
+
+    @patch("paper_digest.cli.sync_feedback_to_github_secret")
+    @patch("paper_digest.cli.pull_feedback_from_github_secret")
+    def test_feedback_sync_direction_push_dry_run_previews_remote_diff(
+        self,
+        mock_pull_feedback_from_github_secret,
+        mock_sync_feedback_to_github_secret,
+    ) -> None:
+        mock_pull_feedback_from_github_secret.return_value = (
+            self._feedback_pull_result()
+        )
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = self._write_feedback_config(root)
+
+            main(
+                [
+                    "feedback",
+                    "set",
+                    "doi:10.5555/example",
+                    "star",
+                    "--note",
+                    "keep local note",
+                    "--config",
+                    str(config_path),
+                ]
+            )
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "feedback",
+                        "sync",
+                        "--direction",
+                        "push",
+                        "--dry-run",
+                        "--show-diff",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+
+        self.assertEqual(exit_code, 0)
+        mock_sync_feedback_to_github_secret.assert_not_called()
+        self.assertIn("Dry run: would sync", stdout.getvalue())
+        self.assertIn("Diff summary:", stdout.getvalue())
+        self.assertIn("status: reading -> star", stdout.getvalue())
+        self.assertIn("note: pulled from GitHub -> keep local note", stdout.getvalue())
+
     def _feedback_pull_result(self):
         from paper_digest.github_feedback import GitHubFeedbackPullResult
 

@@ -19,9 +19,11 @@ from paper_digest.feedback import (
     clear_feedback_review_interval_days,
     clear_feedback_snoozed_until,
     clear_feedback_status,
+    diff_feedback_states,
     list_feedback_entries,
     load_feedback,
     merge_feedback_states,
+    render_feedback_diff,
     save_feedback_file,
     set_feedback_action,
     set_feedback_due_date,
@@ -29,6 +31,7 @@ from paper_digest.feedback import (
     set_feedback_review_interval_days,
     set_feedback_snoozed_until,
     set_feedback_status,
+    summarize_feedback_diff,
 )
 
 
@@ -170,6 +173,46 @@ class FeedbackTests(unittest.TestCase):
         )
         self.assertIn("doi:10.5555/local-only", merged_newer.papers)
         self.assertIn("doi:10.5555/remote-only", merged_newer.papers)
+
+    def test_diff_feedback_states_reports_field_level_changes(self) -> None:
+        before = FeedbackState(
+            papers={
+                "doi:10.5555/example": FeedbackEntry(
+                    status="star",
+                    updated_at=datetime.fromisoformat("2026-04-12T09:00:00+00:00"),
+                    note="local note",
+                    due_date=date(2026, 4, 18),
+                )
+            }
+        )
+        after = FeedbackState(
+            papers={
+                "doi:10.5555/example": FeedbackEntry(
+                    status="follow_up",
+                    updated_at=datetime.fromisoformat("2026-04-13T09:00:00+00:00"),
+                    note="remote note",
+                    due_date=date(2026, 4, 20),
+                ),
+                "doi:10.5555/new": FeedbackEntry(status="reading"),
+            }
+        )
+
+        diff = diff_feedback_states(before, after)
+        rendered = render_feedback_diff(diff)
+
+        self.assertTrue(diff.has_changes)
+        self.assertEqual(diff.added_count, 1)
+        self.assertEqual(diff.removed_count, 0)
+        self.assertEqual(diff.updated_count, 1)
+        self.assertEqual(
+            summarize_feedback_diff(diff),
+            "1 added, 0 removed, 1 updated entries (5 field changes)",
+        )
+        self.assertIn("~ doi:10.5555/example", rendered)
+        self.assertIn("  status: star -> follow_up", rendered)
+        self.assertIn("  note: local note -> remote note", rendered)
+        self.assertIn("+ doi:10.5555/new", rendered)
+        self.assertIn("  status: (none) -> reading", rendered)
 
     def test_load_feedback_parses_string_and_object_entries(self) -> None:
         with TemporaryDirectory() as temp_dir:

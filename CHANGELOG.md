@@ -65,6 +65,9 @@ Versioning.
   newer|local|remote`, so bidirectional feedback sync can resolve conflicts in
   `due_date`, `snoozed_until`, notes, and other structured review fields
   without bluntly overwriting the local file.
+- Feedback sync now also supports `--dry-run` and `--show-diff`, so both push
+  and pull workflows can preview field-level changes against the current
+  GitHub secret before either side is written.
 - The manual `Daily Digest` workflow now accepts a temporary `config.toml`
   override input and isolates those validation runs from caches and Pages
   deployment.

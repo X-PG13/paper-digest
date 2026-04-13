@@ -12,6 +12,7 @@ from .arxiv_client import Paper
 from .config import FeedbackConfig, FeedbackStatus
 
 FeedbackMergeStrategy = Literal["local", "remote", "newer"]
+FeedbackEntryChangeKind = Literal["added", "removed", "updated"]
 
 
 @dataclass(slots=True, frozen=True)
@@ -35,6 +36,45 @@ class FeedbackAutomation:
     resumed_from_snooze: frozenset[str]
     recurring_due: frozenset[str]
     changed: bool = False
+
+
+@dataclass(slots=True, frozen=True)
+class FeedbackFieldChange:
+    field_name: str
+    before: str
+    after: str
+
+
+@dataclass(slots=True, frozen=True)
+class FeedbackEntryChange:
+    canonical_id: str
+    kind: FeedbackEntryChangeKind
+    field_changes: tuple[FeedbackFieldChange, ...]
+
+
+@dataclass(slots=True, frozen=True)
+class FeedbackStateDiff:
+    entry_changes: tuple[FeedbackEntryChange, ...]
+
+    @property
+    def added_count(self) -> int:
+        return sum(1 for change in self.entry_changes if change.kind == "added")
+
+    @property
+    def removed_count(self) -> int:
+        return sum(1 for change in self.entry_changes if change.kind == "removed")
+
+    @property
+    def updated_count(self) -> int:
+        return sum(1 for change in self.entry_changes if change.kind == "updated")
+
+    @property
+    def field_change_count(self) -> int:
+        return sum(len(change.field_changes) for change in self.entry_changes)
+
+    @property
+    def has_changes(self) -> bool:
+        return bool(self.entry_changes)
 
 
 def load_feedback(config: FeedbackConfig) -> FeedbackState:
@@ -401,6 +441,76 @@ def merge_feedback_states(
     return FeedbackState(papers=merged)
 
 
+def diff_feedback_states(
+    before_state: FeedbackState,
+    after_state: FeedbackState,
+) -> FeedbackStateDiff:
+    entry_changes: list[FeedbackEntryChange] = []
+    for canonical_id in sorted(set(before_state.papers) | set(after_state.papers)):
+        before_entry = before_state.papers.get(canonical_id)
+        after_entry = after_state.papers.get(canonical_id)
+        if before_entry is None:
+            assert after_entry is not None
+            entry_changes.append(
+                FeedbackEntryChange(
+                    canonical_id=canonical_id,
+                    kind="added",
+                    field_changes=_entry_field_changes(None, after_entry),
+                )
+            )
+            continue
+        if after_entry is None:
+            entry_changes.append(
+                FeedbackEntryChange(
+                    canonical_id=canonical_id,
+                    kind="removed",
+                    field_changes=_entry_field_changes(before_entry, None),
+                )
+            )
+            continue
+        field_changes = _entry_field_changes(before_entry, after_entry)
+        if field_changes:
+            entry_changes.append(
+                FeedbackEntryChange(
+                    canonical_id=canonical_id,
+                    kind="updated",
+                    field_changes=field_changes,
+                )
+            )
+    return FeedbackStateDiff(entry_changes=tuple(entry_changes))
+
+
+def summarize_feedback_diff(diff: FeedbackStateDiff) -> str:
+    if not diff.has_changes:
+        return "no changes"
+    return (
+        f"{diff.added_count} added, {diff.removed_count} removed, "
+        f"{diff.updated_count} updated entries "
+        f"({diff.field_change_count} field changes)"
+    )
+
+
+def render_feedback_diff(diff: FeedbackStateDiff) -> list[str]:
+    if not diff.has_changes:
+        return ["No feedback changes."]
+    lines: list[str] = []
+    prefixes = {
+        "added": "+",
+        "removed": "-",
+        "updated": "~",
+    }
+    for entry_change in diff.entry_changes:
+        lines.append(
+            f"{prefixes[entry_change.kind]} {entry_change.canonical_id}"
+        )
+        for field_change in entry_change.field_changes:
+            lines.append(
+                f"  {field_change.field_name}: "
+                f"{field_change.before} -> {field_change.after}"
+            )
+    return lines
+
+
 def advance_feedback_state(
     feedback_state: FeedbackState,
     *,
@@ -672,6 +782,64 @@ def _serialize_feedback_entry(entry: FeedbackEntry) -> object:
     if entry.review_interval_days is not None:
         payload["review_interval_days"] = entry.review_interval_days
     return payload
+
+
+def _entry_field_changes(
+    before_entry: FeedbackEntry | None,
+    after_entry: FeedbackEntry | None,
+) -> tuple[FeedbackFieldChange, ...]:
+    before_fields = _feedback_entry_fields(before_entry)
+    after_fields = _feedback_entry_fields(after_entry)
+    field_changes: list[FeedbackFieldChange] = []
+    for field_name in _feedback_entry_field_names():
+        before_value = before_fields[field_name]
+        after_value = after_fields[field_name]
+        if before_value == after_value:
+            continue
+        field_changes.append(
+            FeedbackFieldChange(
+                field_name=field_name,
+                before=_render_feedback_field_value(before_value),
+                after=_render_feedback_field_value(after_value),
+            )
+        )
+    return tuple(field_changes)
+
+
+def _feedback_entry_fields(entry: FeedbackEntry | None) -> dict[str, object | None]:
+    if entry is None:
+        return {field_name: None for field_name in _feedback_entry_field_names()}
+    return {
+        "status": entry.status,
+        "updated_at": entry.updated_at,
+        "note": entry.note,
+        "next_action": entry.next_action,
+        "due_date": entry.due_date,
+        "snoozed_until": entry.snoozed_until,
+        "review_interval_days": entry.review_interval_days,
+    }
+
+
+def _feedback_entry_field_names() -> tuple[str, ...]:
+    return (
+        "status",
+        "updated_at",
+        "note",
+        "next_action",
+        "due_date",
+        "snoozed_until",
+        "review_interval_days",
+    )
+
+
+def _render_feedback_field_value(value: object | None) -> str:
+    if value is None:
+        return "(none)"
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    return str(value)
 
 
 def _effective_due_date(entry: FeedbackEntry) -> date | None:

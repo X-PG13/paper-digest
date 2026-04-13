@@ -311,6 +311,8 @@ python -m paper_digest feedback sync --direction push --repo X-PG13/paper-digest
 python -m paper_digest feedback sync --direction pull --config config.toml
 python -m paper_digest feedback sync --direction pull --merge-strategy local --config config.toml
 python -m paper_digest feedback sync --direction pull --merge-strategy remote --config config.toml
+python -m paper_digest feedback sync --direction pull --dry-run --show-diff --config config.toml
+python -m paper_digest feedback sync --direction push --dry-run --show-diff --config config.toml
 ```
 
 Notes:
@@ -324,6 +326,14 @@ Notes:
   entry with the latest `updated_at`, `local` preserves the current file when
   both sides define the same paper, and `remote` force-prefers the GitHub
   secret copy.
+- `--dry-run` previews the sync result without writing the local `feedback.json`
+  or mutating the GitHub Actions secret.
+- `--show-diff` prints a field-level diff so you can inspect changes to
+  `status`, `note`, `next_action`, `due_date`, `snoozed_until`,
+  `review_interval_days`, and `updated_at` before you apply them.
+- Push previews fetch the current remote feedback state through the same
+  short-lived pull workflow, so `feedback sync --direction push --dry-run`
+  shows what the secret would change to before it is overwritten.
 - If `--repo` is omitted, the command derives `owner/repo` from the current git
   `origin` remote.
 - Pulling uses the dedicated
