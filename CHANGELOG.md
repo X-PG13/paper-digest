@@ -72,6 +72,10 @@ Versioning.
   paper detail pages surface the latest remembered action notification reasons
   so you can inspect or re-arm suppressed `Action Brief` reminders without
   hand-editing the state file.
+- The archive site now also exposes a dedicated
+  `notification-history.html` page that visualizes remembered action
+  notification reasons across papers, grouped by trigger code and linked back
+  to canonical detail pages.
 - Action reminders now only emit newly changed action states such as snooze
   resumes, first due-soon transitions, overdue escalations, and recurring
   reviews that have actually come due; notified action reasons are persisted in
