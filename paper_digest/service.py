@@ -23,10 +23,13 @@ from .digest import (
     finalize_digest_scoring,
 )
 from .feedback import (
+    FeedbackAutomation,
     FeedbackEntry,
     FeedbackState,
+    advance_feedback_state,
     apply_feedback_to_papers,
     load_feedback,
+    save_feedback,
 )
 from .sources import fetch_feed_papers
 from .state import DigestState, dedupe_papers, load_state, save_state
@@ -76,6 +79,10 @@ def generate_digest(
     managed_feedback = feedback_state
     if managed_feedback is None:
         managed_feedback = load_feedback(config.feedback)
+    feedback_automation = advance_feedback_state(
+        managed_feedback,
+        today=local_now.date(),
+    )
     contact_email = config.email.from_address if config.email is not None else None
     openalex_api_key = None
     if config.openalex_api_key_env is not None:
@@ -187,10 +194,13 @@ def generate_digest(
         digest,
         config=config,
         feedback_state=managed_feedback,
+        feedback_automation=feedback_automation,
         current_papers=papers_by_canonical_id,
         current_feed_names=_current_feed_names(digest),
         now=local_now,
     )
+    if feedback_state is None:
+        save_feedback(config.feedback, managed_feedback)
     return digest
 
 
@@ -356,6 +366,7 @@ def _build_action_items(
     *,
     config: AppConfig,
     feedback_state: FeedbackState,
+    feedback_automation: FeedbackAutomation,
     current_papers: dict[str, Paper],
     current_feed_names: dict[str, set[str]],
     now: datetime,
@@ -371,6 +382,7 @@ def _build_action_items(
             entry.next_action is not None
             or entry.due_date is not None
             or entry.review_interval_days is not None
+            or canonical_id in feedback_automation.resumed_from_snooze
         )
     }
     if not actionable_ids:
@@ -405,6 +417,10 @@ def _build_action_items(
             entry,
             effective_due_date=effective_due_date,
             days_until_due=days_until_due,
+            resumed_from_snooze=(
+                canonical_id in feedback_automation.resumed_from_snooze
+            ),
+            recurring_due=(canonical_id in feedback_automation.recurring_due),
         )
         if not reason_codes:
             continue
@@ -768,8 +784,12 @@ def _action_reason_codes(
     *,
     effective_due_date: date | None,
     days_until_due: int | None,
+    resumed_from_snooze: bool,
+    recurring_due: bool,
 ) -> list[str]:
     reason_codes: list[str] = []
+    if resumed_from_snooze:
+        reason_codes.append("snooze_resumed")
     if effective_due_date is not None and days_until_due is not None:
         if days_until_due < 0:
             reason_codes.append("overdue")
@@ -784,6 +804,8 @@ def _action_reason_codes(
             reason_codes.append("due_soon")
         if entry.review_interval_days is not None and entry.due_date is None:
             reason_codes.append("recurring_review")
+            if recurring_due:
+                reason_codes.append("recurring_due")
     if entry.next_action is not None and entry.status in {"star", "follow_up"}:
         reason_codes.append("next_action_pending")
     return reason_codes

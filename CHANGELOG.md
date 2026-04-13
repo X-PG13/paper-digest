@@ -57,6 +57,14 @@ Versioning.
   `review_interval_days`, with CLI support, recurring-review due dates,
   overdue escalation tiers, and archive views that hide snoozed items from the
   active review queue while surfacing snoozed and overdue work separately.
+- Digest runs now auto-advance feedback state when a snooze window ends, flag
+  recurring reviews that have actually come due, and persist those state
+  changes after successful delivery so recurring work can resurface without a
+  manual edit.
+- `feedback sync --direction pull` now supports `--merge-strategy
+  newer|local|remote`, so bidirectional feedback sync can resolve conflicts in
+  `due_date`, `snoozed_until`, notes, and other structured review fields
+  without bluntly overwriting the local file.
 - The manual `Daily Digest` workflow now accepts a temporary `config.toml`
   override input and isolates those validation runs from caches and Pages
   deployment.

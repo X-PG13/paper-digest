@@ -11,6 +11,7 @@ from paper_digest.config import FeedbackConfig
 from paper_digest.feedback import (
     FeedbackEntry,
     FeedbackState,
+    advance_feedback_state,
     apply_feedback_to_papers,
     clear_feedback_action,
     clear_feedback_due_date,
@@ -20,6 +21,7 @@ from paper_digest.feedback import (
     clear_feedback_status,
     list_feedback_entries,
     load_feedback,
+    merge_feedback_states,
     save_feedback_file,
     set_feedback_action,
     set_feedback_due_date,
@@ -49,6 +51,126 @@ def build_paper(*, paper_id: str, title: str) -> Paper:
 
 
 class FeedbackTests(unittest.TestCase):
+    def test_advance_feedback_state_clears_expired_snooze_and_marks_recurring_due(
+        self,
+    ) -> None:
+        state = FeedbackState(
+            papers={
+                "doi:10.5555/snoozed": FeedbackEntry(
+                    status="star",
+                    updated_at=datetime.fromisoformat("2026-04-10T09:00:00+00:00"),
+                    snoozed_until=date(2026, 4, 13),
+                    next_action="resume review",
+                ),
+                "doi:10.5555/recurring": FeedbackEntry(
+                    status="reading",
+                    updated_at=datetime.fromisoformat("2026-04-06T09:00:00+00:00"),
+                    review_interval_days=7,
+                ),
+                "doi:10.5555/done": FeedbackEntry(
+                    status="done",
+                    updated_at=datetime.fromisoformat("2026-04-01T09:00:00+00:00"),
+                    review_interval_days=7,
+                ),
+            }
+        )
+
+        automation = advance_feedback_state(
+            state,
+            today=date(2026, 4, 13),
+        )
+
+        self.assertTrue(automation.changed)
+        self.assertEqual(
+            automation.resumed_from_snooze,
+            frozenset({"doi:10.5555/snoozed"}),
+        )
+        self.assertEqual(
+            automation.recurring_due,
+            frozenset({"doi:10.5555/recurring"}),
+        )
+        self.assertIsNone(state.papers["doi:10.5555/snoozed"].snoozed_until)
+        self.assertEqual(
+            state.papers["doi:10.5555/recurring"].review_interval_days,
+            7,
+        )
+
+    def test_merge_feedback_states_can_prefer_local_remote_or_newer(self) -> None:
+        local = FeedbackState(
+            papers={
+                "doi:10.5555/example": FeedbackEntry(
+                    status="star",
+                    updated_at=datetime.fromisoformat("2026-04-12T09:00:00+00:00"),
+                    note="local note",
+                    due_date=date(2026, 4, 18),
+                ),
+                "doi:10.5555/local-only": FeedbackEntry(status="reading"),
+            }
+        )
+        remote = FeedbackState(
+            papers={
+                "doi:10.5555/example": FeedbackEntry(
+                    status="follow_up",
+                    updated_at=datetime.fromisoformat("2026-04-13T09:00:00+00:00"),
+                    next_action="remote action",
+                    snoozed_until=date(2026, 4, 20),
+                ),
+                "doi:10.5555/remote-only": FeedbackEntry(status="done"),
+            }
+        )
+
+        merged_local = merge_feedback_states(
+            local,
+            remote,
+            strategy="local",
+        )
+        self.assertEqual(
+            merged_local.papers["doi:10.5555/example"].status,
+            "star",
+        )
+        self.assertEqual(
+            merged_local.papers["doi:10.5555/example"].note,
+            "local note",
+        )
+        self.assertEqual(
+            merged_local.papers["doi:10.5555/example"].next_action,
+            "remote action",
+        )
+
+        merged_remote = merge_feedback_states(
+            local,
+            remote,
+            strategy="remote",
+        )
+        self.assertEqual(
+            merged_remote.papers["doi:10.5555/example"].status,
+            "follow_up",
+        )
+        self.assertEqual(
+            merged_remote.papers["doi:10.5555/example"].due_date,
+            date(2026, 4, 18),
+        )
+
+        merged_newer = merge_feedback_states(
+            local,
+            remote,
+            strategy="newer",
+        )
+        self.assertEqual(
+            merged_newer.papers["doi:10.5555/example"].status,
+            "follow_up",
+        )
+        self.assertEqual(
+            merged_newer.papers["doi:10.5555/example"].next_action,
+            "remote action",
+        )
+        self.assertEqual(
+            merged_newer.papers["doi:10.5555/example"].due_date,
+            date(2026, 4, 18),
+        )
+        self.assertIn("doi:10.5555/local-only", merged_newer.papers)
+        self.assertIn("doi:10.5555/remote-only", merged_newer.papers)
+
     def test_load_feedback_parses_string_and_object_entries(self) -> None:
         with TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "feedback.json"

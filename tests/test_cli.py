@@ -26,6 +26,7 @@ class CliTests(unittest.TestCase):
         )
 
     @patch("paper_digest.cli.save_state")
+    @patch("paper_digest.cli.save_feedback")
     @patch("paper_digest.cli.send_configured_deliveries")
     @patch("paper_digest.cli.build_archive_site")
     @patch("paper_digest.cli.write_outputs")
@@ -42,6 +43,7 @@ class CliTests(unittest.TestCase):
         mock_write_outputs,
         mock_build_archive_site,
         mock_send_configured_deliveries,
+        mock_save_feedback,
         mock_save_state,
     ) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -93,6 +95,7 @@ class CliTests(unittest.TestCase):
             feedback_state=feedback_state,
         )
         mock_send_configured_deliveries.assert_called_once_with(config, digest)
+        mock_save_feedback.assert_called_once_with(config.feedback, feedback_state)
         mock_save_state.assert_called_once_with(config.state, state)
 
     def test_main_returns_nonzero_on_missing_config(self) -> None:
@@ -100,6 +103,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(exit_code, 1)
 
     @patch("paper_digest.cli.save_state")
+    @patch("paper_digest.cli.save_feedback")
     @patch(
         "paper_digest.cli.send_configured_deliveries",
         side_effect=DeliveryError("delivery failed"),
@@ -119,6 +123,7 @@ class CliTests(unittest.TestCase):
         mock_write_outputs,
         mock_build_archive_site,
         _mock_send_configured_deliveries,
+        mock_save_feedback,
         mock_save_state,
     ) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -155,6 +160,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertIn("delivery failed", stderr.getvalue())
         self.assertIn("Artifacts preserved at", stderr.getvalue())
+        mock_save_feedback.assert_not_called()
         mock_save_state.assert_not_called()
 
     def _write_feedback_config(self, root: Path) -> Path:
@@ -636,11 +642,70 @@ class CliTests(unittest.TestCase):
             payload["papers"]["doi:10.5555/example"]["status"],
             "reading",
         )
+        self.assertEqual(
+            payload["papers"]["doi:10.5555/example"]["note"],
+            "pulled from GitHub",
+        )
         self.assertIn(
             "Pulled GitHub Actions secret PAPER_DIGEST_FEEDBACK_JSON for "
             "X-PG13/paper-digest",
             stdout.getvalue(),
         )
+        self.assertIn("merge=newer", stdout.getvalue())
+
+    @patch("paper_digest.cli.pull_feedback_from_github_secret")
+    def test_feedback_sync_direction_pull_can_prefer_local_entry(
+        self,
+        mock_pull_feedback_from_github_secret,
+    ) -> None:
+        mock_pull_feedback_from_github_secret.return_value = (
+            self._feedback_pull_result()
+        )
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = self._write_feedback_config(root)
+
+            main(
+                [
+                    "feedback",
+                    "set",
+                    "doi:10.5555/example",
+                    "star",
+                    "--note",
+                    "keep local note",
+                    "--config",
+                    str(config_path),
+                ]
+            )
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "feedback",
+                        "sync",
+                        "--direction",
+                        "pull",
+                        "--merge-strategy",
+                        "local",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+
+            feedback_path = root / ".paper-digest-state" / "feedback.json"
+            payload = json.loads(feedback_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(
+            payload["papers"]["doi:10.5555/example"]["status"],
+            "star",
+        )
+        self.assertEqual(
+            payload["papers"]["doi:10.5555/example"]["note"],
+            "keep local note",
+        )
+        self.assertIn("merge=local", stdout.getvalue())
 
     def _feedback_pull_result(self):
         from paper_digest.github_feedback import GitHubFeedbackPullResult

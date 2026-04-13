@@ -7,6 +7,7 @@ from argparse import ArgumentParser
 from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
+from typing import cast
 
 from . import __version__
 from .analysis import AnalysisError
@@ -17,6 +18,7 @@ from .crossref_client import CrossrefClientError
 from .delivery import DeliveryError, send_configured_deliveries
 from .digest import summarize_digest, write_outputs
 from .feedback import (
+    FeedbackMergeStrategy,
     clear_feedback_action,
     clear_feedback_due_date,
     clear_feedback_note,
@@ -26,6 +28,7 @@ from .feedback import (
     list_feedback_entries,
     load_feedback,
     load_feedback_file,
+    merge_feedback_states,
     save_feedback,
     set_feedback_action,
     set_feedback_due_date,
@@ -281,6 +284,12 @@ def build_feedback_parser() -> ArgumentParser:
         default="push",
         help="Sync direction. Push writes the local file; pull restores it locally.",
     )
+    sync_parser.add_argument(
+        "--merge-strategy",
+        choices=["local", "remote", "newer"],
+        default="newer",
+        help="Conflict resolution for pull. Ignored for push.",
+    )
     return parser
 
 
@@ -309,6 +318,7 @@ def _main_digest(argv: Sequence[str]) -> int:
             feedback_state=feedback_state,
         )
         delivery_receipts = send_configured_deliveries(config, digest)
+        save_feedback(config.feedback, feedback_state)
         save_state(config.state, state)
     except DeliveryError as exc:
         print(f"Error: {exc}", file=sys.stderr)
@@ -604,11 +614,20 @@ def _main_feedback(argv: Sequence[str]) -> int:
                 repo=args.repo,
                 secret_name=args.secret_name,
             )
-            save_feedback(config.feedback, pull_result.feedback_state)
+            merge_strategy = cast(
+                FeedbackMergeStrategy,
+                args.merge_strategy,
+            )
+            merged_feedback = merge_feedback_states(
+                feedback_state,
+                pull_result.feedback_state,
+                strategy=merge_strategy,
+            )
+            save_feedback(config.feedback, merged_feedback)
             print(
                 f"Pulled GitHub Actions secret {args.secret_name} for "
                 f"{pull_result.repository} into {feedback_path} "
-                f"(run {pull_result.run_id})"
+                f"(run {pull_result.run_id}, merge={merge_strategy})"
             )
             return 0
 

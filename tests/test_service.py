@@ -1244,7 +1244,13 @@ class GenerateDigestTests(unittest.TestCase):
         self.assertEqual(overdue_item.days_until_due, -7)
         self.assertEqual(
             overdue_item.reasons,
-            ["overdue", "overdue_7d", "recurring_review", "next_action_pending"],
+            [
+                "overdue",
+                "overdue_7d",
+                "recurring_review",
+                "recurring_due",
+                "next_action_pending",
+            ],
         )
         self.assertEqual(overdue_item.review_interval_days, 1)
         due_soon_item = digest.action_items[1]
@@ -1258,4 +1264,73 @@ class GenerateDigestTests(unittest.TestCase):
         self.assertNotIn(
             "arxiv:2604.00010",
             [item.canonical_id for item in digest.action_items],
+        )
+
+    @patch("paper_digest.service.fetch_feed_papers")
+    def test_generate_digest_resumes_snoozed_items_on_their_resume_day(
+        self,
+        mock_fetch_feed_papers,
+    ) -> None:
+        now = datetime(2026, 4, 13, 9, 30, tzinfo=ZoneInfo("UTC"))
+        feed = FeedConfig(
+            name="LLM",
+            categories=["cs.AI"],
+            keywords=["agent"],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+        )
+        resumed_paper = Paper(
+            title="Resume Review Paper",
+            summary="Agent paper returning after a snooze window.",
+            authors=["Alice"],
+            categories=["cs.AI"],
+            paper_id="http://arxiv.org/abs/2604.12345v1",
+            abstract_url="https://arxiv.org/abs/2604.12345v1",
+            pdf_url="https://arxiv.org/pdf/2604.12345v1",
+            published_at=datetime(2026, 4, 13, 1, 0, tzinfo=ZoneInfo("UTC")),
+            updated_at=datetime(2026, 4, 13, 1, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        mock_fetch_feed_papers.return_value = [resumed_paper]
+
+        with TemporaryDirectory() as temp_dir:
+            config = AppConfig(
+                timezone="UTC",
+                lookback_hours=24,
+                output_dir=Path(temp_dir) / "output",
+                request_delay_seconds=0.0,
+                feeds=[feed],
+                state=StateConfig(
+                    enabled=True,
+                    path=Path(temp_dir) / "state.json",
+                    retention_days=90,
+                ),
+                notify=NotifyConfig(max_action_items=10),
+            )
+            feedback_state = FeedbackState(
+                papers={
+                    "arxiv:2604.12345": FeedbackEntry(
+                        status="star",
+                        updated_at=datetime(2026, 4, 10, 8, 0, tzinfo=ZoneInfo("UTC")),
+                        next_action="resume and compare the planner",
+                        snoozed_until=date(2026, 4, 13),
+                    ),
+                }
+            )
+
+            digest = generate_digest(
+                config,
+                now=now,
+                state=DigestState(seen_papers={}),
+                feedback_state=feedback_state,
+            )
+
+        self.assertEqual(len(digest.action_items), 1)
+        self.assertEqual(digest.action_items[0].canonical_id, "arxiv:2604.12345")
+        self.assertEqual(
+            digest.action_items[0].reasons,
+            ["snooze_resumed", "next_action_pending"],
+        )
+        self.assertIsNone(
+            feedback_state.papers["arxiv:2604.12345"].snoozed_until
         )

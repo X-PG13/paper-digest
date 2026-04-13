@@ -351,6 +351,37 @@ class DigestTests(unittest.TestCase):
         self.assertIn("复查周期：每 7 天", markdown)
         self.assertIn("为什么现在看：3 天内到期；进入周期性复查窗口", markdown)
 
+    def test_render_markdown_includes_snooze_resumed_and_recurring_due_reasons(
+        self,
+    ) -> None:
+        digest = DigestRun(
+            generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
+            timezone="Asia/Shanghai",
+            lookback_hours=24,
+            feeds=[FeedDigest(name="LLM", papers=[])],
+            template="zh_daily_brief",
+            action_items=[
+                ActionItem(
+                    canonical_id="arxiv:2604.12345",
+                    title="Resume Review Paper",
+                    abstract_url="https://arxiv.org/abs/2604.12345v1",
+                    summary="Framework summary",
+                    source_label="arxiv",
+                    feedback_status="reading",
+                    due_date=datetime(2026, 4, 8, tzinfo=UTC).date(),
+                    days_until_due=0,
+                    review_interval_days=7,
+                    reasons=["snooze_resumed", "recurring_review", "recurring_due"],
+                    feed_names=["LLM"],
+                )
+            ],
+        )
+
+        markdown = render_markdown(digest)
+
+        self.assertIn("今天结束搁置，重新回到行动队列", markdown)
+        self.assertIn("周期性复查已经到期", markdown)
+
     def test_summarize_focus_items_reports_counts(self) -> None:
         digest = DigestRun(
             generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
@@ -436,6 +467,32 @@ class DigestTests(unittest.TestCase):
         self.assertEqual(
             summarize_action_items(digest),
             "Actions=1, due_soon=1, recurring=1",
+        )
+
+    def test_summarize_action_items_reports_resumed_and_recurring_due_counts(
+        self,
+    ) -> None:
+        digest = DigestRun(
+            generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
+            timezone="UTC",
+            lookback_hours=24,
+            feeds=[],
+            action_items=[
+                ActionItem(
+                    canonical_id="a",
+                    title="A",
+                    abstract_url="https://example.com/a",
+                    summary="A",
+                    source_label="arxiv",
+                    feedback_status="reading",
+                    reasons=["snooze_resumed", "recurring_review", "recurring_due"],
+                )
+            ],
+        )
+
+        self.assertEqual(
+            summarize_action_items(digest),
+            "Actions=1, resumed=1, recurring=1, recurring_due=1",
         )
 
     def test_render_markdown_supports_zh_daily_brief_template(self) -> None:

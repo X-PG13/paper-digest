@@ -32,6 +32,7 @@ SortMode = Literal["relevance", "published_at", "hybrid"]
 FeedbackStatus = Literal["star", "follow_up", "reading", "done", "ignore"]
 FocusReason = Literal["new_starred", "follow_up_resurfaced", "starred_momentum"]
 ActionReason = Literal[
+    "snooze_resumed",
     "overdue",
     "overdue_1d",
     "overdue_3d",
@@ -39,6 +40,7 @@ ActionReason = Literal[
     "due_soon",
     "next_action_pending",
     "recurring_review",
+    "recurring_due",
 ]
 
 
@@ -1411,6 +1413,7 @@ def _action_feedback_status_value(value: str, field_name: str) -> FeedbackStatus
 def _action_reason_value(value: str, field_name: str) -> ActionReason:
     normalized = value.strip().lower()
     if normalized not in {
+        "snooze_resumed",
         "overdue",
         "overdue_1d",
         "overdue_3d",
@@ -1418,12 +1421,15 @@ def _action_reason_value(value: str, field_name: str) -> ActionReason:
         "due_soon",
         "next_action_pending",
         "recurring_review",
+        "recurring_due",
     }:
         raise ConfigError(
-            f"{field_name} must contain only 'overdue', 'overdue_1d', "
-            "'overdue_3d', 'overdue_7d', 'due_soon', "
-            "'next_action_pending', or 'recurring_review'"
+            f"{field_name} must contain only 'snooze_resumed', 'overdue', "
+            "'overdue_1d', 'overdue_3d', 'overdue_7d', 'due_soon', "
+            "'next_action_pending', 'recurring_review', or 'recurring_due'"
         )
+    if normalized == "snooze_resumed":
+        return "snooze_resumed"
     if normalized == "overdue":
         return "overdue"
     if normalized == "overdue_1d":
@@ -1436,6 +1442,8 @@ def _action_reason_value(value: str, field_name: str) -> ActionReason:
         return "due_soon"
     if normalized == "recurring_review":
         return "recurring_review"
+    if normalized == "recurring_due":
+        return "recurring_due"
     return "next_action_pending"
 
 
