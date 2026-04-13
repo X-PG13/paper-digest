@@ -406,6 +406,63 @@ class CliTests(unittest.TestCase):
                 stdout.getvalue(),
             )
 
+    def test_state_action_reset_dry_run_can_preview_matching_entries(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = self._write_feedback_config(root)
+            state_path = root / ".paper-digest-state" / "state.json"
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            original_payload = {
+                "version": 2,
+                "feeds": {},
+                "action_notifications": {
+                    "arxiv:2604.06170": {
+                        "due_soon": "2026-04-13T09:30:00+00:00",
+                        "overdue_3d": "2026-04-16T09:30:00+00:00",
+                    },
+                    "pubmed:41951858": {
+                        "due_soon": "2026-04-15T09:30:00+00:00",
+                    },
+                },
+            }
+            state_path.write_text(
+                json.dumps(original_payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "state",
+                        "action",
+                        "reset",
+                        "--reason",
+                        "due_soon",
+                        "--before",
+                        "2026-04-14",
+                        "--dry-run",
+                        "--show-match",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(
+                json.loads(state_path.read_text(encoding="utf-8")),
+                original_payload,
+            )
+            self.assertIn(
+                "arxiv:2604.06170\tdue_soon\t2026-04-13T09:30:00+00:00",
+                stdout.getvalue(),
+            )
+            self.assertIn(
+                "Would clear 1 action notification entry",
+                stdout.getvalue(),
+            )
+            self.assertIn("before 2026-04-14", stdout.getvalue())
+
     def test_feedback_clear_removes_entry(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

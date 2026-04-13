@@ -111,6 +111,21 @@ def build_state_parser() -> ArgumentParser:
         "--reason",
         help="Optional action reason to reset, such as overdue_3d.",
     )
+    action_reset_parser.add_argument(
+        "--before",
+        type=_parse_iso_date,
+        help="Only reset entries notified before YYYY-MM-DD.",
+    )
+    action_reset_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview matching entries without writing the state file.",
+    )
+    action_reset_parser.add_argument(
+        "--show-match",
+        action="store_true",
+        help="Print matching canonical_id/reason/notified_at rows before reset.",
+    )
     return parser
 
 
@@ -361,6 +376,13 @@ def build_feedback_parser() -> ArgumentParser:
         help="Print a field-level diff for the sync result before writing.",
     )
     return parser
+
+
+def _parse_iso_date(value: str) -> date:
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"invalid ISO date: {value}") from exc
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -827,32 +849,71 @@ def _main_state(argv: Sequence[str]) -> int:
                 if args.canonical_id
                 else None
             )
-            if canonical_id is None and args.reason is None:
+            if (
+                canonical_id is None
+                and args.reason is None
+                and args.before is None
+            ):
                 print(
-                    "Error: provide a canonical_id and/or --reason for reset",
+                    (
+                        "Error: provide a canonical_id, --reason, "
+                        "and/or --before for reset"
+                    ),
                     file=sys.stderr,
                 )
                 return 1
+            matches = list_action_notifications(
+                state,
+                canonical_id=canonical_id,
+                reason=args.reason,
+                before_date=args.before,
+            )
+            if not matches:
+                print(f"No matching action notification entries in {state_path}")
+                return 0
+            if args.show_match:
+                for record in matches:
+                    print(
+                        f"{record.canonical_id}\t{record.reason}\t"
+                        f"{record.notified_at.isoformat()}"
+                    )
+            if args.dry_run:
+                target = canonical_id or "all matching entries"
+                filters = []
+                if args.reason is not None:
+                    filters.append(f"reason {args.reason}")
+                if args.before is not None:
+                    filters.append(f"before {args.before.isoformat()}")
+                filter_suffix = f" ({', '.join(filters)})" if filters else ""
+                print(
+                    f"Would clear {len(matches)} action notification "
+                    f"entr{'y' if len(matches) == 1 else 'ies'} for {target}"
+                    f"{filter_suffix} in {state_path}"
+                )
+                return 0
+
             cleared = clear_action_notifications(
                 state,
                 canonical_id=canonical_id,
                 reason=args.reason,
+                before_date=args.before,
             )
             save_state(config.state, state)
             if cleared:
                 target = canonical_id or "all matching entries"
+                filters = []
+                if args.reason is not None:
+                    filters.append(f"reason {args.reason}")
+                if args.before is not None:
+                    filters.append(f"before {args.before.isoformat()}")
                 reason_suffix = (
-                    f" with reason {args.reason}"
-                    if args.reason is not None
-                    else ""
+                    f" ({', '.join(filters)})" if filters else ""
                 )
                 print(
                     f"Cleared {cleared} action notification entr"
                     f"{'y' if cleared == 1 else 'ies'} for {target}"
                     f"{reason_suffix} in {state_path}"
                 )
-            else:
-                print(f"No matching action notification entries in {state_path}")
             return 0
     except ConfigError as exc:
         print(f"Error: {exc}", file=sys.stderr)
