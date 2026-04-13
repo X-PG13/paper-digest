@@ -19,16 +19,19 @@ from .delivery import DeliveryError, send_configured_deliveries
 from .digest import summarize_digest, write_outputs
 from .feedback import (
     FeedbackMergeStrategy,
+    FeedbackStateDiff,
     clear_feedback_action,
     clear_feedback_due_date,
     clear_feedback_note,
     clear_feedback_review_interval_days,
     clear_feedback_snoozed_until,
     clear_feedback_status,
+    diff_feedback_states,
     list_feedback_entries,
     load_feedback,
     load_feedback_file,
     merge_feedback_states,
+    render_feedback_diff,
     save_feedback,
     set_feedback_action,
     set_feedback_due_date,
@@ -36,6 +39,7 @@ from .feedback import (
     set_feedback_review_interval_days,
     set_feedback_snoozed_until,
     set_feedback_status,
+    summarize_feedback_diff,
 )
 from .github_feedback import (
     DEFAULT_FEEDBACK_SECRET_NAME,
@@ -289,6 +293,16 @@ def build_feedback_parser() -> ArgumentParser:
         choices=["local", "remote", "newer"],
         default="newer",
         help="Conflict resolution for pull. Ignored for push.",
+    )
+    sync_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview the sync result without writing the local file or GitHub secret.",
+    )
+    sync_parser.add_argument(
+        "--show-diff",
+        action="store_true",
+        help="Print a field-level diff for the sync result before writing.",
     )
     return parser
 
@@ -594,10 +608,48 @@ def _main_feedback(argv: Sequence[str]) -> int:
                 )
             return 0
         if args.feedback_command == "sync":
-            save_feedback(config.feedback, feedback_state)
             direction = str(args.direction)
             sync_cwd = Path(args.config).resolve().parent
+            preview_requested = bool(args.dry_run or args.show_diff)
             if direction == "push":
+                remote_snapshot = None
+                if preview_requested:
+                    try:
+                        remote_snapshot = pull_feedback_from_github_secret(
+                            cwd=sync_cwd,
+                            repo=args.repo,
+                            secret_name=args.secret_name,
+                        )
+                    except GitHubFeedbackSyncError as exc:
+                        if args.dry_run:
+                            print(f"Error: {exc}", file=sys.stderr)
+                            return 1
+                        print(
+                            "Warning: could not fetch remote feedback preview: "
+                            f"{exc}",
+                            file=sys.stderr,
+                        )
+                if remote_snapshot is not None:
+                    diff = diff_feedback_states(
+                        remote_snapshot.feedback_state,
+                        feedback_state,
+                    )
+                    _print_feedback_sync_preview(
+                        direction="push",
+                        feedback_path=feedback_path,
+                        secret_name=args.secret_name,
+                        repository=remote_snapshot.repository,
+                        diff=diff,
+                        show_diff=bool(args.show_diff),
+                        merge_strategy=None,
+                        run_id=remote_snapshot.run_id,
+                        dry_run=bool(args.dry_run),
+                    )
+                    if args.dry_run:
+                        return 0
+                elif args.dry_run:
+                    return 1
+
                 repo = sync_feedback_to_github_secret(
                     feedback_state,
                     cwd=sync_cwd,
@@ -623,6 +675,21 @@ def _main_feedback(argv: Sequence[str]) -> int:
                 pull_result.feedback_state,
                 strategy=merge_strategy,
             )
+            diff = diff_feedback_states(feedback_state, merged_feedback)
+            if preview_requested:
+                _print_feedback_sync_preview(
+                    direction="pull",
+                    feedback_path=feedback_path,
+                    secret_name=args.secret_name,
+                    repository=pull_result.repository,
+                    diff=diff,
+                    show_diff=bool(args.show_diff),
+                    merge_strategy=merge_strategy,
+                    run_id=pull_result.run_id,
+                    dry_run=bool(args.dry_run),
+                )
+                if args.dry_run:
+                    return 0
             save_feedback(config.feedback, merged_feedback)
             print(
                 f"Pulled GitHub Actions secret {args.secret_name} for "
@@ -665,6 +732,38 @@ def _main_feedback(argv: Sequence[str]) -> int:
     except (ConfigError, GitHubFeedbackSyncError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
+
+
+def _print_feedback_sync_preview(
+    *,
+    direction: str,
+    feedback_path: Path,
+    secret_name: str,
+    repository: str,
+    diff: FeedbackStateDiff,
+    show_diff: bool,
+    merge_strategy: FeedbackMergeStrategy | None,
+    run_id: str | None,
+    dry_run: bool,
+) -> None:
+    prefix = "Dry run" if dry_run else "Preview"
+    if direction == "push":
+        run_label = f" (remote run {run_id})" if run_id else ""
+        print(
+            f"{prefix}: would sync {feedback_path} to GitHub Actions secret "
+            f"{secret_name} for {repository}{run_label}"
+        )
+    else:
+        merge_label = f", merge={merge_strategy}" if merge_strategy is not None else ""
+        run_label = f" (run {run_id}{merge_label})" if run_id is not None else ""
+        print(
+            f"{prefix}: would pull GitHub Actions secret {secret_name} for "
+            f"{repository} into {feedback_path}{run_label}"
+        )
+    print(f"Diff summary: {summarize_feedback_diff(diff)}")
+    if show_diff:
+        for line in render_feedback_diff(diff):
+            print(line)
 
 
 def _tracked_keywords(config: object) -> list[str]:
