@@ -324,6 +324,8 @@ python -m paper_digest feedback sync --direction push --dry-run --show-diff --co
 python -m paper_digest state action list --config config.toml
 python -m paper_digest state action reset 'doi:10.5555/paper-circle' --config config.toml
 python -m paper_digest state action reset --reason overdue_3d --config config.toml
+python -m paper_digest state action reset --reason overdue_3d --dry-run --show-match --config config.toml
+python -m paper_digest state action reset --reason due_soon --before 2026-04-15 --config config.toml
 ```
 
 Notes:
@@ -346,6 +348,10 @@ Notes:
   that currently suppress repeated action reminders.
 - `state action reset` re-arms action notifications for one paper or one
   reason code without requiring a manual edit to the persisted state file.
+- `state action reset --dry-run --show-match` previews the exact
+  `canonical_id + reason + notified_at` rows that would be re-armed.
+- `state action reset --before YYYY-MM-DD` narrows resets to older remembered
+  notifications, which is useful when you only want to re-arm stale entries.
 - Push previews fetch the current remote feedback state through the same
   short-lived pull workflow, so `feedback sync --direction push --dry-run`
   shows what the secret would change to before it is overwritten.

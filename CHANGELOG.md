@@ -76,6 +76,9 @@ Versioning.
   `notification-history.html` page that visualizes remembered action
   notification reasons across papers, grouped by trigger code and linked back
   to canonical detail pages.
+- `state action reset` now supports `--dry-run`, `--show-match`, and
+  `--before YYYY-MM-DD`, so action-notification re-arms can be previewed and
+  narrowed to stale entries before the state file is mutated.
 - Action reminders now only emit newly changed action states such as snooze
   resumes, first due-soon transitions, overdue escalations, and recurring
   reviews that have actually come due; notified action reasons are persisted in

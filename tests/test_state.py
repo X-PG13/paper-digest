@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -185,6 +185,33 @@ class StateTests(unittest.TestCase):
             ],
         )
 
+    def test_list_action_notifications_can_filter_by_reason_and_before_date(
+        self,
+    ) -> None:
+        state = DigestState(
+            seen_papers={},
+            action_notifications={
+                "arxiv:2604.06170": {
+                    "due_soon": "2026-04-09T09:00:00+00:00",
+                    "overdue_3d": "2026-04-12T09:00:00+00:00",
+                },
+                "pubmed:41951858": {
+                    "due_soon": "2026-04-15T09:00:00+00:00",
+                },
+            },
+        )
+
+        records = list_action_notifications(
+            state,
+            reason="due_soon",
+            before_date=date(2026, 4, 14),
+        )
+
+        self.assertEqual(
+            [(record.canonical_id, record.reason) for record in records],
+            [("arxiv:2604.06170", "due_soon")],
+        )
+
     def test_clear_action_notifications_can_reset_by_reason(self) -> None:
         state = DigestState(
             seen_papers={},
@@ -208,5 +235,38 @@ class StateTests(unittest.TestCase):
                 "arxiv:2604.06170": {
                     "due_soon": "2026-04-09T09:00:00+00:00",
                 }
+            },
+        )
+
+    def test_clear_action_notifications_can_reset_before_date(self) -> None:
+        state = DigestState(
+            seen_papers={},
+            action_notifications={
+                "arxiv:2604.06170": {
+                    "due_soon": "2026-04-09T09:00:00+00:00",
+                    "overdue_3d": "2026-04-12T09:00:00+00:00",
+                },
+                "pubmed:41951858": {
+                    "due_soon": "2026-04-15T09:00:00+00:00",
+                },
+            },
+        )
+
+        cleared = clear_action_notifications(
+            state,
+            reason="due_soon",
+            before_date=date(2026, 4, 14),
+        )
+
+        self.assertEqual(cleared, 1)
+        self.assertEqual(
+            state.action_notifications,
+            {
+                "arxiv:2604.06170": {
+                    "overdue_3d": "2026-04-12T09:00:00+00:00",
+                },
+                "pubmed:41951858": {
+                    "due_soon": "2026-04-15T09:00:00+00:00",
+                },
             },
         )

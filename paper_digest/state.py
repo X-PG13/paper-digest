@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from .arxiv_client import Paper
 from .config import StateConfig
@@ -109,17 +109,24 @@ def list_action_notifications(
     state: DigestState,
     *,
     canonical_id: str | None = None,
+    reason: str | None = None,
+    before_date: date | None = None,
 ) -> list[ActionNotificationRecord]:
     records: list[ActionNotificationRecord] = []
     for current_id, reasons in state.action_notifications.items():
         if canonical_id is not None and current_id != canonical_id:
             continue
-        for reason, notified_at in reasons.items():
+        for current_reason, notified_at in reasons.items():
+            if reason is not None and current_reason != reason:
+                continue
+            notified_at_dt = _parse_state_datetime(notified_at)
+            if before_date is not None and notified_at_dt.date() >= before_date:
+                continue
             records.append(
                 ActionNotificationRecord(
                     canonical_id=current_id,
-                    reason=reason,
-                    notified_at=_parse_state_datetime(notified_at),
+                    reason=current_reason,
+                    notified_at=notified_at_dt,
                 )
             )
     return sorted(
@@ -137,36 +144,25 @@ def clear_action_notifications(
     *,
     canonical_id: str | None = None,
     reason: str | None = None,
+    before_date: date | None = None,
 ) -> int:
-    if canonical_id is None and reason is None:
-        raise ValueError("canonical_id or reason must be provided")
+    if canonical_id is None and reason is None and before_date is None:
+        raise ValueError("canonical_id, reason, or before_date must be provided")
 
-    cleared = 0
-    if canonical_id is not None:
-        reasons = state.action_notifications.get(canonical_id)
+    matches = list_action_notifications(
+        state,
+        canonical_id=canonical_id,
+        reason=reason,
+        before_date=before_date,
+    )
+    for record in matches:
+        reasons = state.action_notifications.get(record.canonical_id)
         if reasons is None:
-            return 0
-        if reason is None:
-            cleared = len(reasons)
-            state.action_notifications.pop(canonical_id, None)
-            return cleared
-        if reason in reasons:
-            del reasons[reason]
-            cleared = 1
-        if not reasons:
-            state.action_notifications.pop(canonical_id, None)
-        return cleared
-
-    assert reason is not None
-    for current_id in list(state.action_notifications):
-        reasons = state.action_notifications[current_id]
-        if reason not in reasons:
             continue
-        del reasons[reason]
-        cleared += 1
+        reasons.pop(record.reason, None)
         if not reasons:
-            del state.action_notifications[current_id]
-    return cleared
+            state.action_notifications.pop(record.canonical_id, None)
+    return len(matches)
 
 
 def _prune_feed_state(feed_state: dict[str, str], cutoff: datetime) -> None:
