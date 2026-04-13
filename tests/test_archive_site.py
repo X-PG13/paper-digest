@@ -233,6 +233,9 @@ class ArchiveSiteTests(unittest.TestCase):
             review_queue_html = (site_path / "review-queue.html").read_text(
                 encoding="utf-8"
             )
+            notification_history_html = (
+                site_path / "notification-history.html"
+            ).read_text(encoding="utf-8")
             llm_html = (site_path / "feeds/llm.html").read_text(encoding="utf-8")
             llm_xml = (site_path / "feeds/llm.xml").read_text(encoding="utf-8")
             agent_html = (site_path / "topics/agent.html").read_text(encoding="utf-8")
@@ -248,6 +251,7 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn("Paper Circle", index_html)
             self.assertIn("papers/", index_html)
             self.assertIn("momentum.html", index_html)
+            self.assertIn("notification-history.html", index_html)
             self.assertIn("weekly-review.html", index_html)
             self.assertIn("reading-list.html", index_html)
             self.assertIn("review-queue.html", index_html)
@@ -301,6 +305,14 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertIn("复查周期：每 14 天", review_queue_html)
             self.assertIn("compare baseline table", review_queue_html)
             self.assertIn("2026-04-11", review_queue_html)
+            self.assertIn("通知历史", notification_history_html)
+            self.assertIn("提醒原因概览", notification_history_html)
+            self.assertIn("最近通知记忆", notification_history_html)
+            self.assertIn("Paper Circle", notification_history_html)
+            self.assertIn("doi:10.5555/paper-circle", notification_history_html)
+            self.assertIn("首次进入 3 天内到期", notification_history_html)
+            self.assertIn("已逾期至少 3 天", notification_history_html)
+            self.assertIn("papers/", notification_history_html)
             self.assertIn("LLM 固定订阅页", llm_html)
             self.assertIn('type="application/rss+xml"', llm_html)
             self.assertIn("订阅 RSS", llm_html)
@@ -358,6 +370,7 @@ class ArchiveSiteTests(unittest.TestCase):
             self.assertTrue((site_path / "weekly-review.html").exists())
             self.assertTrue((site_path / "reading-list.html").exists())
             self.assertTrue((site_path / "review-queue.html").exists())
+            self.assertTrue((site_path / "notification-history.html").exists())
             self.assertTrue((site_path / "latest.md").exists())
             self.assertTrue((site_path / "latest.json").exists())
             self.assertTrue((site_path / "digests/2026-04-08/digest.json").exists())

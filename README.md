@@ -15,8 +15,8 @@ The current scope is intentionally narrow:
 - Optionally enrich selected papers with structured LLM analysis.
 - Generate machine-readable `JSON` and human-readable `Markdown`.
 - Build a static archive site with search, feed subscriptions, topic tracking,
-  canonical paper detail pages, rising-paper views, trend views, and RSS
-  subscription feeds.
+  canonical paper detail pages, rising-paper views, trend views,
+  notification-history views, and RSS subscription feeds.
 - Persist state to avoid repeating already-sent papers.
 - Optionally deliver the digest through SMTP email, Feishu webhooks, WeCom
   webhooks, Slack incoming webhooks, Discord incoming webhooks, or Telegram bots.
@@ -220,6 +220,9 @@ hide_ignored = true
 - The archive site exposes `output/site/review-queue.html`, which highlights
   overdue items, papers due within 3 days, queued next actions, newly surfaced
   unmarked papers, and resurfaced follow-ups.
+- The archive site exposes `output/site/notification-history.html`, which
+  visualizes the remembered action-notification state that suppresses duplicate
+  `Action Brief` reasons across runs.
 - Paper detail pages, reading lists, weekly review sections, review queues, and
   Focus outputs all surface those feedback notes, next actions, and due dates
   once they are present.

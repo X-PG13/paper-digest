@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import shutil
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from email.utils import format_datetime
@@ -202,6 +203,22 @@ class WeeklyReviewSection:
     items: list[PaperDetail]
 
 
+@dataclass(slots=True, frozen=True)
+class NotificationHistoryEntry:
+    canonical_id: str
+    title: str
+    detail_href: str | None
+    reason: str
+    notified_at: datetime
+    feedback_status: FeedbackStatus | None
+    feedback_note: str | None
+    feedback_next_action: str | None
+    feedback_due_date: date | None
+    feedback_snoozed_until: date | None
+    feedback_review_interval_days: int | None
+    last_seen: datetime | None
+
+
 def build_archive_site(
     output_dir: Path,
     *,
@@ -232,6 +249,10 @@ def build_archive_site(
         feedback_state=feedback_state,
         digest_state=digest_state,
     )
+    notification_entries = _build_notification_history_entries(
+        paper_details,
+        digest_state=digest_state,
+    )
 
     _copy_latest_files(output_dir, site_root)
     site_root.joinpath("index.html").write_text(
@@ -256,6 +277,10 @@ def build_archive_site(
     )
     site_root.joinpath("review-queue.html").write_text(
         _render_review_queue_page(paper_details),
+        encoding="utf-8",
+    )
+    site_root.joinpath("notification-history.html").write_text(
+        _render_notification_history_page(notification_entries),
         encoding="utf-8",
     )
 
@@ -855,6 +880,7 @@ def _render_index(
                 ("latest.json", "查看最新 JSON"),
                 ("trends.html", "查看趋势总览"),
                 ("momentum.html", "持续升温论文"),
+                ("notification-history.html", "通知历史"),
                 ("weekly-review.html", "周度回顾"),
                 (None, f"最近构建：{latest_label}"),
             ]
@@ -959,6 +985,7 @@ def _render_trends_page(
                 ("latest.md", "最新 Markdown"),
                 ("latest.json", "最新 JSON"),
                 ("momentum.html", "持续升温论文"),
+                ("notification-history.html", "通知历史"),
                 ("weekly-review.html", "周度回顾"),
             ]
         ),
@@ -1301,6 +1328,7 @@ def _render_momentum_page(paper_details: list[PaperDetail]) -> str:
                 ("index.html", "返回归档首页"),
                 ("trends.html", "查看趋势总览"),
                 ("review-queue.html", "Review Queue"),
+                ("notification-history.html", "通知历史"),
                 ("weekly-review.html", "周度回顾"),
                 ("reading-list.html", "阅读清单"),
                 ("latest.md", "最新 Markdown"),
@@ -1742,6 +1770,7 @@ def _render_review_queue_page(paper_details: list[PaperDetail]) -> str:
                 ("index.html", "返回归档首页"),
                 ("trends.html", "查看趋势总览"),
                 ("reading-list.html", "阅读清单"),
+                ("notification-history.html", "通知历史"),
                 ("weekly-review.html", "周度回顾"),
             ]
         ),
@@ -1807,6 +1836,7 @@ def _render_reading_list_page(paper_details: list[PaperDetail]) -> str:
                 ("trends.html", "查看趋势总览"),
                 ("review-queue.html", "Review Queue"),
                 ("momentum.html", "持续升温论文"),
+                ("notification-history.html", "通知历史"),
                 ("weekly-review.html", "周度回顾"),
             ]
         ),
@@ -1903,10 +1933,155 @@ def _render_weekly_review_page(paper_details: list[PaperDetail]) -> str:
                 ("review-queue.html", "Review Queue"),
                 ("reading-list.html", "阅读清单"),
                 ("momentum.html", "持续升温论文"),
+                ("notification-history.html", "通知历史"),
             ]
         ),
         content=content,
         nav_current="weekly_review",
+    )
+
+
+def _render_notification_history_page(
+    entries: list[NotificationHistoryEntry],
+) -> str:
+    unique_papers = {entry.canonical_id for entry in entries}
+    latest_notified_at = max((entry.notified_at for entry in entries), default=None)
+    recent_entries = (
+        [
+            entry
+            for entry in entries
+            if latest_notified_at is not None
+            and (latest_notified_at - entry.notified_at).days < 7
+        ]
+        if latest_notified_at is not None
+        else []
+    )
+    overdue_count = sum(1 for entry in entries if entry.reason.startswith("overdue"))
+    due_soon_count = sum(1 for entry in entries if entry.reason == "due_soon")
+    recurring_count = sum(
+        1
+        for entry in entries
+        if entry.reason in {"recurring_review", "recurring_due", "snooze_resumed"}
+    )
+    stats = [
+        ArchiveStats(
+            "已记忆提醒",
+            len(entries),
+            "条 reason 记录",
+            len(unique_papers),
+            "篇论文",
+        ),
+        ArchiveStats(
+            "最近 7 天",
+            len(recent_entries),
+            "条提醒",
+            len({entry.canonical_id for entry in recent_entries}),
+            "篇论文",
+        ),
+        ArchiveStats(
+            "逾期与临期",
+            overdue_count,
+            "条逾期记录",
+            due_soon_count,
+            "条 3 天内到期",
+        ),
+        ArchiveStats(
+            "恢复与复查",
+            recurring_count,
+            "条恢复/复查",
+            sum(1 for entry in entries if entry.reason == "next_action_pending"),
+            "条下一步待执行",
+        ),
+    ]
+    reason_counter = Counter(entry.reason for entry in entries)
+    reason_nav = (
+        '<div class="chip-cloud">'
+        + "".join(
+            (
+                f'<a class="topic-chip" href="#reason-{escape(_slugify(reason))}">'
+                f"{escape(_action_notification_reason_label(reason))} · {count}</a>"
+            )
+            for reason, count in sorted(
+                reason_counter.items(),
+                key=lambda item: (-item[1], item[0]),
+            )
+        )
+        + "</div>"
+        if reason_counter
+        else _render_empty_note("当前还没有已记忆的 action 提醒。")
+    )
+    latest_cards = (
+        '<div class="subscription-grid">'
+        + "".join(
+            _render_notification_history_card(entry, link_prefix="")
+            for entry in entries[:12]
+        )
+        + "</div>"
+        if entries
+        else _render_empty_state("当前还没有可视化的 action 通知状态。")
+    )
+    grouped_sections = (
+        "".join(
+            _render_section_block(
+                _action_notification_reason_label(reason),
+                (
+                    f"当前记忆了 {len(reason_entries)} 条 "
+                    f"{_action_notification_reason_label(reason)} 记录。"
+                ),
+                '<div class="subscription-grid">'
+                + "".join(
+                    _render_notification_history_card(entry, link_prefix="")
+                    for entry in reason_entries
+                )
+                + "</div>",
+            )
+            for reason, reason_entries in _group_notification_history_entries(entries)
+        )
+        if entries
+        else _render_empty_note("还没有按原因可分组的通知状态。")
+    )
+    content = (
+        '<section class="section-grid">'
+        + "".join(_render_stats_card(item) for item in stats)
+        + "</section>"
+        + _render_section(
+            "提醒原因概览",
+            (
+                "这里展示当前站点还记得哪些 action reason，"
+                "用来解释为什么某篇论文今天没有再次提醒。"
+            ),
+            reason_nav,
+        )
+        + _render_section(
+            "最近通知记忆",
+            "按最近触发时间倒序展示 action 通知状态，方便快速定位最近被抑制的提醒。",
+            latest_cards,
+        )
+        + _render_section(
+            "按原因查看",
+            "把同一类提醒原因放在一起，便于判断哪些规则当前最常触发。",
+            grouped_sections,
+        )
+    )
+    return _render_page(
+        page_title="Paper Digest Notification History",
+        eyebrow="Notification Memory",
+        heading="通知历史",
+        description=(
+            "这里展示当前归档还记得哪些 action 提醒状态。"
+            "它不是完整的发送日志，而是用于抑制重复提醒的 remembered state。"
+        ),
+        hero_links=_render_hero_links(
+            [
+                ("index.html", "返回归档首页"),
+                ("review-queue.html", "Review Queue"),
+                ("weekly-review.html", "周度回顾"),
+                ("reading-list.html", "阅读清单"),
+                ("latest.md", "最新 Markdown"),
+            ]
+        ),
+        content=content,
+        nav_current="notification_history",
     )
 
 
@@ -2291,6 +2466,80 @@ def _render_action_notification_history(
     )
 
 
+def _render_notification_history_card(
+    entry: NotificationHistoryEntry,
+    *,
+    link_prefix: str,
+) -> str:
+    title_html = escape(entry.title)
+    if entry.detail_href is not None:
+        title_html = (
+            f'<a href="{escape(link_prefix + entry.detail_href)}">{title_html}</a>'
+        )
+    note_html = ""
+    if entry.feedback_note:
+        note_html = (
+            '<p class="resource-copy note-copy">'
+            f"备注：{escape(_truncate(entry.feedback_note, 140))}"
+            "</p>"
+        )
+    action_html = ""
+    if entry.feedback_next_action:
+        action_html += (
+            '<p class="resource-copy note-copy">'
+            f"下一步：{escape(_truncate(entry.feedback_next_action, 140))}"
+            "</p>"
+        )
+    if entry.feedback_due_date is not None:
+        action_html += (
+            '<p class="resource-copy note-copy">'
+            f"最晚处理：{escape(_format_due_date(entry.feedback_due_date))}"
+            "</p>"
+        )
+    if entry.feedback_snoozed_until is not None:
+        action_html += (
+            '<p class="resource-copy note-copy">'
+            f"搁置到：{escape(entry.feedback_snoozed_until.isoformat())}"
+            "</p>"
+        )
+    if entry.feedback_review_interval_days is not None:
+        action_html += (
+            '<p class="resource-copy note-copy">'
+            f"复查周期：每 {entry.feedback_review_interval_days} 天"
+            "</p>"
+        )
+    archive_hint = ""
+    if entry.detail_href is None:
+        archive_hint = (
+            '<p class="resource-copy note-copy">'
+            "当前归档里还没有对应的论文详情页。"
+            "</p>"
+        )
+    return (
+        '<article class="resource-card">'
+        '<p class="resource-kicker">Action Notification</p>'
+        f"{_render_feedback_badge(entry.feedback_status)}"
+        f'<h3 class="resource-title">{title_html}</h3>'
+        '<p class="resource-copy">'
+        f"{escape(_action_notification_reason_label(entry.reason))}"
+        f" · reason code: {escape(entry.reason)}"
+        "</p>"
+        f'<p class="resource-copy">{escape(entry.canonical_id)}</p>'
+        f"{note_html}"
+        f"{action_html}"
+        f"{archive_hint}"
+        '<div class="resource-meta">'
+        f"<span>最近通知：{escape(_format_seen_label(entry.notified_at))}</span>"
+        + (
+            f"<span>最近出现：{escape(_format_seen_label(entry.last_seen))}</span>"
+            if entry.last_seen is not None
+            else "<span>暂无归档详情</span>"
+        )
+        + "</div>"
+        "</article>"
+    )
+
+
 def _action_notification_summary(
     notifications: list[ActionNotificationRecord],
 ) -> str:
@@ -2316,6 +2565,22 @@ def _action_notification_reason_label(reason: str) -> str:
         "recurring_due": "周期复查到期",
     }
     return labels.get(reason, reason)
+
+
+def _group_notification_history_entries(
+    entries: list[NotificationHistoryEntry],
+) -> list[tuple[str, list[NotificationHistoryEntry]]]:
+    grouped: dict[str, list[NotificationHistoryEntry]] = {}
+    for entry in entries:
+        grouped.setdefault(entry.reason, []).append(entry)
+    return sorted(
+        grouped.items(),
+        key=lambda item: (
+            -len(item[1]),
+            -max(entry.notified_at.timestamp() for entry in item[1]),
+            item[0],
+        ),
+    )
 
 
 def _render_feed_rss(overview: FeedOverview, archives: list[DayArchive]) -> str:
@@ -2427,6 +2692,11 @@ def _render_nav(current: str, link_prefix: str) -> str:
         ("home", f"{link_prefix}index.html", "归档首页"),
         ("trends", f"{link_prefix}trends.html", "趋势总览"),
         ("review_queue", f"{link_prefix}review-queue.html", "行动队列"),
+        (
+            "notification_history",
+            f"{link_prefix}notification-history.html",
+            "通知历史",
+        ),
         ("momentum", f"{link_prefix}momentum.html", "持续升温"),
         ("weekly_review", f"{link_prefix}weekly-review.html", "周度回顾"),
         ("reading_list", f"{link_prefix}reading-list.html", "阅读清单"),
@@ -2514,6 +2784,15 @@ def _render_subscription_panel(
         "</p>"
         "</a>"
     )
+    notification_history_card = (
+        '<a class="resource-card" href="notification-history.html">'
+        '<p class="resource-kicker">Notification Memory</p>'
+        '<h3 class="resource-title">通知历史</h3>'
+        "<p class=\"resource-copy\">"
+        "可视化当前记住的 action reason，解释为什么某些提醒今天没有再次发出。"
+        "</p>"
+        "</a>"
+    )
     reading_card = (
         '<a class="resource-card" href="reading-list.html">'
         '<p class="resource-kicker">Reading List</p>'
@@ -2529,6 +2808,7 @@ def _render_subscription_panel(
         '<div class="subscription-grid">'
         + trends_card
         + review_queue_card
+        + notification_history_card
         + momentum_card
         + weekly_review_card
         + reading_card
@@ -3913,6 +4193,49 @@ def _resolve_action_notifications(
     if digest_state is None:
         return []
     return list_action_notifications(digest_state, canonical_id=canonical_id)
+
+
+def _build_notification_history_entries(
+    paper_details: list[PaperDetail],
+    *,
+    digest_state: DigestState | None,
+) -> list[NotificationHistoryEntry]:
+    if digest_state is None:
+        return []
+    detail_by_id = {
+        detail.paper.canonical_id: detail for detail in paper_details
+    }
+    entries: list[NotificationHistoryEntry] = []
+    for record in list_action_notifications(digest_state):
+        detail = detail_by_id.get(record.canonical_id)
+        effective_due_date = (
+            _effective_feedback_due_date(detail) if detail is not None else None
+        )
+        entries.append(
+            NotificationHistoryEntry(
+                canonical_id=record.canonical_id,
+                title=detail.paper.title if detail is not None else record.canonical_id,
+                detail_href=detail.paper.detail_href if detail is not None else None,
+                reason=record.reason,
+                notified_at=record.notified_at,
+                feedback_status=detail.feedback_status if detail is not None else None,
+                feedback_note=detail.feedback_note if detail is not None else None,
+                feedback_next_action=(
+                    detail.feedback_next_action if detail is not None else None
+                ),
+                feedback_due_date=effective_due_date,
+                feedback_snoozed_until=(
+                    detail.feedback_snoozed_until if detail is not None else None
+                ),
+                feedback_review_interval_days=(
+                    detail.feedback_review_interval_days
+                    if detail is not None
+                    else None
+                ),
+                last_seen=detail.last_seen if detail is not None else None,
+            )
+        )
+    return entries
 
 
 def _effective_feedback_due_date(detail: PaperDetail) -> date | None:
