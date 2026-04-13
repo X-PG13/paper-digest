@@ -53,6 +53,19 @@ class _HistorySnapshot:
     appearance_count: int = 0
 
 
+_ACTION_TRANSITION_REASONS = frozenset(
+    {
+        "snooze_resumed",
+        "due_soon",
+        "overdue",
+        "overdue_1d",
+        "overdue_3d",
+        "overdue_7d",
+        "recurring_due",
+    }
+)
+
+
 def generate_digest(
     config: AppConfig,
     *,
@@ -179,8 +192,6 @@ def generate_digest(
             template=config.digest.template,
             topic_candidates=topic_candidates,
         )
-    if state is None:
-        save_state(config.state, managed_state)
     digest.focus_items = _build_focus_items(
         digest,
         config=config,
@@ -190,7 +201,7 @@ def generate_digest(
         current_feed_names=_current_feed_names(digest),
         now=local_now,
     )
-    digest.action_items = _build_action_items(
+    action_items = _build_action_items(
         digest,
         config=config,
         feedback_state=managed_feedback,
@@ -199,6 +210,14 @@ def generate_digest(
         current_feed_names=_current_feed_names(digest),
         now=local_now,
     )
+    digest.action_items = _select_action_notification_items(
+        action_items,
+        state=managed_state,
+        now=local_now,
+        max_items=config.notify.max_action_items,
+    )
+    if state is None:
+        save_state(config.state, managed_state)
     if feedback_state is None:
         save_feedback(config.feedback, managed_feedback)
     return digest
@@ -476,7 +495,54 @@ def _build_action_items(
         )
 
     action_items.sort(key=lambda item: item[0])
-    return [item for _, item in action_items[: config.notify.max_action_items]]
+    return [item for _, item in action_items]
+
+
+def _select_action_notification_items(
+    action_items: Sequence[ActionItem],
+    *,
+    state: DigestState,
+    now: datetime,
+    max_items: int,
+) -> list[ActionItem]:
+    previous_notifications = state.action_notifications
+    current_triggers: dict[str, tuple[str, ...]] = {}
+    for item in action_items:
+        trigger_reasons = tuple(_action_transition_reasons(item.reasons))
+        if trigger_reasons:
+            current_triggers[item.canonical_id] = trigger_reasons
+
+    next_notifications: dict[str, dict[str, str]] = {}
+    for canonical_id, reasons in previous_notifications.items():
+        active_reasons = current_triggers.get(canonical_id)
+        if not active_reasons:
+            continue
+        retained = {
+            reason: timestamp
+            for reason, timestamp in reasons.items()
+            if reason in active_reasons
+        }
+        if retained:
+            next_notifications[canonical_id] = retained
+
+    selected_items: list[ActionItem] = []
+    notified_at = now.astimezone(UTC).isoformat()
+    for item in action_items:
+        trigger_reasons = tuple(_action_transition_reasons(item.reasons))
+        if not trigger_reasons:
+            continue
+        previous_reasons = previous_notifications.get(item.canonical_id, {})
+        if not any(reason not in previous_reasons for reason in trigger_reasons):
+            continue
+        if len(selected_items) >= max_items:
+            continue
+        selected_items.append(item)
+        notification_entry = next_notifications.setdefault(item.canonical_id, {})
+        for reason in trigger_reasons:
+            notification_entry[reason] = previous_reasons.get(reason, notified_at)
+
+    state.action_notifications = next_notifications
+    return selected_items
 
 
 def _load_history_snapshots(
@@ -809,6 +875,14 @@ def _action_reason_codes(
     if entry.next_action is not None and entry.status in {"star", "follow_up"}:
         reason_codes.append("next_action_pending")
     return reason_codes
+
+
+def _action_transition_reasons(reason_codes: Sequence[str]) -> list[str]:
+    return [
+        reason
+        for reason in reason_codes
+        if reason in _ACTION_TRANSITION_REASONS
+    ]
 
 
 def _current_feed_names(digest: DigestRun) -> dict[str, set[str]]:

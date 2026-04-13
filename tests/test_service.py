@@ -1334,3 +1334,123 @@ class GenerateDigestTests(unittest.TestCase):
         self.assertIsNone(
             feedback_state.papers["arxiv:2604.12345"].snoozed_until
         )
+
+    @patch("paper_digest.service.fetch_feed_papers")
+    def test_generate_digest_only_notifies_new_action_reason_transitions(
+        self,
+        mock_fetch_feed_papers,
+    ) -> None:
+        feed = FeedConfig(
+            name="LLM",
+            categories=["cs.AI"],
+            keywords=["agent"],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+        )
+        paper = Paper(
+            title="Action Transition Paper",
+            summary="Agent paper used to validate action transition notifications.",
+            authors=["Alice"],
+            categories=["cs.AI"],
+            paper_id="http://arxiv.org/abs/2604.06170v1",
+            abstract_url="https://arxiv.org/abs/2604.06170v1",
+            pdf_url="https://arxiv.org/pdf/2604.06170v1",
+            published_at=datetime(2026, 4, 9, 1, 0, tzinfo=ZoneInfo("UTC")),
+            updated_at=datetime(2026, 4, 9, 1, 0, tzinfo=ZoneInfo("UTC")),
+        )
+        mock_fetch_feed_papers.return_value = [paper]
+
+        with TemporaryDirectory() as temp_dir:
+            config = AppConfig(
+                timezone="UTC",
+                lookback_hours=240,
+                output_dir=Path(temp_dir) / "output",
+                request_delay_seconds=0.0,
+                feeds=[feed],
+                state=StateConfig(
+                    enabled=True,
+                    path=Path(temp_dir) / "state.json",
+                    retention_days=90,
+                ),
+                notify=NotifyConfig(max_action_items=10),
+            )
+            feedback_state = FeedbackState(
+                papers={
+                    "arxiv:2604.06170": FeedbackEntry(
+                        status="reading",
+                        updated_at=datetime(2026, 4, 8, 8, 0, tzinfo=ZoneInfo("UTC")),
+                        due_date=date(2026, 4, 11),
+                    ),
+                }
+            )
+            state = DigestState(seen_papers={})
+
+            due_soon_digest = generate_digest(
+                config,
+                now=datetime(2026, 4, 9, 9, 30, tzinfo=ZoneInfo("UTC")),
+                state=state,
+                feedback_state=feedback_state,
+            )
+            self.assertEqual(len(due_soon_digest.action_items), 1)
+            self.assertEqual(
+                due_soon_digest.action_items[0].reasons,
+                ["due_soon"],
+            )
+            self.assertEqual(
+                state.action_notifications,
+                {
+                    "arxiv:2604.06170": {
+                        "due_soon": state.action_notifications["arxiv:2604.06170"][
+                            "due_soon"
+                        ],
+                    }
+                },
+            )
+
+            state.seen_papers.clear()
+            repeated_due_soon_digest = generate_digest(
+                config,
+                now=datetime(2026, 4, 10, 9, 30, tzinfo=ZoneInfo("UTC")),
+                state=state,
+                feedback_state=feedback_state,
+            )
+            self.assertEqual(repeated_due_soon_digest.action_items, [])
+            self.assertEqual(
+                set(state.action_notifications["arxiv:2604.06170"]),
+                {"due_soon"},
+            )
+
+            state.seen_papers.clear()
+            overdue_digest = generate_digest(
+                config,
+                now=datetime(2026, 4, 12, 9, 30, tzinfo=ZoneInfo("UTC")),
+                state=state,
+                feedback_state=feedback_state,
+            )
+            self.assertEqual(len(overdue_digest.action_items), 1)
+            self.assertEqual(
+                overdue_digest.action_items[0].reasons,
+                ["overdue", "overdue_1d"],
+            )
+            self.assertEqual(
+                set(state.action_notifications["arxiv:2604.06170"]),
+                {"overdue", "overdue_1d"},
+            )
+
+            state.seen_papers.clear()
+            escalated_digest = generate_digest(
+                config,
+                now=datetime(2026, 4, 14, 9, 30, tzinfo=ZoneInfo("UTC")),
+                state=state,
+                feedback_state=feedback_state,
+            )
+            self.assertEqual(len(escalated_digest.action_items), 1)
+            self.assertEqual(
+                escalated_digest.action_items[0].reasons,
+                ["overdue", "overdue_3d"],
+            )
+            self.assertEqual(
+                set(state.action_notifications["arxiv:2604.06170"]),
+                {"overdue", "overdue_3d"},
+            )

@@ -68,6 +68,12 @@ Versioning.
 - Feedback sync now also supports `--dry-run` and `--show-diff`, so both push
   and pull workflows can preview field-level changes against the current
   GitHub secret before either side is written.
+- Action reminders now only emit newly changed action states such as snooze
+  resumes, first due-soon transitions, overdue escalations, and recurring
+  reviews that have actually come due; notified action reasons are persisted in
+  state so `Action Brief` does not repeat the same reminder every day, while
+  the weekly review page keeps the longer unfinished / overdue / recurring
+  backlog visible.
 - The manual `Daily Digest` workflow now accepts a temporary `config.toml`
   override input and isolates those validation runs from caches and Pages
   deployment.
