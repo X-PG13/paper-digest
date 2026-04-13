@@ -884,6 +884,10 @@ def _focus_reason_label(reason: str, *, language: str) -> str:
 
 def _action_reason_label(reason: str, *, language: str) -> str:
     labels = {
+        "snooze_resumed": {
+            "en": "snooze window ended today",
+            "zh": "今天结束搁置，重新回到行动队列",
+        },
         "overdue": {
             "en": "already overdue",
             "zh": "已经逾期",
@@ -911,6 +915,10 @@ def _action_reason_label(reason: str, *, language: str) -> str:
         "recurring_review": {
             "en": "entered its recurring review window",
             "zh": "进入周期性复查窗口",
+        },
+        "recurring_due": {
+            "en": "recurring review is now due",
+            "zh": "周期性复查已经到期",
         },
     }
     return labels.get(reason, {}).get(language, reason)
@@ -957,6 +965,9 @@ def summarize_focus_items(digest: DigestRun) -> str:
 def summarize_action_items(digest: DigestRun) -> str:
     if not digest.action_items:
         return "Actions=0"
+    resumed = sum(
+        1 for item in digest.action_items if "snooze_resumed" in item.reasons
+    )
     overdue = sum(
         1 for item in digest.action_items if "overdue" in item.reasons
     )
@@ -969,7 +980,12 @@ def summarize_action_items(digest: DigestRun) -> str:
     recurring = sum(
         1 for item in digest.action_items if "recurring_review" in item.reasons
     )
+    recurring_due = sum(
+        1 for item in digest.action_items if "recurring_due" in item.reasons
+    )
     parts = [f"Actions={len(digest.action_items)}"]
+    if resumed:
+        parts.append(f"resumed={resumed}")
     if overdue:
         parts.append(f"overdue={overdue}")
     if due_soon:
@@ -978,6 +994,8 @@ def summarize_action_items(digest: DigestRun) -> str:
         parts.append(f"next_action={next_action}")
     if recurring:
         parts.append(f"recurring={recurring}")
+    if recurring_due:
+        parts.append(f"recurring_due={recurring_due}")
     return ", ".join(parts)
 
 

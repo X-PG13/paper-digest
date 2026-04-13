@@ -265,7 +265,11 @@ Example feedback file:
     "doi:10.5555/paper-circle": {
       "status": "star",
       "updated_at": "2026-04-10T09:15:00+08:00",
-      "note": "use this as the anchor paper for next week's review"
+      "note": "use this as the anchor paper for next week's review",
+      "next_action": "compare section 4 with the baseline table",
+      "due_date": "2026-04-18",
+      "snoozed_until": "2026-04-20",
+      "review_interval_days": 14
     },
     "arxiv:2604.00001": "reading",
     "title:example-normalized-title": "done"
@@ -293,6 +297,7 @@ python -m paper_digest feedback interval clear 'doi:10.5555/paper-circle' --conf
 python -m paper_digest feedback clear-note 'doi:10.5555/paper-circle' --config config.toml
 python -m paper_digest feedback sync --direction push --config config.toml
 python -m paper_digest feedback sync --direction pull --config config.toml
+python -m paper_digest feedback sync --direction pull --merge-strategy newer --config config.toml
 python -m paper_digest feedback clear 'doi:10.5555/paper-circle' --config config.toml
 python -m paper_digest feedback list --config config.toml
 ```
@@ -304,6 +309,8 @@ hand-copying JSON:
 python -m paper_digest feedback sync --direction push --config config.toml
 python -m paper_digest feedback sync --direction push --repo X-PG13/paper-digest --secret-name PAPER_DIGEST_FEEDBACK_JSON --config config.toml
 python -m paper_digest feedback sync --direction pull --config config.toml
+python -m paper_digest feedback sync --direction pull --merge-strategy local --config config.toml
+python -m paper_digest feedback sync --direction pull --merge-strategy remote --config config.toml
 ```
 
 Notes:
@@ -313,6 +320,10 @@ Notes:
 - `feedback sync --direction pull` dispatches a short-lived GitHub Actions
   workflow that materializes the current feedback secret into a one-day
   artifact, then downloads it back into your local `feedback.json`.
+- Pull supports `--merge-strategy newer|local|remote`. `newer` prefers the
+  entry with the latest `updated_at`, `local` preserves the current file when
+  both sides define the same paper, and `remote` force-prefers the GitHub
+  secret copy.
 - If `--repo` is omitted, the command derives `owner/repo` from the current git
   `origin` remote.
 - Pulling uses the dedicated
@@ -320,6 +331,11 @@ Notes:
   workflow because GitHub Actions secrets are write-only through the direct API.
 - Because pull temporarily exports the secret into an artifact, use it only on
   repositories and GitHub accounts you trust.
+- When a digest run reaches `snoozed_until`, that paper automatically leaves
+  the snoozed state and can re-enter the active review queue the same day.
+- Recurring review intervals are only reactivated for `star`, `follow_up`, and
+  `reading` papers. `done` entries keep their interval metadata but do not
+  auto-resurface into action reminders.
 
 Analysis notes:
 
@@ -489,12 +505,14 @@ Notes:
   without suppressing the normal digest for other deliveries.
 - `action_statuses = ["star", "follow_up", "reading"]` narrows action
   reminders to specific feedback states for that delivery.
-- `action_reasons = ["overdue", "overdue_7d", "due_soon", "next_action_pending", "recurring_review"]`
+- `action_reasons = ["snooze_resumed", "overdue", "overdue_7d", "due_soon", "next_action_pending", "recurring_review", "recurring_due"]`
   narrows action reminders by why they surfaced.
 - `action_max_items = 2` caps how many action reminders one delivery gets,
   independent of the global `[notify].max_action_items`.
 - `action_overdue_only = true` keeps one delivery focused on overdue work only.
 - `action_due_within_days = 3` keeps one delivery focused on near-term work.
+- `snooze_resumed` marks papers whose `snoozed_until` ends today, and
+  `recurring_due` marks recurring-review items whose interval is now due.
 - Delivery-level action filters only narrow the global action pool; they do not
   widen past what `[notify]` already emitted.
 - `focus_statuses = ["star", "follow_up"]` narrows Focus to specific feedback

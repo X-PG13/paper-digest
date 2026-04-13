@@ -323,7 +323,7 @@ class LoadConfigTests(unittest.TestCase):
                     webhook_url = "https://open.feishu.cn/example"
                     title_prefix = "[Robot]"
                     skip_if_empty = true
-                    action_reasons = ["overdue_7d", "recurring_review"]
+                    action_reasons = ["snooze_resumed", "overdue_7d", "recurring_due"]
                     """
                 ).strip(),
                 encoding="utf-8",
@@ -333,7 +333,7 @@ class LoadConfigTests(unittest.TestCase):
 
         self.assertEqual(
             config.deliveries[0].action_reasons,
-            ["overdue_7d", "recurring_review"],
+            ["snooze_resumed", "overdue_7d", "recurring_due"],
         )
 
     def test_load_config_reads_ranking_settings_and_feed_sort_override(self) -> None:

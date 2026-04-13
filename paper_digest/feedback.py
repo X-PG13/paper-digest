@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from dataclasses import dataclass, replace
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 from .arxiv_client import Paper
 from .config import FeedbackConfig, FeedbackStatus
+
+FeedbackMergeStrategy = Literal["local", "remote", "newer"]
 
 
 @dataclass(slots=True, frozen=True)
@@ -26,6 +28,13 @@ class FeedbackEntry:
 @dataclass(slots=True)
 class FeedbackState:
     papers: dict[str, FeedbackEntry]
+
+
+@dataclass(slots=True, frozen=True)
+class FeedbackAutomation:
+    resumed_from_snooze: frozenset[str]
+    recurring_due: frozenset[str]
+    changed: bool = False
 
 
 def load_feedback(config: FeedbackConfig) -> FeedbackState:
@@ -365,6 +374,71 @@ def list_feedback_entries(
     )
 
 
+def merge_feedback_states(
+    local_state: FeedbackState,
+    remote_state: FeedbackState,
+    *,
+    strategy: FeedbackMergeStrategy,
+) -> FeedbackState:
+    merged: dict[str, FeedbackEntry] = {}
+    for canonical_id in sorted(
+        set(local_state.papers) | set(remote_state.papers)
+    ):
+        local_entry = local_state.papers.get(canonical_id)
+        remote_entry = remote_state.papers.get(canonical_id)
+        if local_entry is None:
+            assert remote_entry is not None
+            merged[canonical_id] = remote_entry
+            continue
+        if remote_entry is None:
+            merged[canonical_id] = local_entry
+            continue
+        merged[canonical_id] = _merge_feedback_entry(
+            local_entry,
+            remote_entry,
+            strategy=strategy,
+        )
+    return FeedbackState(papers=merged)
+
+
+def advance_feedback_state(
+    feedback_state: FeedbackState,
+    *,
+    today: date,
+) -> FeedbackAutomation:
+    resumed_from_snooze: set[str] = set()
+    recurring_due: set[str] = set()
+    changed = False
+    actionable_statuses = {"star", "follow_up", "reading"}
+
+    for canonical_id, entry in list(feedback_state.papers.items()):
+        updated_entry = entry
+        if entry.snoozed_until is not None and entry.snoozed_until <= today:
+            if entry.snoozed_until == today:
+                resumed_from_snooze.add(canonical_id)
+            updated_entry = replace(updated_entry, snoozed_until=None)
+            changed = True
+
+        effective_due_date = _effective_due_date(updated_entry)
+        if (
+            updated_entry.status in actionable_statuses
+            and updated_entry.review_interval_days is not None
+            and updated_entry.due_date is None
+            and effective_due_date is not None
+            and effective_due_date <= today
+        ):
+            recurring_due.add(canonical_id)
+
+        if updated_entry is not entry:
+            feedback_state.papers[canonical_id] = updated_entry
+
+    return FeedbackAutomation(
+        resumed_from_snooze=frozenset(resumed_from_snooze),
+        recurring_due=frozenset(recurring_due),
+        changed=changed,
+    )
+
+
 def normalize_feedback_canonical_id(value: str) -> str:
     normalized = value.strip()
     if not normalized:
@@ -598,6 +672,88 @@ def _serialize_feedback_entry(entry: FeedbackEntry) -> object:
     if entry.review_interval_days is not None:
         payload["review_interval_days"] = entry.review_interval_days
     return payload
+
+
+def _effective_due_date(entry: FeedbackEntry) -> date | None:
+    if entry.due_date is not None:
+        return entry.due_date
+    if entry.review_interval_days is None or entry.updated_at is None:
+        return None
+    return entry.updated_at.date() + timedelta(days=entry.review_interval_days)
+
+
+def _merge_feedback_entry(
+    local_entry: FeedbackEntry,
+    remote_entry: FeedbackEntry,
+    *,
+    strategy: FeedbackMergeStrategy,
+) -> FeedbackEntry:
+    preferred, fallback = _preferred_feedback_entries(
+        local_entry,
+        remote_entry,
+        strategy=strategy,
+    )
+    return FeedbackEntry(
+        status=preferred.status,
+        updated_at=_latest_datetime(local_entry.updated_at, remote_entry.updated_at),
+        note=_merged_optional_value(preferred.note, fallback.note),
+        next_action=_merged_optional_value(
+            preferred.next_action,
+            fallback.next_action,
+        ),
+        due_date=_merged_optional_value(preferred.due_date, fallback.due_date),
+        snoozed_until=_merged_optional_value(
+            preferred.snoozed_until,
+            fallback.snoozed_until,
+        ),
+        review_interval_days=_merged_optional_value(
+            preferred.review_interval_days,
+            fallback.review_interval_days,
+        ),
+    )
+
+
+def _preferred_feedback_entries(
+    local_entry: FeedbackEntry,
+    remote_entry: FeedbackEntry,
+    *,
+    strategy: FeedbackMergeStrategy,
+) -> tuple[FeedbackEntry, FeedbackEntry]:
+    if strategy == "local":
+        return local_entry, remote_entry
+    if strategy == "remote":
+        return remote_entry, local_entry
+    local_updated = local_entry.updated_at
+    remote_updated = remote_entry.updated_at
+    if local_updated is None and remote_updated is None:
+        return local_entry, remote_entry
+    if remote_updated is None:
+        return local_entry, remote_entry
+    if local_updated is None:
+        return remote_entry, local_entry
+    if remote_updated > local_updated:
+        return remote_entry, local_entry
+    return local_entry, remote_entry
+
+
+def _merged_optional_value[T](
+    preferred: T | None,
+    fallback: T | None,
+) -> T | None:
+    if preferred is not None:
+        return preferred
+    return fallback
+
+
+def _latest_datetime(
+    left: datetime | None,
+    right: datetime | None,
+) -> datetime | None:
+    if left is None:
+        return right
+    if right is None:
+        return left
+    return max(left, right)
 
 
 def _coerce_feedback_path(path: object) -> Path:
