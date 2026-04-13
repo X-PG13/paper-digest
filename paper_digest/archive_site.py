@@ -1327,6 +1327,22 @@ def _build_weekly_review_sections(
 
     today = anchor.date()
     actionable_statuses = {"star", "follow_up", "reading"}
+    unfinished = [
+        detail
+        for detail in paper_details
+        if detail.feedback_status in actionable_statuses
+        and not _is_snoozed(detail, today=today)
+    ]
+    unfinished.sort(
+        key=lambda detail: (
+            _effective_feedback_due_date(detail) or date.max,
+            _feedback_stage_priority(detail.feedback_status),
+            -(detail.feedback_updated_at or detail.last_seen).timestamp(),
+            -detail.paper.relevance_score,
+            detail.paper.title.lower(),
+        )
+    )
+
     snoozed = [
         detail
         for detail in paper_details
@@ -1358,35 +1374,19 @@ def _build_weekly_review_sections(
             detail.paper.title.lower(),
         )
     )
-    overdue_ids = {detail.paper.canonical_id for detail in overdue}
 
-    pending = [
+    recurring_resurfaced = [
         detail
-        for detail in paper_details
-        if detail.feedback_status in {"star", "follow_up"}
-        and not _is_snoozed(detail, today=today)
-        and detail.paper.canonical_id not in overdue_ids
-        and _is_same_iso_week(detail.feedback_updated_at or detail.last_seen, anchor)
+        for detail in unfinished
+        if detail.feedback_review_interval_days is not None
+        and (effective_due_date := _effective_feedback_due_date(detail)) is not None
+        and effective_due_date <= today
     ]
-    pending.sort(
+    recurring_resurfaced.sort(
         key=lambda detail: (
-            _feedback_stage_priority(detail.feedback_status),
-            -(detail.feedback_updated_at or detail.last_seen).timestamp(),
-            -detail.paper.relevance_score,
-            detail.paper.title.lower(),
-        )
-    )
-
-    reading = [
-        detail
-        for detail in paper_details
-        if detail.feedback_status == "reading"
-        and not _is_snoozed(detail, today=today)
-        and detail.paper.canonical_id not in overdue_ids
-    ]
-    reading.sort(
-        key=lambda detail: (
-            -(detail.feedback_updated_at or detail.last_seen).timestamp(),
+            _effective_feedback_due_date(detail) or date.max,
+            -detail.active_days,
+            -detail.active_feeds,
             -detail.paper.relevance_score,
             detail.paper.title.lower(),
         )
@@ -1401,21 +1401,19 @@ def _build_weekly_review_sections(
         )
     )
 
-    resurfaced = [
+    long_overdue = [
         detail
-        for detail in paper_details
-        if detail.feedback_status in {"star", "follow_up", "reading"}
-        and not _is_snoozed(detail, today=today)
-        and detail.paper.canonical_id not in overdue_ids
-        and _is_same_iso_week(detail.last_seen, anchor)
-        and (detail.active_days > 1 or detail.active_feeds > 1)
+        for detail in overdue
+        if (
+            effective_due_date := _effective_feedback_due_date(detail)
+        ) is not None
+        and (today - effective_due_date).days >= 1
     ]
-    resurfaced.sort(
+    long_overdue.sort(
         key=lambda detail: (
-            -detail.active_days,
-            -detail.active_feeds,
-            -detail.appearance_count,
-            -detail.last_seen.timestamp(),
+            _effective_feedback_due_date(detail) or date.max,
+            -(detail.active_days),
+            -(detail.appearance_count),
             -detail.paper.relevance_score,
             detail.paper.title.lower(),
         )
@@ -1438,20 +1436,26 @@ def _build_weekly_review_sections(
                 items=snoozed,
             )
         )
-    if pending:
+    if unfinished:
         sections.append(
             WeeklyReviewSection(
-                label="本周新增待处理",
-                description="最近一周新增的标星和待跟进论文，适合作为本周优先处理列表。",
-                items=pending,
+                label="还没处理完的",
+                description=(
+                    "所有仍在 star、follow_up 或 reading 阶段的活跃 "
+                    "backlog，适合作为本周持续推进清单。"
+                ),
+                items=unfinished,
             )
         )
-    if reading:
+    if long_overdue:
         sections.append(
             WeeklyReviewSection(
-                label="正在看",
-                description="已经进入阅读中的论文，适合在周中持续补充笔记或结论。",
-                items=reading,
+                label="已连续逾期的",
+                description=(
+                    "这些论文已经持续逾期，应该从 backlog 里优先清理"
+                    "或重新安排。"
+                ),
+                items=long_overdue,
             )
         )
     if done:
@@ -1462,12 +1466,12 @@ def _build_weekly_review_sections(
                 items=done,
             )
         )
-    if resurfaced:
+    if recurring_resurfaced:
         sections.append(
             WeeklyReviewSection(
-                label="再次提醒",
-                description="本周再次升温的已标记论文，适合作为周会前的二次提醒列表。",
-                items=resurfaced,
+                label="周期复查又回来的",
+                description="这些论文重新进入周期复查窗口，适合在周报里统一回看。",
+                items=recurring_resurfaced,
             )
         )
     return sections
@@ -1804,6 +1808,22 @@ def _render_reading_list_page(paper_details: list[PaperDetail]) -> str:
 def _render_weekly_review_page(paper_details: list[PaperDetail]) -> str:
     reading_list = _build_reading_list(paper_details)
     sections = _build_weekly_review_sections(paper_details)
+    unfinished_count = next(
+        (len(section.items) for section in sections if section.label == "还没处理完的"),
+        0,
+    )
+    overdue_count = next(
+        (len(section.items) for section in sections if section.label == "已连续逾期的"),
+        0,
+    )
+    recurring_count = next(
+        (
+            len(section.items)
+            for section in sections
+            if section.label == "周期复查又回来的"
+        ),
+        0,
+    )
     weekly_blocks = (
         "".join(
             _render_section_block(
@@ -1827,13 +1847,16 @@ def _render_weekly_review_page(paper_details: list[PaperDetail]) -> str:
     )
     stats = [
         ArchiveStats(
-            "待处理",
-            sum(
-                1
-                for item in reading_list
-                if item.feedback_status in {"star", "follow_up"}
-            ),
-            "篇论文",
+            "未完成 backlog",
+            unfinished_count,
+            "篇活跃论文",
+            overdue_count,
+            "篇连续逾期",
+        ),
+        ArchiveStats(
+            "周期复查",
+            recurring_count,
+            "篇重新回归",
             sum(1 for item in reading_list if item.feedback_status == "reading"),
             "篇阅读中",
         ),
@@ -1841,20 +1864,8 @@ def _render_weekly_review_page(paper_details: list[PaperDetail]) -> str:
             "已完成",
             sum(1 for item in paper_details if item.feedback_status == "done"),
             "篇论文",
-            len(sections),
-            "个回顾区块",
-        ),
-        ArchiveStats(
-            "再次提醒",
-            sum(
-                1
-                for item in paper_details
-                if item.feedback_status in {"star", "follow_up", "reading"}
-                and (item.active_days > 1 or item.active_feeds > 1)
-            ),
-            "篇持续升温论文",
             len(reading_list),
-            "篇在读清单",
+            "篇阅读清单",
         ),
     ]
     content = (
@@ -1863,7 +1874,7 @@ def _render_weekly_review_page(paper_details: list[PaperDetail]) -> str:
         + "</section>"
         + _render_section(
             "周度回顾",
-            "按周收口你已经标星或待跟进的论文，适合做周会前的快速回看。",
+            "日级提醒只推新的行动变化，周报则把 backlog、连续逾期和周期复查统一收口。",
             weekly_blocks,
         )
     )
@@ -1872,8 +1883,8 @@ def _render_weekly_review_page(paper_details: list[PaperDetail]) -> str:
         eyebrow="Feedback Review",
         heading="周度回顾",
         description=(
-            "把待处理、正在看、已完成和再次提醒的论文拆开，"
-            "帮助你把阅读清单变成真正可执行的周度研究回顾。"
+            "把还没处理完的 backlog、连续逾期、周期复查回归和已完成论文拆开，"
+            "帮助你把每天的变化提醒沉淀成周度研究推进视图。"
         ),
         hero_links=_render_hero_links(
             [

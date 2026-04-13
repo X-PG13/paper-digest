@@ -107,10 +107,48 @@ class StateTests(unittest.TestCase):
                 retention_days=90,
             )
             state = DigestState(
-                seen_papers={"LLM": {"paper-1": "2026-04-08T09:00:00+00:00"}}
+                seen_papers={"LLM": {"paper-1": "2026-04-08T09:00:00+00:00"}},
+                action_notifications={
+                    "arxiv:2604.06170": {
+                        "due_soon": "2026-04-09T09:30:00+00:00",
+                    }
+                },
             )
 
             save_state(config, state)
             loaded = load_state(config)
 
         self.assertEqual(loaded.seen_papers, state.seen_papers)
+        self.assertEqual(
+            loaded.action_notifications,
+            state.action_notifications,
+        )
+
+    def test_load_state_supports_legacy_payload_without_action_notifications(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config = StateConfig(
+                enabled=True,
+                path=Path(temp_dir) / "state.json",
+                retention_days=90,
+            )
+            config.path.write_text(
+                '{\n'
+                '  "version": 1,\n'
+                '  "feeds": {\n'
+                '    "LLM": {\n'
+                '      "paper-1": "2026-04-08T09:00:00+00:00"\n'
+                "    }\n"
+                "  }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            loaded = load_state(config)
+
+        self.assertEqual(
+            loaded.seen_papers,
+            {"LLM": {"paper-1": "2026-04-08T09:00:00+00:00"}},
+        )
+        self.assertEqual(loaded.action_notifications, {})

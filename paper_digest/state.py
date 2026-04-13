@@ -1,9 +1,9 @@
-"""Persistent state for deduping already-seen papers."""
+"""Persistent state for deduping already-seen papers and action notifications."""
 
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from .arxiv_client import Paper
@@ -13,6 +13,7 @@ from .config import StateConfig
 @dataclass(slots=True)
 class DigestState:
     seen_papers: dict[str, dict[str, str]]
+    action_notifications: dict[str, dict[str, str]] = field(default_factory=dict)
 
 
 def load_state(config: StateConfig) -> DigestState:
@@ -23,6 +24,7 @@ def load_state(config: StateConfig) -> DigestState:
 
     raw = json.loads(config.path.read_text(encoding="utf-8"))
     feeds = raw.get("feeds", {})
+    notifications = raw.get("action_notifications", {})
     if not isinstance(feeds, dict):
         return DigestState(seen_papers={})
 
@@ -34,7 +36,19 @@ def load_state(config: StateConfig) -> DigestState:
                 for paper_id, timestamp in items.items()
                 if isinstance(paper_id, str) and isinstance(timestamp, str)
             }
-    return DigestState(seen_papers=normalized)
+    normalized_notifications: dict[str, dict[str, str]] = {}
+    if isinstance(notifications, dict):
+        for canonical_id, reasons in notifications.items():
+            if isinstance(canonical_id, str) and isinstance(reasons, dict):
+                normalized_notifications[canonical_id] = {
+                    reason: timestamp
+                    for reason, timestamp in reasons.items()
+                    if isinstance(reason, str) and isinstance(timestamp, str)
+                }
+    return DigestState(
+        seen_papers=normalized,
+        action_notifications=normalized_notifications,
+    )
 
 
 def dedupe_papers(
@@ -74,8 +88,9 @@ def save_state(config: StateConfig, state: DigestState) -> None:
 
     config.path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "version": 1,
+        "version": 2,
         "feeds": state.seen_papers,
+        "action_notifications": state.action_notifications,
     }
     config.path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2),

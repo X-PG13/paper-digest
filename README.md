@@ -215,7 +215,8 @@ hide_ignored = true
 - The archive site exposes a dedicated `output/site/reading-list.html` page
   that aggregates starred, follow-up, and in-progress papers.
 - The archive site also exposes `output/site/weekly-review.html`, which groups
-  papers into pending, in-progress, completed, and resurfaced buckets.
+  papers into unfinished backlog, continuously overdue work, recurring-review
+  returns, snoozed items, and completed work.
 - The archive site exposes `output/site/review-queue.html`, which highlights
   overdue items, papers due within 3 days, queued next actions, newly surfaced
   unmarked papers, and resurfaced follow-ups.
@@ -246,8 +247,9 @@ action_overdue_only = false
   `star` / `follow_up` status, and surface coverage context such as active days,
   feed span, and appearance count.
 - Daily digests now also include a dedicated "本周该处理什么" section for
-  overdue items, papers due within 3 days, and queued next actions on
-  `star` / `follow_up` / `reading` papers.
+  newly changed action states such as snooze resumes, first `due_soon`
+  entries, overdue escalations, and recurring reviews that are now due, while
+  the weekly review page keeps the longer backlog.
 - `max_action_items` caps how many action reminders get rendered into one run.
 - `action_overdue_only = true` narrows action reminders to already overdue
   items.
