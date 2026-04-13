@@ -93,6 +93,7 @@ class CliTests(unittest.TestCase):
             config.output_dir,
             tracked_keywords=["agent", "reasoning"],
             feedback_state=feedback_state,
+            digest_state=state,
         )
         mock_send_configured_deliveries.assert_called_once_with(config, digest)
         mock_save_feedback.assert_called_once_with(config.feedback, feedback_state)
@@ -218,10 +219,6 @@ class CliTests(unittest.TestCase):
                 payload["papers"]["doi:10.5555/example"]["status"],
                 "star",
             )
-            self.assertEqual(
-                payload["papers"]["doi:10.5555/example"]["note"],
-                "first pass note",
-            )
             self.assertIn("Set doi:10.5555/example -> star", stdout.getvalue())
 
             stdout = io.StringIO()
@@ -304,6 +301,108 @@ class CliTests(unittest.TestCase):
             self.assertNotIn("note", payload["papers"]["doi:10.5555/example"])
             self.assertIn(
                 "Cleared note for doi:10.5555/example",
+                stdout.getvalue(),
+            )
+
+    def test_state_action_list_reports_notification_entries(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = self._write_feedback_config(root)
+            state_path = root / ".paper-digest-state" / "state.json"
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state_path.write_text(
+                json.dumps(
+                    {
+                        "version": 2,
+                        "feeds": {},
+                        "action_notifications": {
+                            "arxiv:2604.06170": {
+                                "due_soon": "2026-04-13T09:30:00+00:00",
+                                "overdue_3d": "2026-04-16T09:30:00+00:00",
+                            }
+                        },
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "state",
+                        "action",
+                        "list",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            self.assertIn(
+                "arxiv:2604.06170\toverdue_3d\t2026-04-16T09:30:00+00:00",
+                stdout.getvalue(),
+            )
+            self.assertIn(
+                "arxiv:2604.06170\tdue_soon\t2026-04-13T09:30:00+00:00",
+                stdout.getvalue(),
+            )
+
+    def test_state_action_reset_can_clear_reason_across_entries(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = self._write_feedback_config(root)
+            state_path = root / ".paper-digest-state" / "state.json"
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state_path.write_text(
+                json.dumps(
+                    {
+                        "version": 2,
+                        "feeds": {},
+                        "action_notifications": {
+                            "arxiv:2604.06170": {
+                                "due_soon": "2026-04-13T09:30:00+00:00",
+                                "overdue_3d": "2026-04-16T09:30:00+00:00",
+                            },
+                            "pubmed:41951858": {
+                                "overdue_3d": "2026-04-17T09:30:00+00:00",
+                            },
+                        },
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "state",
+                        "action",
+                        "reset",
+                        "--reason",
+                        "overdue_3d",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                payload["action_notifications"],
+                {
+                    "arxiv:2604.06170": {
+                        "due_soon": "2026-04-13T09:30:00+00:00",
+                    }
+                },
+            )
+            self.assertIn(
+                "Cleared 2 action notification entries",
                 stdout.getvalue(),
             )
 

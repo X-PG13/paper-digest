@@ -223,6 +223,9 @@ hide_ignored = true
 - Paper detail pages, reading lists, weekly review sections, review queues, and
   Focus outputs all surface those feedback notes, next actions, and due dates
   once they are present.
+- Canonical detail pages also show the most recent remembered action
+  notifications, so you can tell which reasons have already been sent and why
+  a paper may be absent from today's `Action Brief`.
 
 Notification focus:
 
@@ -315,6 +318,9 @@ python -m paper_digest feedback sync --direction pull --merge-strategy local --c
 python -m paper_digest feedback sync --direction pull --merge-strategy remote --config config.toml
 python -m paper_digest feedback sync --direction pull --dry-run --show-diff --config config.toml
 python -m paper_digest feedback sync --direction push --dry-run --show-diff --config config.toml
+python -m paper_digest state action list --config config.toml
+python -m paper_digest state action reset 'doi:10.5555/paper-circle' --config config.toml
+python -m paper_digest state action reset --reason overdue_3d --config config.toml
 ```
 
 Notes:
@@ -333,6 +339,10 @@ Notes:
 - `--show-diff` prints a field-level diff so you can inspect changes to
   `status`, `note`, `next_action`, `due_date`, `snoozed_until`,
   `review_interval_days`, and `updated_at` before you apply them.
+- `state action list` shows the remembered `canonical_id + reason` entries
+  that currently suppress repeated action reminders.
+- `state action reset` re-arms action notifications for one paper or one
+  reason code without requiring a manual edit to the persisted state file.
 - Push previews fetch the current remote feedback state through the same
   short-lived pull workflow, so `feedback sync --direction push --dry-run`
   shows what the secret would change to before it is overwritten.

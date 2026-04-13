@@ -16,6 +16,13 @@ class DigestState:
     action_notifications: dict[str, dict[str, str]] = field(default_factory=dict)
 
 
+@dataclass(slots=True, frozen=True)
+class ActionNotificationRecord:
+    canonical_id: str
+    reason: str
+    notified_at: datetime
+
+
 def load_state(config: StateConfig) -> DigestState:
     """Load state from disk if enabled, otherwise return an empty state."""
 
@@ -96,6 +103,70 @@ def save_state(config: StateConfig, state: DigestState) -> None:
         json.dumps(payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+
+def list_action_notifications(
+    state: DigestState,
+    *,
+    canonical_id: str | None = None,
+) -> list[ActionNotificationRecord]:
+    records: list[ActionNotificationRecord] = []
+    for current_id, reasons in state.action_notifications.items():
+        if canonical_id is not None and current_id != canonical_id:
+            continue
+        for reason, notified_at in reasons.items():
+            records.append(
+                ActionNotificationRecord(
+                    canonical_id=current_id,
+                    reason=reason,
+                    notified_at=_parse_state_datetime(notified_at),
+                )
+            )
+    return sorted(
+        records,
+        key=lambda record: (
+            -record.notified_at.timestamp(),
+            record.canonical_id,
+            record.reason,
+        ),
+    )
+
+
+def clear_action_notifications(
+    state: DigestState,
+    *,
+    canonical_id: str | None = None,
+    reason: str | None = None,
+) -> int:
+    if canonical_id is None and reason is None:
+        raise ValueError("canonical_id or reason must be provided")
+
+    cleared = 0
+    if canonical_id is not None:
+        reasons = state.action_notifications.get(canonical_id)
+        if reasons is None:
+            return 0
+        if reason is None:
+            cleared = len(reasons)
+            state.action_notifications.pop(canonical_id, None)
+            return cleared
+        if reason in reasons:
+            del reasons[reason]
+            cleared = 1
+        if not reasons:
+            state.action_notifications.pop(canonical_id, None)
+        return cleared
+
+    assert reason is not None
+    for current_id in list(state.action_notifications):
+        reasons = state.action_notifications[current_id]
+        if reason not in reasons:
+            continue
+        del reasons[reason]
+        cleared += 1
+        if not reasons:
+            del state.action_notifications[current_id]
+    return cleared
 
 
 def _prune_feed_state(feed_state: dict[str, str], cutoff: datetime) -> None:

@@ -7,7 +7,14 @@ from tempfile import TemporaryDirectory
 
 from paper_digest.arxiv_client import Paper
 from paper_digest.config import StateConfig
-from paper_digest.state import DigestState, dedupe_papers, load_state, save_state
+from paper_digest.state import (
+    DigestState,
+    clear_action_notifications,
+    dedupe_papers,
+    list_action_notifications,
+    load_state,
+    save_state,
+)
 
 
 def build_paper(
@@ -152,3 +159,54 @@ class StateTests(unittest.TestCase):
             {"LLM": {"paper-1": "2026-04-08T09:00:00+00:00"}},
         )
         self.assertEqual(loaded.action_notifications, {})
+
+    def test_list_action_notifications_sorts_latest_first(self) -> None:
+        state = DigestState(
+            seen_papers={},
+            action_notifications={
+                "arxiv:2604.06170": {
+                    "due_soon": "2026-04-09T09:00:00+00:00",
+                    "overdue_3d": "2026-04-12T09:00:00+00:00",
+                },
+                "pubmed:41951858": {
+                    "overdue_1d": "2026-04-11T09:00:00+00:00",
+                },
+            },
+        )
+
+        records = list_action_notifications(state)
+
+        self.assertEqual(
+            [(record.canonical_id, record.reason) for record in records],
+            [
+                ("arxiv:2604.06170", "overdue_3d"),
+                ("pubmed:41951858", "overdue_1d"),
+                ("arxiv:2604.06170", "due_soon"),
+            ],
+        )
+
+    def test_clear_action_notifications_can_reset_by_reason(self) -> None:
+        state = DigestState(
+            seen_papers={},
+            action_notifications={
+                "arxiv:2604.06170": {
+                    "due_soon": "2026-04-09T09:00:00+00:00",
+                    "overdue_3d": "2026-04-12T09:00:00+00:00",
+                },
+                "pubmed:41951858": {
+                    "overdue_3d": "2026-04-11T09:00:00+00:00",
+                },
+            },
+        )
+
+        cleared = clear_action_notifications(state, reason="overdue_3d")
+
+        self.assertEqual(cleared, 2)
+        self.assertEqual(
+            state.action_notifications,
+            {
+                "arxiv:2604.06170": {
+                    "due_soon": "2026-04-09T09:00:00+00:00",
+                }
+            },
+        )

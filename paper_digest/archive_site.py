@@ -23,6 +23,7 @@ from .feedback import (
     feedback_label_zh,
     feedback_snooze_command_snippet,
 )
+from .state import ActionNotificationRecord, DigestState, list_action_notifications
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -190,6 +191,7 @@ class PaperDetail:
     feedback_due_date: date | None
     feedback_snoozed_until: date | None
     feedback_review_interval_days: int | None
+    action_notifications: list[ActionNotificationRecord]
     related_papers: list[RelatedPaper]
 
 
@@ -205,6 +207,7 @@ def build_archive_site(
     *,
     tracked_keywords: Sequence[str] = (),
     feedback_state: FeedbackState | None = None,
+    digest_state: DigestState | None = None,
 ) -> Path:
     """Build a static multi-page archive under ``output_dir / 'site'``."""
 
@@ -227,6 +230,7 @@ def build_archive_site(
         archives,
         tracked_keywords,
         feedback_state=feedback_state,
+        digest_state=digest_state,
     )
 
     _copy_latest_files(output_dir, site_root)
@@ -650,6 +654,7 @@ def _build_paper_details(
     tracked_keywords: Sequence[str],
     *,
     feedback_state: FeedbackState | None,
+    digest_state: DigestState | None,
 ) -> list[PaperDetail]:
     occurrences_by_id: dict[
         str,
@@ -737,6 +742,10 @@ def _build_paper_details(
                 representative.feedback_review_interval_days,
                 feedback_state,
             ),
+            action_notifications=_resolve_action_notifications(
+                canonical_id,
+                digest_state,
+            ),
             related_papers=[],
         )
 
@@ -762,6 +771,7 @@ def _build_paper_details(
             feedback_due_date=detail.feedback_due_date,
             feedback_snoozed_until=detail.feedback_snoozed_until,
             feedback_review_interval_days=detail.feedback_review_interval_days,
+            action_notifications=detail.action_notifications,
             related_papers=related,
         )
 
@@ -2024,6 +2034,10 @@ def _render_paper_page(detail: PaperDetail) -> str:
                     "命中原因",
                     paper.reason_summary or "未记录",
                 )
+                + _render_meta_block(
+                    "最近行动提醒",
+                    _action_notification_summary(detail.action_notifications),
+                )
                 + "</div>"
             ),
         )
@@ -2080,6 +2094,14 @@ def _render_paper_page(detail: PaperDetail) -> str:
             "反馈操作",
             "复制规范主键或本地 CLI 命令，把这篇论文快速加入个人反馈状态文件。",
             _render_feedback_actions(detail),
+        )
+        + _render_section(
+            "行动提醒状态",
+            (
+                "这里记录这篇论文最近已经触发过哪些 action reason，"
+                "便于解释为什么今天没有再次提醒。"
+            ),
+            _render_action_notification_history(detail.action_notifications),
         )
         + _render_section(
             "来源与外链",
@@ -2181,6 +2203,10 @@ def _render_feedback_actions(detail: PaperDetail) -> str:
     due_command = feedback_due_command_snippet(canonical_id)
     snooze_command = feedback_snooze_command_snippet(canonical_id)
     interval_command = feedback_interval_command_snippet(canonical_id)
+    action_state_reset_command = (
+        "python -m paper_digest state action reset "
+        f"'{canonical_id}' --config config.toml"
+    )
     buttons = [
         ("复制 canonical_id", canonical_id),
         ("复制标星命令", feedback_command_snippet(canonical_id, "star")),
@@ -2196,6 +2222,7 @@ def _render_feedback_actions(detail: PaperDetail) -> str:
         ("复制到期命令", due_command),
         ("复制搁置命令", snooze_command),
         ("复制复查周期命令", interval_command),
+        ("复制重置 Action 通知命令", action_state_reset_command),
     ]
     return (
         '<div class="chip-cloud">'
@@ -2232,6 +2259,63 @@ def _render_copy_script() -> str:
   });
 </script>
 """
+
+
+def _render_action_notification_history(
+    notifications: list[ActionNotificationRecord],
+) -> str:
+    if not notifications:
+        return (
+            '<div class="empty">'
+            "当前还没有记录过 action 提醒。"
+            "</div>"
+        )
+    return (
+        '<div class="subscription-grid">'
+        + "".join(
+            (
+                '<article class="resource-card">'
+                '<p class="resource-kicker">Action Notification</p>'
+                '<h3 class="resource-title">'
+                f"{escape(_action_notification_reason_label(item.reason))}"
+                "</h3>"
+                f'<p class="resource-copy">reason code: {escape(item.reason)}</p>'
+                '<div class="resource-meta">'
+                f"<span>最近通知：{escape(_format_seen_label(item.notified_at))}</span>"
+                "</div>"
+                "</article>"
+            )
+            for item in notifications
+        )
+        + "</div>"
+    )
+
+
+def _action_notification_summary(
+    notifications: list[ActionNotificationRecord],
+) -> str:
+    if not notifications:
+        return "未记录"
+    return "；".join(
+        (
+            f"{_action_notification_reason_label(item.reason)}"
+            f"（{_format_seen_label(item.notified_at)}）"
+        )
+        for item in notifications[:3]
+    )
+
+
+def _action_notification_reason_label(reason: str) -> str:
+    labels = {
+        "snooze_resumed": "今天结束搁置",
+        "due_soon": "首次进入 3 天内到期",
+        "overdue": "首次进入逾期",
+        "overdue_1d": "已逾期至少 1 天",
+        "overdue_3d": "已逾期至少 3 天",
+        "overdue_7d": "已逾期至少 7 天",
+        "recurring_due": "周期复查到期",
+    }
+    return labels.get(reason, reason)
 
 
 def _render_feed_rss(overview: FeedOverview, archives: list[DayArchive]) -> str:
@@ -3820,6 +3904,15 @@ def _resolve_feedback_review_interval_days(
         if entry is not None and entry.review_interval_days is not None:
             return entry.review_interval_days
     return archived_review_interval_days
+
+
+def _resolve_action_notifications(
+    canonical_id: str,
+    digest_state: DigestState | None,
+) -> list[ActionNotificationRecord]:
+    if digest_state is None:
+        return []
+    return list_action_notifications(digest_state, canonical_id=canonical_id)
 
 
 def _effective_feedback_due_date(detail: PaperDetail) -> date | None:
