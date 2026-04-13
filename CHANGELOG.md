@@ -49,12 +49,10 @@ Versioning.
   or run as an action-only reminder channel.
 - Deliveries can now further narrow action reminders by feedback status,
   trigger reason, due window, overdue-only mode, and per-channel item caps.
-- The feedback CLI now supports `sync-github-secret`, so local feedback state
-  can be pushed into `PAPER_DIGEST_FEEDBACK_JSON` without hand-copying JSON.
-- Feedback-state GitHub sync is now bidirectional: the CLI supports
-  `feedback pull-github-secret` plus `feedback sync --direction push|pull`, and
-  a dedicated workflow can export the current feedback secret into a temporary
-  artifact for local restore.
+- Feedback-state GitHub sync now uses a single CLI entrypoint:
+  `feedback sync --direction push|pull`. Push writes the local feedback state
+  into `PAPER_DIGEST_FEEDBACK_JSON`, and pull restores it locally through a
+  dedicated short-lived export workflow.
 - Feedback entries now also support `snoozed_until` and
   `review_interval_days`, with CLI support, recurring-review due dates,
   overdue escalation tiers, and archive views that hide snoozed items from the

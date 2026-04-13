@@ -281,16 +281,6 @@ def build_feedback_parser() -> ArgumentParser:
         default="push",
         help="Sync direction. Push writes the local file; pull restores it locally.",
     )
-    subparsers.add_parser(
-        "sync-github-secret",
-        help="Legacy alias for 'feedback sync --direction push'.",
-        parents=[common, sync_common],
-    )
-    subparsers.add_parser(
-        "pull-github-secret",
-        help="Legacy alias for 'feedback sync --direction pull'.",
-        parents=[common, sync_common],
-    )
     return parser
 
 
@@ -593,13 +583,9 @@ def _main_feedback(argv: Sequence[str]) -> int:
                     f"{args.canonical_id.strip()} in {feedback_path}"
                 )
             return 0
-        if args.feedback_command in {
-            "sync-github-secret",
-            "pull-github-secret",
-            "sync",
-        }:
+        if args.feedback_command == "sync":
             save_feedback(config.feedback, feedback_state)
-            direction = _feedback_sync_direction(args)
+            direction = str(args.direction)
             sync_cwd = Path(args.config).resolve().parent
             if direction == "push":
                 repo = sync_feedback_to_github_secret(
@@ -675,15 +661,6 @@ def _tracked_keywords(config: object) -> list[str]:
             seen.add(normalized)
             keywords.append(stripped)
     return keywords
-
-
-def _feedback_sync_direction(args: object) -> str:
-    command = getattr(args, "feedback_command", "")
-    if command == "sync-github-secret":
-        return "push"
-    if command == "pull-github-secret":
-        return "pull"
-    return str(getattr(args, "direction", "push"))
 
 
 if __name__ == "__main__":
