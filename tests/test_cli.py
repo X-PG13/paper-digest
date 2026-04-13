@@ -13,7 +13,7 @@ from paper_digest.cli import main
 from paper_digest.config import AppConfig, FeedConfig, StateConfig
 from paper_digest.delivery import DeliveryError
 from paper_digest.digest import DigestRun, FeedDigest
-from paper_digest.feedback import FeedbackState
+from paper_digest.feedback import FeedbackEntry, FeedbackState
 from paper_digest.state import DigestState
 
 
@@ -599,4 +599,142 @@ class CliTests(unittest.TestCase):
         self.assertIn(
             "GitHub Actions secret PAPER_DIGEST_FEEDBACK_JSON for X-PG13/paper-digest",
             stdout.getvalue(),
+        )
+
+    @patch("paper_digest.cli.pull_feedback_from_github_secret")
+    def test_feedback_pull_github_secret_restores_local_feedback_file(
+        self,
+        mock_pull_feedback_from_github_secret,
+    ) -> None:
+        mock_pull_feedback_from_github_secret.return_value = (
+            self._feedback_pull_result()
+        )
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = self._write_feedback_config(root)
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "feedback",
+                        "pull-github-secret",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+
+            feedback_path = root / ".paper-digest-state" / "feedback.json"
+            payload = json.loads(feedback_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(
+            payload["papers"]["doi:10.5555/example"]["status"],
+            "reading",
+        )
+        self.assertEqual(
+            payload["papers"]["doi:10.5555/example"]["note"],
+            "pulled from GitHub",
+        )
+        self.assertIn(
+            "Pulled GitHub Actions secret PAPER_DIGEST_FEEDBACK_JSON for "
+            "X-PG13/paper-digest",
+            stdout.getvalue(),
+        )
+
+    @patch("paper_digest.cli.sync_feedback_to_github_secret")
+    def test_feedback_sync_direction_push_matches_legacy_push_command(
+        self,
+        mock_sync_feedback_to_github_secret,
+    ) -> None:
+        mock_sync_feedback_to_github_secret.return_value = "X-PG13/paper-digest"
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = self._write_feedback_config(root)
+
+            main(
+                [
+                    "feedback",
+                    "set",
+                    "doi:10.5555/example",
+                    "star",
+                    "--config",
+                    str(config_path),
+                ]
+            )
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "feedback",
+                        "sync",
+                        "--direction",
+                        "push",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn(
+            "Synced",
+            stdout.getvalue(),
+        )
+
+    @patch("paper_digest.cli.pull_feedback_from_github_secret")
+    def test_feedback_sync_direction_pull_matches_legacy_pull_command(
+        self,
+        mock_pull_feedback_from_github_secret,
+    ) -> None:
+        mock_pull_feedback_from_github_secret.return_value = (
+            self._feedback_pull_result()
+        )
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = self._write_feedback_config(root)
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "feedback",
+                        "sync",
+                        "--direction",
+                        "pull",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+
+            feedback_path = root / ".paper-digest-state" / "feedback.json"
+            payload = json.loads(feedback_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(
+            payload["papers"]["doi:10.5555/example"]["status"],
+            "reading",
+        )
+        self.assertIn(
+            "Pulled GitHub Actions secret PAPER_DIGEST_FEEDBACK_JSON for "
+            "X-PG13/paper-digest",
+            stdout.getvalue(),
+        )
+
+    def _feedback_pull_result(self):
+        from paper_digest.github_feedback import GitHubFeedbackPullResult
+
+        return GitHubFeedbackPullResult(
+            repository="X-PG13/paper-digest",
+            run_id="123456789",
+            run_url="https://github.com/X-PG13/paper-digest/actions/runs/123456789",
+            feedback_state=FeedbackState(
+                papers={
+                    "doi:10.5555/example": FeedbackEntry(
+                        status="reading",
+                        updated_at=datetime(2026, 4, 12, 10, 0, tzinfo=UTC),
+                        note="pulled from GitHub",
+                    )
+                }
+            ),
         )

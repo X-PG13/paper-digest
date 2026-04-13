@@ -292,25 +292,41 @@ python -m paper_digest feedback snooze clear 'doi:10.5555/paper-circle' --config
 python -m paper_digest feedback interval clear 'doi:10.5555/paper-circle' --config config.toml
 python -m paper_digest feedback clear-note 'doi:10.5555/paper-circle' --config config.toml
 python -m paper_digest feedback sync-github-secret --config config.toml
+python -m paper_digest feedback pull-github-secret --config config.toml
+python -m paper_digest feedback sync --direction push --config config.toml
+python -m paper_digest feedback sync --direction pull --config config.toml
 python -m paper_digest feedback clear 'doi:10.5555/paper-circle' --config config.toml
 python -m paper_digest feedback list --config config.toml
 ```
 
-To sync your local feedback state into GitHub Actions without hand-copying JSON:
+To sync your local feedback state into or back out of GitHub Actions without
+hand-copying JSON:
 
 ```bash
 python -m paper_digest feedback sync-github-secret --config config.toml
 python -m paper_digest feedback sync-github-secret --repo X-PG13/paper-digest --secret-name PAPER_DIGEST_FEEDBACK_JSON --config config.toml
+python -m paper_digest feedback pull-github-secret --config config.toml
+python -m paper_digest feedback sync --direction push --config config.toml
+python -m paper_digest feedback sync --direction pull --config config.toml
 ```
 
 Notes:
 
 - `feedback sync-github-secret` writes the current local feedback payload into a
   GitHub Actions repository secret by calling `gh secret set`.
+- `feedback pull-github-secret` dispatches a short-lived GitHub Actions workflow
+  that materializes the current feedback secret into a one-day artifact, then
+  downloads it back into your local `feedback.json`.
+- `feedback sync --direction push|pull` wraps the same behavior behind one
+  directional command. The legacy `sync-github-secret` and
+  `pull-github-secret` commands remain available as aliases.
 - If `--repo` is omitted, the command derives `owner/repo` from the current git
   `origin` remote.
-- Pulling the secret value back from GitHub is intentionally not supported
-  because GitHub Actions secrets are write-only.
+- Pulling uses the dedicated
+  [`feedback-secret-sync.yml`](./.github/workflows/feedback-secret-sync.yml)
+  workflow because GitHub Actions secrets are write-only through the direct API.
+- Because pull temporarily exports the secret into an artifact, use it only on
+  repositories and GitHub accounts you trust.
 
 Analysis notes:
 
@@ -604,6 +620,12 @@ Feedback-state precedence for scheduled and manual runs is:
 1. `feedback_json_override`
 2. `PAPER_DIGEST_FEEDBACK_JSON`
 3. cached `.paper-digest-state/feedback.json`
+
+For bidirectional local sync, the repository also includes
+[`feedback-secret-sync.yml`](./.github/workflows/feedback-secret-sync.yml),
+which exports the configured feedback secret into a short-lived artifact for
+`paper_digest feedback pull-github-secret` and
+`paper_digest feedback sync --direction pull`.
 
 It also restores and saves `output/` history through the GitHub Actions cache.
 That keeps dated digest folders alive across runs, so feed pages, keyword pages,
