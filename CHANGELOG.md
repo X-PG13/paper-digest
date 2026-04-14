@@ -79,6 +79,10 @@ Versioning.
 - `state action reset` now supports `--dry-run`, `--show-match`, and
   `--before YYYY-MM-DD`, so action-notification re-arms can be previewed and
   narrowed to stale entries before the state file is mutated.
+- Remembered action-notification state now supports
+  `state action sync --direction push|pull`, plus `--dry-run` and
+  `--show-diff`, so local `state action reset` operations can preview and sync
+  the exact suppression snapshot used by GitHub Actions runs.
 - Action reminders now only emit newly changed action states such as snooze
   resumes, first due-soon transitions, overdue escalations, and recurring
   reviews that have actually come due; notified action reasons are persisted in

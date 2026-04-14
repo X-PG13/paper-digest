@@ -42,6 +42,13 @@ from .feedback import (
     set_feedback_status,
     summarize_feedback_diff,
 )
+from .github_action_state import (
+    DEFAULT_ACTION_STATE_SYNC_ARTIFACT,
+    DEFAULT_ACTION_STATE_SYNC_WORKFLOW,
+    GitHubActionStateSyncError,
+    pull_action_notifications_from_github_actions,
+    sync_action_notifications_to_github_actions,
+)
 from .github_feedback import (
     DEFAULT_FEEDBACK_SECRET_NAME,
     GitHubFeedbackSyncError,
@@ -53,10 +60,14 @@ from .pubmed_client import PubMedClientError
 from .semantic_scholar_client import SemanticScholarClientError
 from .service import generate_digest
 from .state import (
+    ActionNotificationDiff,
     clear_action_notifications,
+    diff_action_notifications,
     list_action_notifications,
     load_state,
+    render_action_notification_diff,
     save_state,
+    summarize_action_notification_diff,
 )
 
 
@@ -125,6 +136,45 @@ def build_state_parser() -> ArgumentParser:
         "--show-match",
         action="store_true",
         help="Print matching canonical_id/reason/notified_at rows before reset.",
+    )
+    action_sync_common = ArgumentParser(add_help=False)
+    action_sync_common.add_argument(
+        "--repo",
+        help="Optional owner/repo override. Defaults to the current git origin remote.",
+    )
+    action_sync_common.add_argument(
+        "--workflow-file",
+        default=DEFAULT_ACTION_STATE_SYNC_WORKFLOW,
+        help="GitHub Actions workflow file used for action state sync.",
+    )
+    action_sync_common.add_argument(
+        "--artifact-name",
+        default=DEFAULT_ACTION_STATE_SYNC_ARTIFACT,
+        help="Artifact name produced by the action state sync workflow.",
+    )
+    action_sync_parser = action_subparsers.add_parser(
+        "sync",
+        help="Push or pull remembered action notifications through GitHub Actions.",
+        parents=[common, action_sync_common],
+    )
+    action_sync_parser.add_argument(
+        "--direction",
+        choices=["push", "pull"],
+        default="push",
+        help=(
+            "Sync direction. Push writes the local action state; "
+            "pull restores it locally."
+        ),
+    )
+    action_sync_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview the sync result without writing local or remote action state.",
+    )
+    action_sync_parser.add_argument(
+        "--show-diff",
+        action="store_true",
+        help="Print a reason-level diff for the sync result before writing.",
     )
     return parser
 
@@ -822,6 +872,92 @@ def _main_state(argv: Sequence[str]) -> int:
         state = load_state(config.state)
         state_path = Path(config.state.path).resolve()
         if args.state_command == "action":
+            if args.state_action_command == "sync":
+                direction = str(args.direction)
+                sync_cwd = Path(args.config).resolve().parent
+                preview_requested = bool(args.dry_run or args.show_diff)
+                if direction == "push":
+                    remote_snapshot = None
+                    if preview_requested:
+                        try:
+                            remote_snapshot = (
+                                pull_action_notifications_from_github_actions(
+                                    cwd=sync_cwd,
+                                    repo=args.repo,
+                                    workflow_file=args.workflow_file,
+                                    artifact_name=args.artifact_name,
+                                )
+                            )
+                        except GitHubActionStateSyncError as exc:
+                            if args.dry_run:
+                                print(f"Error: {exc}", file=sys.stderr)
+                                return 1
+                            print(
+                                "Warning: could not fetch remote action state preview: "
+                                f"{exc}",
+                                file=sys.stderr,
+                            )
+                    if remote_snapshot is not None:
+                        diff = diff_action_notifications(
+                            remote_snapshot.action_notifications,
+                            state.action_notifications,
+                        )
+                        _print_action_state_sync_preview(
+                            direction="push",
+                            state_path=state_path,
+                            repository=remote_snapshot.repository,
+                            diff=diff,
+                            show_diff=bool(args.show_diff),
+                            run_id=remote_snapshot.run_id,
+                            dry_run=bool(args.dry_run),
+                        )
+                        if args.dry_run:
+                            return 0
+                    elif args.dry_run:
+                        return 1
+
+                    push_result = sync_action_notifications_to_github_actions(
+                        state.action_notifications,
+                        cwd=sync_cwd,
+                        repo=args.repo,
+                        workflow_file=args.workflow_file,
+                        artifact_name=args.artifact_name,
+                    )
+                    print(
+                        f"Synced action notifications from {state_path} to "
+                        f"{push_result.repository} (run {push_result.run_id})"
+                    )
+                    return 0
+
+                pull_result = pull_action_notifications_from_github_actions(
+                    cwd=sync_cwd,
+                    repo=args.repo,
+                    workflow_file=args.workflow_file,
+                    artifact_name=args.artifact_name,
+                )
+                diff = diff_action_notifications(
+                    state.action_notifications,
+                    pull_result.action_notifications,
+                )
+                if preview_requested:
+                    _print_action_state_sync_preview(
+                        direction="pull",
+                        state_path=state_path,
+                        repository=pull_result.repository,
+                        diff=diff,
+                        show_diff=bool(args.show_diff),
+                        run_id=pull_result.run_id,
+                        dry_run=bool(args.dry_run),
+                    )
+                    if args.dry_run:
+                        return 0
+                state.action_notifications = pull_result.action_notifications
+                save_state(config.state, state)
+                print(
+                    f"Pulled action notifications from {pull_result.repository} "
+                    f"into {state_path} (run {pull_result.run_id})"
+                )
+                return 0
             if args.state_action_command == "list":
                 canonical_id = (
                     normalize_feedback_canonical_id(args.canonical_id)
@@ -915,7 +1051,7 @@ def _main_state(argv: Sequence[str]) -> int:
                     f"{reason_suffix} in {state_path}"
                 )
             return 0
-    except ConfigError as exc:
+    except (ConfigError, GitHubActionStateSyncError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     return 0
@@ -950,6 +1086,34 @@ def _print_feedback_sync_preview(
     print(f"Diff summary: {summarize_feedback_diff(diff)}")
     if show_diff:
         for line in render_feedback_diff(diff):
+            print(line)
+
+
+def _print_action_state_sync_preview(
+    *,
+    direction: str,
+    state_path: Path,
+    repository: str,
+    diff: ActionNotificationDiff,
+    show_diff: bool,
+    run_id: str | None,
+    dry_run: bool,
+) -> None:
+    prefix = "Dry run" if dry_run else "Preview"
+    run_label = f" (run {run_id})" if run_id is not None else ""
+    if direction == "push":
+        print(
+            f"{prefix}: would sync action notifications from {state_path} to "
+            f"{repository}{run_label}"
+        )
+    else:
+        print(
+            f"{prefix}: would pull action notifications from {repository} into "
+            f"{state_path}{run_label}"
+        )
+    print(f"Diff summary: {summarize_action_notification_diff(diff)}")
+    if show_diff:
+        for line in render_action_notification_diff(diff):
             print(line)
 
 

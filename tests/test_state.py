@@ -11,9 +11,14 @@ from paper_digest.state import (
     DigestState,
     clear_action_notifications,
     dedupe_papers,
+    diff_action_notifications,
     list_action_notifications,
     load_state,
+    parse_action_notifications_payload,
+    render_action_notification_diff,
     save_state,
+    serialize_action_notifications,
+    summarize_action_notification_diff,
 )
 
 
@@ -269,4 +274,47 @@ class StateTests(unittest.TestCase):
                     "due_soon": "2026-04-15T09:00:00+00:00",
                 },
             },
+        )
+
+    def test_action_notification_payload_round_trip(self) -> None:
+        action_notifications = {
+            "arxiv:2604.06170": {
+                "due_soon": "2026-04-13T09:30:00+00:00",
+            }
+        }
+
+        payload = serialize_action_notifications(action_notifications)
+        parsed = parse_action_notifications_payload(payload)
+
+        self.assertEqual(parsed, action_notifications)
+
+    def test_diff_action_notifications_reports_added_updated_and_removed(
+        self,
+    ) -> None:
+        diff = diff_action_notifications(
+            {
+                "arxiv:2604.06170": {
+                    "due_soon": "2026-04-13T09:30:00+00:00",
+                    "overdue_1d": "2026-04-14T09:30:00+00:00",
+                }
+            },
+            {
+                "arxiv:2604.06170": {
+                    "overdue_1d": "2026-04-15T09:30:00+00:00",
+                    "overdue_3d": "2026-04-17T09:30:00+00:00",
+                }
+            },
+        )
+
+        self.assertEqual(
+            summarize_action_notification_diff(diff),
+            "added=1, updated=1, removed=1",
+        )
+        self.assertEqual(
+            render_action_notification_diff(diff),
+            [
+                "+\tarxiv:2604.06170\toverdue_3d\t2026-04-17T09:30:00+00:00",
+                "~\tarxiv:2604.06170\toverdue_1d\t2026-04-14T09:30:00+00:00\t->\t2026-04-15T09:30:00+00:00",
+                "-\tarxiv:2604.06170\tdue_soon\t2026-04-13T09:30:00+00:00",
+            ],
         )

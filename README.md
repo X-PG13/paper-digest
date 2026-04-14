@@ -326,6 +326,9 @@ python -m paper_digest state action reset 'doi:10.5555/paper-circle' --config co
 python -m paper_digest state action reset --reason overdue_3d --config config.toml
 python -m paper_digest state action reset --reason overdue_3d --dry-run --show-match --config config.toml
 python -m paper_digest state action reset --reason due_soon --before 2026-04-15 --config config.toml
+python -m paper_digest state action sync --direction push --config config.toml
+python -m paper_digest state action sync --direction pull --config config.toml
+python -m paper_digest state action sync --direction pull --dry-run --show-diff --config config.toml
 ```
 
 Notes:
@@ -352,6 +355,15 @@ Notes:
   `canonical_id + reason + notified_at` rows that would be re-armed.
 - `state action reset --before YYYY-MM-DD` narrows resets to older remembered
   notifications, which is useful when you only want to re-arm stale entries.
+- `state action sync --direction push` writes the current remembered action
+  notification state into the GitHub Actions cache used by scheduled digest
+  runs, without overwriting feed-level seen-paper history.
+- `state action sync --direction pull` exports the current GitHub Actions-side
+  action notification snapshot into your local `state.json`, so local resets
+  can inspect or mirror the online suppression state.
+- `state action sync --dry-run --show-diff` previews added, updated, and
+  removed `canonical_id + reason + notified_at` entries before either local or
+  remote action state is written.
 - Push previews fetch the current remote feedback state through the same
   short-lived pull workflow, so `feedback sync --direction push --dry-run`
   shows what the secret would change to before it is overwritten.
@@ -360,6 +372,10 @@ Notes:
 - Pulling uses the dedicated
   [`feedback-secret-sync.yml`](./.github/workflows/feedback-secret-sync.yml)
   workflow because GitHub Actions secrets are write-only through the direct API.
+- Action-state sync uses the dedicated
+  [`action-state-sync.yml`](./.github/workflows/action-state-sync.yml)
+  workflow to restore or replace only the remembered `action_notifications`
+  cache that drives `Action Brief` suppression and `notification-history.html`.
 - Because pull temporarily exports the secret into an artifact, use it only on
   repositories and GitHub accounts you trust.
 - When a digest run reaches `snoozed_until`, that paper automatically leaves
