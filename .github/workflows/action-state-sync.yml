@@ -1,0 +1,140 @@
+name: Action State Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      direction:
+        description: Export the remembered action state, or import a replacement snapshot.
+        required: true
+        default: export
+        type: choice
+        options:
+          - export
+          - import
+      action_state_json:
+        description: JSON payload for import runs only.
+        required: false
+        type: string
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+permissions:
+  contents: read
+
+jobs:
+  sync-action-state:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Restore digest state cache
+        uses: actions/cache/restore@v5
+        with:
+          path: .paper-digest-state
+          key: paper-digest-state-${{ github.run_id }}
+          restore-keys: |
+            paper-digest-state-
+
+      - name: Ensure state directory
+        run: mkdir -p .paper-digest-state
+
+      - name: Export action notification state
+        if: ${{ github.event.inputs.direction == 'export' }}
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          state_path = Path(".paper-digest-state/state.json")
+          payload = {}
+          if state_path.exists():
+              try:
+                  payload = json.loads(state_path.read_text(encoding="utf-8"))
+              except json.JSONDecodeError as exc:
+                  raise SystemExit(f"Failed to parse cached state.json: {exc}")
+          action_notifications = payload.get("action_notifications", {})
+          if not isinstance(action_notifications, dict):
+              action_notifications = {}
+          Path("action-state.json").write_text(
+              json.dumps(
+                  {
+                      "version": 1,
+                      "action_notifications": action_notifications,
+                  },
+                  ensure_ascii=False,
+                  indent=2,
+              ),
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Import action notification state
+        if: ${{ github.event.inputs.direction == 'import' }}
+        env:
+          ACTION_STATE_JSON: ${{ github.event.inputs.action_state_json }}
+        run: |
+          if [ -z "$ACTION_STATE_JSON" ]; then
+            echo "Missing action_state_json for import direction." >&2
+            exit 1
+          fi
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          state_path = Path(".paper-digest-state/state.json")
+          payload = json.loads(os.environ["ACTION_STATE_JSON"])
+          action_notifications = payload.get("action_notifications", payload)
+          if not isinstance(action_notifications, dict):
+              raise SystemExit("action_state_json must decode to an object")
+
+          existing = {}
+          if state_path.exists():
+              try:
+                  existing = json.loads(state_path.read_text(encoding="utf-8"))
+              except json.JSONDecodeError:
+                  existing = {}
+
+          feeds = existing.get("feeds", {})
+          if not isinstance(feeds, dict):
+              feeds = {}
+
+          state_payload = {
+              "version": 2,
+              "feeds": feeds,
+              "action_notifications": action_notifications,
+          }
+          state_path.write_text(
+              json.dumps(state_payload, ensure_ascii=False, indent=2),
+              encoding="utf-8",
+          )
+          Path("action-state.json").write_text(
+              json.dumps(
+                  {
+                      "version": 1,
+                      "action_notifications": action_notifications,
+                  },
+                  ensure_ascii=False,
+                  indent=2,
+              ),
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload action state artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: action-state
+          path: action-state.json
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Save digest state cache
+        if: ${{ github.event.inputs.direction == 'import' && hashFiles('.paper-digest-state/**') != '' }}
+        uses: actions/cache/save@v5
+        with:
+          path: .paper-digest-state
+          key: paper-digest-state-${{ github.run_id }}

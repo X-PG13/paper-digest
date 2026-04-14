@@ -23,6 +23,21 @@ class ActionNotificationRecord:
     notified_at: datetime
 
 
+@dataclass(slots=True, frozen=True)
+class ActionNotificationChange:
+    canonical_id: str
+    reason: str
+    previous_notified_at: str | None
+    next_notified_at: str | None
+
+
+@dataclass(slots=True, frozen=True)
+class ActionNotificationDiff:
+    added: tuple[ActionNotificationChange, ...] = ()
+    removed: tuple[ActionNotificationChange, ...] = ()
+    updated: tuple[ActionNotificationChange, ...] = ()
+
+
 def load_state(config: StateConfig) -> DigestState:
     """Load state from disk if enabled, otherwise return an empty state."""
 
@@ -43,15 +58,7 @@ def load_state(config: StateConfig) -> DigestState:
                 for paper_id, timestamp in items.items()
                 if isinstance(paper_id, str) and isinstance(timestamp, str)
             }
-    normalized_notifications: dict[str, dict[str, str]] = {}
-    if isinstance(notifications, dict):
-        for canonical_id, reasons in notifications.items():
-            if isinstance(canonical_id, str) and isinstance(reasons, dict):
-                normalized_notifications[canonical_id] = {
-                    reason: timestamp
-                    for reason, timestamp in reasons.items()
-                    if isinstance(reason, str) and isinstance(timestamp, str)
-                }
+    normalized_notifications = normalize_action_notifications(notifications)
     return DigestState(
         seen_papers=normalized,
         action_notifications=normalized_notifications,
@@ -103,6 +110,128 @@ def save_state(config: StateConfig, state: DigestState) -> None:
         json.dumps(payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+
+def normalize_action_notifications(
+    raw: object,
+) -> dict[str, dict[str, str]]:
+    normalized_notifications: dict[str, dict[str, str]] = {}
+    if not isinstance(raw, dict):
+        return normalized_notifications
+    for canonical_id, reasons in raw.items():
+        if isinstance(canonical_id, str) and isinstance(reasons, dict):
+            normalized_reasons = {
+                reason: timestamp
+                for reason, timestamp in reasons.items()
+                if isinstance(reason, str) and isinstance(timestamp, str)
+            }
+            if normalized_reasons:
+                normalized_notifications[canonical_id] = normalized_reasons
+    return normalized_notifications
+
+
+def serialize_action_notifications(
+    action_notifications: dict[str, dict[str, str]],
+) -> str:
+    payload = {
+        "version": 1,
+        "action_notifications": normalize_action_notifications(action_notifications),
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def parse_action_notifications_payload(
+    payload: str,
+) -> dict[str, dict[str, str]]:
+    raw = json.loads(payload)
+    if isinstance(raw, dict) and "action_notifications" in raw:
+        return normalize_action_notifications(raw.get("action_notifications"))
+    return normalize_action_notifications(raw)
+
+
+def diff_action_notifications(
+    previous: dict[str, dict[str, str]],
+    current: dict[str, dict[str, str]],
+) -> ActionNotificationDiff:
+    previous_flat = _flatten_action_notifications(previous)
+    current_flat = _flatten_action_notifications(current)
+    added: list[ActionNotificationChange] = []
+    removed: list[ActionNotificationChange] = []
+    updated: list[ActionNotificationChange] = []
+
+    for key in sorted(previous_flat.keys() | current_flat.keys()):
+        previous_notified_at = previous_flat.get(key)
+        current_notified_at = current_flat.get(key)
+        if previous_notified_at is None and current_notified_at is not None:
+            added.append(
+                ActionNotificationChange(
+                    canonical_id=key[0],
+                    reason=key[1],
+                    previous_notified_at=None,
+                    next_notified_at=current_notified_at,
+                )
+            )
+            continue
+        if previous_notified_at is not None and current_notified_at is None:
+            removed.append(
+                ActionNotificationChange(
+                    canonical_id=key[0],
+                    reason=key[1],
+                    previous_notified_at=previous_notified_at,
+                    next_notified_at=None,
+                )
+            )
+            continue
+        if (
+            previous_notified_at is not None
+            and current_notified_at is not None
+            and previous_notified_at != current_notified_at
+        ):
+            updated.append(
+                ActionNotificationChange(
+                    canonical_id=key[0],
+                    reason=key[1],
+                    previous_notified_at=previous_notified_at,
+                    next_notified_at=current_notified_at,
+                )
+            )
+
+    return ActionNotificationDiff(
+        added=tuple(added),
+        removed=tuple(removed),
+        updated=tuple(updated),
+    )
+
+
+def summarize_action_notification_diff(diff: ActionNotificationDiff) -> str:
+    return (
+        f"added={len(diff.added)}, "
+        f"updated={len(diff.updated)}, "
+        f"removed={len(diff.removed)}"
+    )
+
+
+def render_action_notification_diff(
+    diff: ActionNotificationDiff,
+) -> list[str]:
+    lines: list[str] = []
+    for change in diff.added:
+        lines.append(
+            f"+\t{change.canonical_id}\t{change.reason}\t"
+            f"{change.next_notified_at or ''}"
+        )
+    for change in diff.updated:
+        lines.append(
+            f"~\t{change.canonical_id}\t{change.reason}\t"
+            f"{change.previous_notified_at or ''}\t->\t"
+            f"{change.next_notified_at or ''}"
+        )
+    for change in diff.removed:
+        lines.append(
+            f"-\t{change.canonical_id}\t{change.reason}\t"
+            f"{change.previous_notified_at or ''}"
+        )
+    return lines
 
 
 def list_action_notifications(
@@ -177,3 +306,15 @@ def _prune_feed_state(feed_state: dict[str, str], cutoff: datetime) -> None:
 
 def _parse_state_datetime(value: str) -> datetime:
     return datetime.fromisoformat(value)
+
+
+def _flatten_action_notifications(
+    action_notifications: dict[str, dict[str, str]],
+) -> dict[tuple[str, str], str]:
+    flattened: dict[tuple[str, str], str] = {}
+    for canonical_id, reasons in normalize_action_notifications(
+        action_notifications
+    ).items():
+        for reason, notified_at in reasons.items():
+            flattened[(canonical_id, reason)] = notified_at
+    return flattened

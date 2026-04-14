@@ -14,6 +14,7 @@ from paper_digest.config import AppConfig, FeedConfig, StateConfig
 from paper_digest.delivery import DeliveryError
 from paper_digest.digest import DigestRun, FeedDigest
 from paper_digest.feedback import FeedbackEntry, FeedbackState
+from paper_digest.github_action_state import GitHubActionStateResult
 from paper_digest.state import DigestState
 
 
@@ -462,6 +463,146 @@ class CliTests(unittest.TestCase):
                 stdout.getvalue(),
             )
             self.assertIn("before 2026-04-14", stdout.getvalue())
+
+    @patch("paper_digest.cli.sync_action_notifications_to_github_actions")
+    @patch("paper_digest.cli.pull_action_notifications_from_github_actions")
+    def test_state_action_sync_push_dry_run_previews_remote_diff(
+        self,
+        mock_pull,
+        mock_sync,
+    ) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = self._write_feedback_config(root)
+            state_path = root / ".paper-digest-state" / "state.json"
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state_path.write_text(
+                json.dumps(
+                    {
+                        "version": 2,
+                        "feeds": {},
+                        "action_notifications": {
+                            "arxiv:2604.06170": {
+                                "due_soon": "2026-04-13T09:30:00+00:00",
+                            }
+                        },
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            mock_pull.return_value = GitHubActionStateResult(
+                repository="X-PG13/paper-digest",
+                run_id="123456789",
+                run_url=(
+                    "https://github.com/X-PG13/paper-digest/"
+                    "actions/runs/123456789"
+                ),
+                action_notifications={},
+            )
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "state",
+                        "action",
+                        "sync",
+                        "--direction",
+                        "push",
+                        "--dry-run",
+                        "--show-diff",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            mock_sync.assert_not_called()
+            self.assertIn(
+                "would sync action notifications",
+                stdout.getvalue().lower(),
+            )
+            self.assertIn(
+                "Diff summary: added=1, updated=0, removed=0",
+                stdout.getvalue(),
+            )
+            self.assertIn(
+                "+\tarxiv:2604.06170\tdue_soon\t2026-04-13T09:30:00+00:00",
+                stdout.getvalue(),
+            )
+
+    @patch("paper_digest.cli.pull_action_notifications_from_github_actions")
+    def test_state_action_sync_pull_dry_run_does_not_write_state(
+        self,
+        mock_pull,
+    ) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = self._write_feedback_config(root)
+            state_path = root / ".paper-digest-state" / "state.json"
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            original_payload = {
+                "version": 2,
+                "feeds": {},
+                "action_notifications": {
+                    "arxiv:2604.06170": {
+                        "due_soon": "2026-04-13T09:30:00+00:00",
+                    }
+                },
+            }
+            state_path.write_text(
+                json.dumps(original_payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            mock_pull.return_value = GitHubActionStateResult(
+                repository="X-PG13/paper-digest",
+                run_id="123456789",
+                run_url=(
+                    "https://github.com/X-PG13/paper-digest/"
+                    "actions/runs/123456789"
+                ),
+                action_notifications={
+                    "arxiv:2604.06170": {
+                        "overdue_3d": "2026-04-16T09:30:00+00:00",
+                    }
+                },
+            )
+
+            stdout = io.StringIO()
+            with patch("sys.stdout", stdout):
+                exit_code = main(
+                    [
+                        "state",
+                        "action",
+                        "sync",
+                        "--direction",
+                        "pull",
+                        "--dry-run",
+                        "--show-diff",
+                        "--config",
+                        str(config_path),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(
+                json.loads(state_path.read_text(encoding="utf-8")),
+                original_payload,
+            )
+            self.assertIn(
+                "would pull action notifications",
+                stdout.getvalue().lower(),
+            )
+            self.assertIn(
+                "Diff summary: added=1, updated=0, removed=1",
+                stdout.getvalue(),
+            )
+            self.assertIn(
+                "+\tarxiv:2604.06170\toverdue_3d\t2026-04-16T09:30:00+00:00",
+                stdout.getvalue(),
+            )
 
     def test_feedback_clear_removes_entry(self) -> None:
         with TemporaryDirectory() as temp_dir:
