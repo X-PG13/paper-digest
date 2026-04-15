@@ -30,7 +30,7 @@ Changelog = "https://github.com/X-PG13/paper-digest/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [
-  "build>=1.2.2",
+  "build>=1.4.3",
   "coverage[toml]>=7.6.0",
   "mypy>=1.11.0",
   "pre-commit>=4.0.0",
