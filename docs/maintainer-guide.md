@@ -233,11 +233,15 @@ start with `docs/maintainer-operations-hub.md`.
   release-note category/exclusion collectors, and baseline validation loop.
 - `tools/check_policies.py`: shared policy-check entry point for label
   registry, issue-form, issue-intake, support, saved-reply, triage, PR hygiene,
-  label-policy, docs-contract, and release-lifecycle schema validators, so
-  local and CI policy checks report failures with the contract name that
-  failed. It can also emit a JSON report with schema version, overall status,
-  per-contract status, and flattened errors for CI upload and local
-  post-processing.
+  repository-settings, label-policy, docs-contract, and release-lifecycle
+  schema validators, so local and CI policy checks report failures with the
+  contract name that failed. It can also emit a JSON report with schema version,
+  overall status, per-contract status, and flattened errors for CI upload and
+  local post-processing.
+- `tools/repository_settings_policy.py`: shared repository-admin contract for
+  the required-check list, the PR-facing workflow names/triggers that back those
+  checks, and the cross-links among branch protection, ruleset, and repository
+  settings docs.
 - `tools/render_policy_report.py`: shared renderer for policy-check JSON
   reports, producing GitHub Actions annotations and Markdown summaries from the
   same report schema used by local `make policy-check-json`.

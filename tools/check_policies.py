@@ -17,6 +17,7 @@ from tools.label_behavior_policy import validate_label_behavior_policy
 from tools.label_registry import validate_label_registry
 from tools.lifecycle_contracts import validate_lifecycle_contract_schema
 from tools.pr_policy import validate_pr_hygiene_contract
+from tools.repository_settings_policy import validate_repository_settings_policy
 from tools.routing_label_policy import validate_routing_label_policy
 from tools.saved_reply_policy import validate_saved_reply_contract
 from tools.status_label_policy import validate_status_label_policy
@@ -59,6 +60,7 @@ DEFAULT_POLICY_CHECKS = (
     PolicyCheck("saved reply contract", validate_saved_reply_contract),
     PolicyCheck("triage reply policy", validate_triage_reply_policy),
     PolicyCheck("PR hygiene contract", validate_pr_hygiene_contract),
+    PolicyCheck("repository settings policy", validate_repository_settings_policy),
     PolicyCheck("routing label policy", validate_routing_label_policy),
     PolicyCheck("label behavior policy", validate_label_behavior_policy),
     PolicyCheck(

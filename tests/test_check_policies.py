@@ -27,6 +27,7 @@ class CheckPoliciesTests(unittest.TestCase):
         self.assertIn("support contract", names)
         self.assertIn("saved reply contract", names)
         self.assertIn("release lifecycle contract schema", names)
+        self.assertIn("repository settings policy", names)
 
     def test_run_policy_checks_reports_exception_with_contract_name(self) -> None:
         def fail() -> None:

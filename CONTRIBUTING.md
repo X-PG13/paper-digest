@@ -237,6 +237,11 @@ permissions, triggers, artifact paths, and repo-local helper calls.
 - Update `tools/pr_policy.py` and `.github/pull_request_template.md` together
   when PR-template checkbox labels, linked-issue field wording, or PR-hygiene
   reminder copy changes.
+- Update `tools/repository_settings_policy.py`,
+  `docs/branch-protection-policy.md`, `docs/repository-settings-checklist.md`,
+  `docs/ruleset-policy.md`, and the referenced workflow files together when
+  required checks, repository-settings cross-links, or PR-facing workflow
+  names/triggers change.
 - Update `tools/issue_intake_policy.py` and
   `.github/ISSUE_TEMPLATE/bug_report.yml` together when bug-report section
   labels, form name/title, required field wording, placeholder semantics, or
