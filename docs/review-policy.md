@@ -51,6 +51,8 @@ For those changes, the pull request should clearly call out:
   clearly in the PR template rather than leaving maintainers to infer intent.
 - `PR Hygiene` automation should stay advisory: it should remind contributors to
   tighten the PR, not replace human review.
+- Do not configure `PR Hygiene` as a required branch-protection check unless
+  this section is changed to make the reminder workflow explicitly blocking.
 
 ## Self-Merge Guidance
 

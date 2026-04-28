@@ -30,10 +30,15 @@ Configure `main` so it matches `docs/branch-protection-policy.md`:
 3. Dismiss stale approvals on new commits.
 4. Require review from code owners.
 5. Require all conversations to be resolved.
-6. Require these status checks:
-   `CI`, `Dependency Review`, `Workflow Lint`, `PR Hygiene`.
+6. Require these stable status-check contexts:
+   `verify / verify`, `dependency-review`, `actionlint`.
 7. Disable force pushes.
 8. Disable branch deletion.
+
+These contexts correspond to the `CI`, `Dependency Review`, and `Workflow Lint`
+workflows. Keep `PR Hygiene` advisory by default; it can remind contributors
+about missing PR context, but branch protection should not require it unless
+`docs/review-policy.md` changes from advisory to blocking.
 
 If repository rulesets are used, keep them aligned with
 `docs/ruleset-policy.md`.

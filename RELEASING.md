@@ -78,11 +78,22 @@ checks, and operator-facing release notes before the tag is pushed.
 
 ## Release Dry Run
 
-Before pushing a tag, run a release dry run locally:
+Before pushing a tag, run the local release dry run:
 
 ```bash
 make release-dry-run
 ```
+
+This is the maintainer-facing "can this release path work?" command. It runs
+the same verification bundle expected before a tag cut:
+
+- `make check` for lint, type checking, policy/docs contracts, and coverage
+- `make build` for wheel and source archive generation
+- `make release-check` for package metadata validation with `twine`
+
+Use the component commands only when isolating a failure. For normal release
+preparation, prefer `make release-dry-run` so the release issue records one
+clear pass/fail signal.
 
 For a GitHub Actions dry run, dispatch the release workflow without publishing:
 
@@ -90,9 +101,10 @@ For a GitHub Actions dry run, dispatch the release workflow without publishing:
 gh workflow run release.yml --ref <branch-or-tag> -f dry_run=true
 ```
 
-The dry run builds the same `package-dist` artifact as the tag path and verifies
-that both a wheel and source archive are present. Publishing remains gated to a
-tag push, or to an explicit manual dispatch on a tag with `dry_run=false`.
+The workflow dry run builds the same `package-dist` artifact as the tag path
+and verifies that both a wheel and source archive are present. It does not
+publish a GitHub release. Publishing remains gated to a tag push, or to an
+explicit manual dispatch on a tag with `dry_run=false`.
 
 ## Create a Release
 

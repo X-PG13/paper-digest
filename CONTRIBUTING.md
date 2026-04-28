@@ -144,6 +144,20 @@ repo-local binary.
 also runs the workflow contract suite, which verifies behavior wiring such as
 permissions, triggers, artifact paths, and repo-local helper calls.
 
+## User Feedback And Support Signals
+
+Use the public issue forms to turn real usage into maintainable follow-up:
+
+- Bug reports should include the source, delivery channel, config surface, or
+  workflow involved, plus the failing command or run link when available.
+- Support requests should describe the setup path, such as local CLI, Feishu
+  webhook, GitHub Actions schedule, or archive Pages deployment.
+- Feature requests should state the source, delivery, ranking, archive, or
+  maintainer workflow being proposed and whether the request affects config.
+
+Security issues should follow `SECURITY.md`. General support expectations live
+in `SUPPORT.md`.
+
 ## Pull Request Guidelines
 
 - Keep changes focused and explain the user-facing impact.

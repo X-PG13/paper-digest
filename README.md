@@ -45,6 +45,7 @@ than a one-off script. The baseline includes:
 
 - Full config reference and commented examples: [`config.example.toml`](./config.example.toml)
 - Small starting profiles for common setups: [`docs/config-recipes.md`](./docs/config-recipes.md)
+- Ready-to-edit Feishu LM/arXiv morning digest config: [`examples/feishu-lm-arxiv.toml`](./examples/feishu-lm-arxiv.toml)
 - Runtime and platform support policy: [`docs/compatibility-matrix.md`](./docs/compatibility-matrix.md)
 - Label taxonomy and triage labels: [`docs/label-taxonomy.md`](./docs/label-taxonomy.md)
 - Security disclosure and support routing: [`SECURITY.md`](./SECURITY.md) and [`SUPPORT.md`](./SUPPORT.md)
@@ -92,19 +93,23 @@ python -m pip install -e '.[dev]'
 
 ## Quick Start
 
-1. Choose a config starting point:
+1. Choose a config starting point.
 
 - For a fully commented reference, copy [`config.example.toml`](./config.example.toml).
 - For a smaller profile such as "local smoke test" or "GitHub Actions
   schedule", start from [`docs/config-recipes.md`](./docs/config-recipes.md).
+- For a Feishu morning digest focused on LM papers from arXiv, copy
+  [`examples/feishu-lm-arxiv.toml`](./examples/feishu-lm-arxiv.toml).
 
-2. Copy the example config:
+2. Copy a config into the local ignored `config.toml` file:
 
 ```bash
 cp config.example.toml config.toml
 ```
 
-3. Generate the digest:
+3. For a first local smoke test, keep `[analysis] enabled = false` and leave
+   `[[deliveries]]` commented out or use a webhook placeholder. Then generate
+   the digest:
 
 ```bash
 python -m paper_digest --config config.toml
@@ -120,6 +125,10 @@ python -m paper_digest --config config.toml
 - `output/site/weekly-review.html`
 - `output/YYYY-MM-DD/digest.json`
 - `output/YYYY-MM-DD/digest.md`
+
+5. When the local output looks right, add the full `config.toml` content to the
+   GitHub repository secret `PAPER_DIGEST_CONFIG_TOML` and run `Daily Digest`
+   manually once before relying on the daily schedule.
 
 ## Configuration
 
@@ -751,10 +760,13 @@ Additional maintainer docs:
 The repository includes a scheduled workflow at
 [`daily-digest.yml`](./.github/workflows/daily-digest.yml).
 
-The default schedule is `5 0 * * *`, which means:
+The default schedule is `0 1 * * *`, which means:
 
-- `00:05 UTC` every day
-- `08:05` every day in `Asia/Shanghai`
+- `01:00 UTC` every day
+- about `09:00` every day in `Asia/Shanghai`
+
+GitHub Actions cron is not a real-time scheduler, so delivery can be delayed by
+a few minutes when the hosted runner queue is busy.
 
 To use it, create these GitHub repository secrets:
 
@@ -769,6 +781,11 @@ To use it, create these GitHub repository secrets:
 For manual validation runs, `workflow_dispatch` also accepts an optional
 `config_toml_override` input. When you provide it, that run uses the temporary
 config instead of `PAPER_DIGEST_CONFIG_TOML`.
+
+For the common "LM papers from arXiv to Feishu every morning" setup, start from
+[`examples/feishu-lm-arxiv.toml`](./examples/feishu-lm-arxiv.toml), replace the
+placeholder Feishu webhook, store the full file content in
+`PAPER_DIGEST_CONFIG_TOML`, and trigger `Daily Digest` manually once on `main`.
 
 The same workflow also accepts an optional `feedback_json_override` input.
 When you provide it, that run materializes the given JSON into
@@ -870,6 +887,20 @@ On macOS or Linux you can run the digest every morning with `cron`:
 ```cron
 0 8 * * * /absolute/path/to/.venv/bin/python -m paper_digest --config /absolute/path/to/config.toml
 ```
+
+## Feedback And Support
+
+Use the GitHub issue forms for real usage feedback:
+
+- Bug reports: broken source fetches, delivery failures, archive rendering
+  issues, or regressions in CLI behavior.
+- Support requests: setup questions, webhook configuration problems, or
+  scheduled workflow debugging.
+- Feature requests: new sources, delivery channels, ranking rules, or archive
+  views.
+
+Security reports should follow [`SECURITY.md`](./SECURITY.md), not public
+issues. General support expectations are in [`SUPPORT.md`](./SUPPORT.md).
 
 ## Roadmap
 

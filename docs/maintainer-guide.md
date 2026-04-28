@@ -482,14 +482,17 @@ The source of truth for intake and closure rules is
   strategy, Pages, Discussions, and other repository-admin settings.
 - Use `docs/ruleset-policy.md` as the source of truth when branch rulesets or
   merge queue enter the workflow.
-- If workflow names or required status checks change, update the protection
-  policy in the same pull request.
+- If workflow names or required status-check contexts change, update the
+  protection policy in the same pull request. Branch protection uses check
+  contexts such as `verify / verify`, not only the human-readable workflow
+  name.
 - Prefer reusable workflows when CI and release pipelines share the same
   verification contract.
 - Treat `pull_request_target` automation as sensitive: do not add checkout or
   untrusted-code execution to triage-only workflows.
 - Keep `pr-hygiene.yml`, the PR template, and contributor docs aligned so the
-  automation only enforces what the repository publicly asks contributors to do.
+  automation only reminds contributors about what the repository publicly asks
+  them to do.
 
 ## Saved Replies
 

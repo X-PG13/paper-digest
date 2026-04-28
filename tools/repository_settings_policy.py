@@ -12,6 +12,7 @@ class RequiredStatusCheckSpec:
     workflow_path: str
     workflow_name: str
     trigger: str
+    check_context: str
 
 
 REQUIRED_STATUS_CHECKS = (
@@ -20,26 +21,35 @@ REQUIRED_STATUS_CHECKS = (
         workflow_path=".github/workflows/ci.yml",
         workflow_name="CI",
         trigger="pull_request:",
+        check_context="verify / verify",
     ),
     RequiredStatusCheckSpec(
         name="Dependency Review",
         workflow_path=".github/workflows/dependency-review.yml",
         workflow_name="Dependency Review",
         trigger="pull_request:",
+        check_context="dependency-review",
     ),
     RequiredStatusCheckSpec(
         name="Workflow Lint",
         workflow_path=".github/workflows/workflow-lint.yml",
         workflow_name="Workflow Lint",
         trigger="pull_request:",
+        check_context="actionlint",
     ),
+)
+
+ADVISORY_STATUS_CHECKS = (
     RequiredStatusCheckSpec(
         name="PR Hygiene",
         workflow_path=".github/workflows/pr-hygiene.yml",
         workflow_name="PR Hygiene",
         trigger="pull_request_target:",
+        check_context="hygiene",
     ),
 )
+
+PR_FACING_STATUS_CHECKS = REQUIRED_STATUS_CHECKS + ADVISORY_STATUS_CHECKS
 
 REQUIRED_STATUS_CHECK_DOCS = (
     "docs/branch-protection-policy.md",
@@ -94,6 +104,18 @@ def required_status_check_names() -> tuple[str, ...]:
     return tuple(check.name for check in REQUIRED_STATUS_CHECKS)
 
 
+def advisory_status_check_names() -> tuple[str, ...]:
+    return tuple(check.name for check in ADVISORY_STATUS_CHECKS)
+
+
+def pr_facing_status_check_names() -> tuple[str, ...]:
+    return tuple(check.name for check in PR_FACING_STATUS_CHECKS)
+
+
+def required_status_check_contexts() -> tuple[str, ...]:
+    return tuple(check.check_context for check in REQUIRED_STATUS_CHECKS)
+
+
 def required_status_check_workflow_paths() -> tuple[str, ...]:
     return tuple(check.workflow_path for check in REQUIRED_STATUS_CHECKS)
 
@@ -106,11 +128,15 @@ def validate_repository_settings_policy(root: Path | None = None) -> tuple[str, 
     if len(check_names) != len(set(check_names)):
         errors.append("repository settings policy: duplicate required check names")
 
-    workflow_paths = required_status_check_workflow_paths()
+    check_contexts = required_status_check_contexts()
+    if len(check_contexts) != len(set(check_contexts)):
+        errors.append("repository settings policy: duplicate required check contexts")
+
+    workflow_paths = tuple(check.workflow_path for check in PR_FACING_STATUS_CHECKS)
     if len(workflow_paths) != len(set(workflow_paths)):
         errors.append("repository settings policy: duplicate workflow paths")
 
-    for check in REQUIRED_STATUS_CHECKS:
+    for check in PR_FACING_STATUS_CHECKS:
         workflow_text = _read_text(repo_root, check.workflow_path)
         if workflow_text is None:
             errors.append(f"{check.workflow_path}: missing workflow file")
@@ -137,6 +163,17 @@ def validate_repository_settings_policy(root: Path | None = None) -> tuple[str, 
             if f"`{check_name}`" not in doc_text:
                 errors.append(
                     f"{doc_path}: missing required status check `{check_name}`"
+                )
+        for check_context in check_contexts:
+            if f"`{check_context}`" not in doc_text:
+                errors.append(
+                    f"{doc_path}: missing required status check context "
+                    f"`{check_context}`"
+                )
+        for check_name in advisory_status_check_names():
+            if f"`{check_name}`" not in doc_text:
+                errors.append(
+                    f"{doc_path}: missing advisory status check `{check_name}`"
                 )
 
     for doc_path, required_links in REPOSITORY_SETTINGS_DOC_LINKS.items():

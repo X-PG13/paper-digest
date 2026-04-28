@@ -52,12 +52,16 @@ merges are blocked.
 
 ## Required Checks
 
-Keep ruleset-required checks aligned with the documented branch policy:
+Keep ruleset-required checks aligned with the documented branch policy. The
+required GitHub check contexts are:
 
-- `CI`
-- `Dependency Review`
-- `Workflow Lint`
-- `PR Hygiene`
+- `verify / verify` for the `CI` workflow
+- `dependency-review` for the `Dependency Review` workflow
+- `actionlint` for the `Workflow Lint` workflow
+
+Keep `PR Hygiene` advisory unless `docs/review-policy.md` and
+`docs/branch-protection-policy.md` are changed in the same pull request to make
+PR hygiene blocking.
 
 If check names change, update this file and the related maintainer docs in the
 same pull request.

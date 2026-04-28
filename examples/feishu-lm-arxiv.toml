@@ -1,0 +1,72 @@
+[app]
+timezone = "Asia/Shanghai"
+lookback_hours = 24
+output_dir = "output"
+request_delay_seconds = 3
+request_timeout_seconds = 60
+fetch_retry_attempts = 4
+fetch_retry_backoff_seconds = 10
+
+[state]
+enabled = true
+path = ".paper-digest-state/state.json"
+retention_days = 90
+
+[feedback]
+enabled = true
+path = ".paper-digest-state/feedback.json"
+
+[digest]
+template = "zh_daily_brief"
+top_highlights = 5
+feed_key_points = 5
+
+[ranking]
+sort_by = "hybrid"
+
+[analysis]
+enabled = false
+provider = "openai"
+model = "gpt-5-mini"
+api_key_env = "OPENAI_API_KEY"
+base_url = "https://api.openai.com/v1/responses"
+timeout_seconds = 60
+max_papers = 8
+max_output_tokens = 600
+language = "Chinese"
+reasoning_effort = "minimal"
+
+[[feeds]]
+name = "LM"
+source = "arxiv"
+categories = ["cs.CL", "cs.AI", "cs.LG"]
+keywords = [
+  "language model",
+  "large language model",
+  "LLM",
+  "reasoning",
+  "agent",
+  "alignment",
+  "instruction tuning",
+  "in-context learning",
+  "retrieval augmented generation",
+  "RAG",
+  "multimodal language model",
+  "benchmark",
+  "evaluation",
+]
+exclude_keywords = ["survey", "tutorial", "position paper"]
+max_results = 100
+max_items = 15
+
+[[deliveries]]
+type = "feishu_webhook"
+webhook_url = "https://open.feishu.cn/open-apis/bot/v2/hook/replace-me"
+title_prefix = "[Paper Digest]"
+skip_if_empty = true
+target = "digest"
+include_focus = true
+focus_target = "digest"
+include_actions = true
+action_target = "digest"
+action_only = false

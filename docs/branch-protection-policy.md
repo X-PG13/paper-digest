@@ -18,9 +18,21 @@ When GitHub settings allow it, enable at least these protections:
 3. Dismiss stale approvals when new commits are pushed.
 4. Require review from code owners.
 5. Require all review conversations to be resolved.
-6. Require the `CI`, `Dependency Review`, `Workflow Lint`, and `PR Hygiene`
-   workflows to pass.
+6. Require the stable branch-protection check contexts to pass.
 7. Block force pushes and branch deletion.
+
+The required GitHub check contexts are:
+
+| Required workflow | Required check context |
+| --- | --- |
+| `CI` | `verify / verify` |
+| `Dependency Review` | `dependency-review` |
+| `Workflow Lint` | `actionlint` |
+
+`PR Hygiene` remains an advisory `pull_request_target` workflow. It should
+comment on missing docs, changelog, or issue-link context, but it should not be
+configured as a required branch-protection check unless the review policy also
+changes from advisory to blocking.
 
 ## Merge Hygiene
 

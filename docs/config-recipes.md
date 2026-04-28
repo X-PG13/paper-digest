@@ -69,7 +69,25 @@ max_results = 100
 max_items = 15
 ```
 
-## 3. Chinese Daily Brief Without LLM Calls
+## 3. Feishu LM/arXiv Morning Digest
+
+Use [`examples/feishu-lm-arxiv.toml`](../examples/feishu-lm-arxiv.toml) when
+you want the scheduled GitHub workflow to send one Chinese Feishu message each
+morning for new LM papers from arXiv.
+
+Operational steps:
+
+1. Replace the placeholder Feishu webhook URL.
+2. Store the full TOML content in the `PAPER_DIGEST_CONFIG_TOML` repository
+   secret.
+3. Trigger `Daily Digest` manually once on `main`.
+4. Let the default workflow schedule deliver at about `09:00 Asia/Shanghai`.
+
+Keep `target = "digest"`, `focus_target = "digest"`, and
+`action_target = "digest"` when you want one combined Feishu message instead
+of separate per-feed, Focus, or Action messages.
+
+## 4. Chinese Daily Brief Without LLM Calls
 
 Use this when you want the Chinese briefing layout but do not want to spend API
 tokens yet.
@@ -93,7 +111,7 @@ language = "Chinese"
 reasoning_effort = "minimal"
 ```
 
-## 4. Action-Oriented Reminder Channel
+## 5. Action-Oriented Reminder Channel
 
 Use this when one delivery should only push due work instead of the whole
 digest.
