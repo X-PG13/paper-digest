@@ -138,7 +138,9 @@ start with `docs/maintainer-operations-hub.md`.
   `tools/render_docs_report.py` and `tools/render_policy_report.py`. The
   docs-check JSON report now carries structured findings so annotations can
   target file/line locations when docs-check can infer them.
-- `release.yml`: tag-driven packaging and GitHub Release publishing.
+- `release.yml`: tag-driven packaging and GitHub Release publishing, with a
+  manual `dry_run` dispatch path that builds and validates `package-dist`
+  without publishing.
 - `docs-check-pr-comment.yml`: trusted `workflow_run` follow-up that downloads
   the `docs-check-report` artifact from a CI pull-request run, re-renders the
   PR comment body on the default branch, posts it on failing PRs, and deletes

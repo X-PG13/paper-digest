@@ -434,7 +434,8 @@ class DocsCheckTests(unittest.TestCase):
                     ## Before Tagging
                     - Ensure `CHANGELOG.md` is updated.
                     - Confirm the version in `paper_digest/__about__.py`.
-                    - Run `make check`, `make build`, and `make release-check`.
+                    - Run `make check`, `make build`, `make release-check`, and
+                      `make release-dry-run`.
                     - Confirm the latest quarterly review issue is current.
                     - Keep the release-preparation issue linked from the
                       release-preparation pull request.
@@ -472,6 +473,7 @@ class DocsCheckTests(unittest.TestCase):
 
                     ## Release-Prep Responsibilities
                     - confirm scope, changelog intent, and compatibility claims
+                    - run the local release dry run before the tag is pushed
                     - decide whether the latest quarterly review is still current
 
                     ## Post-Release Responsibilities
@@ -496,6 +498,7 @@ class DocsCheckTests(unittest.TestCase):
                             - [ ] `make check`
                             - [ ] `make build`
                             - [ ] `make release-check`
+                            - [ ] `make release-dry-run`
                             - [ ] Version in `paper_digest/__about__.py` confirmed.
                             - [ ] Release-preparation PR linked here.
                             - [ ] Post-release follow-up issue linked after publication.

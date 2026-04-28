@@ -427,11 +427,13 @@ RELEASE_LIFECYCLE_TEXT_CONTRACTS = (
                 "make check",
                 "make build",
                 "make release-check",
+                "make release-dry-run",
             ),
             RELEASE_PREP_FORM_SOURCE.label: (
                 "make check",
                 "make build",
                 "make release-check",
+                "make release-dry-run",
             ),
         },
     ),
@@ -757,6 +759,7 @@ RELEASE_PREP_VALIDATION_FORM_FIELD = IssueFormFieldContract(
         "`make check`",
         "`make build`",
         "`make release-check`",
+        "`make release-dry-run`",
         "Version in `paper_digest/__about__.py` confirmed.",
     ),
 )

@@ -53,6 +53,8 @@ Keep these links explicit:
 During release preparation, maintainers should:
 
 - confirm scope, changelog intent, and compatibility claims
+- run the local release dry run before the tag is pushed
+- use the GitHub Actions dry run when workflow or packaging behavior changed
 - decide whether the latest quarterly review is still current
 - prepare operator-facing notes for workflow, settings, or repository-operations
   changes

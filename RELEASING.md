@@ -32,7 +32,12 @@ history once a release is published.
 make check
 make build
 make release-check
+make release-dry-run
 ```
+
+`make release-dry-run` is the single local pre-tag command for the release
+path. It composes `make check`, `make build`, and `make release-check`, so use
+the component commands above only when you need to isolate a failure.
 
 If the cycle changed required GitHub checks, confirm
 `docs/branch-protection-policy.md` still names the active set.
@@ -70,6 +75,24 @@ latest quarterly review issue in the release-preparation pull request or
 maintainer notes.
 Use the release-preparation issue to record changelog intent, compatibility
 checks, and operator-facing release notes before the tag is pushed.
+
+## Release Dry Run
+
+Before pushing a tag, run a release dry run locally:
+
+```bash
+make release-dry-run
+```
+
+For a GitHub Actions dry run, dispatch the release workflow without publishing:
+
+```bash
+gh workflow run release.yml --ref <branch-or-tag> -f dry_run=true
+```
+
+The dry run builds the same `package-dist` artifact as the tag path and verifies
+that both a wheel and source archive are present. Publishing remains gated to a
+tag push, or to an explicit manual dispatch on a tag with `dry_run=false`.
 
 ## Create a Release
 

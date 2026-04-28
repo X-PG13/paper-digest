@@ -27,6 +27,12 @@ make build
 make release-check
 ```
 
+For release-preparation pull requests, run the composed release dry run:
+
+```bash
+make release-dry-run
+```
+
 If a pull request is mostly documentation or policy work, you can use the
 faster docs-only guardrail while iterating:
 

@@ -2,7 +2,7 @@ PYTHON ?= python3
 VENV_PYTHON := .venv/bin/python
 PYTHON_BIN := $(if $(wildcard $(VENV_PYTHON)),$(VENV_PYTHON),$(PYTHON))
 
-.PHONY: run test lint format typecheck coverage policy-check policy-check-json policy-check-markdown docs-check docs-check-json docs-check-markdown docs-check-pr-comment workflow-tools workflow-check build release-check check
+.PHONY: run test lint format typecheck coverage policy-check policy-check-json policy-check-markdown docs-check docs-check-json docs-check-markdown docs-check-pr-comment workflow-tools workflow-check build release-check release-dry-run check
 
 run:
 	$(PYTHON_BIN) -m paper_digest --config config.toml
@@ -61,5 +61,7 @@ build:
 
 release-check:
 	$(PYTHON_BIN) -m twine check dist/*
+
+release-dry-run: check build release-check
 
 check: lint typecheck policy-check docs-check coverage

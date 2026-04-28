@@ -97,6 +97,7 @@ body:
         - [ ] `make check`
         - [ ] `make build`
         - [ ] `make release-check`
+        - [ ] `make release-dry-run`
         - [ ] Version in `paper_digest/__about__.py` confirmed.
       # END GENERATED: release-prep-form-validation
     validations:
