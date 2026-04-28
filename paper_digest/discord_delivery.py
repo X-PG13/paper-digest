@@ -100,12 +100,6 @@ def _normalize_markdown(body: str) -> str:
         if normalized.startswith("- "):
             lines.append(f"• {normalized[2:]}")
             continue
-        if line.startswith("  - "):
-            lines.append(f"• {stripped[2:]}")
-            continue
-        if line.startswith("   - "):
-            lines.append(f"• {stripped[2:]}")
-            continue
         lines.append(normalized)
     return "\n".join(lines).strip()
 

@@ -1051,10 +1051,12 @@ def _main_state(argv: Sequence[str]) -> int:
                     f"{reason_suffix} in {state_path}"
                 )
             return 0
+        raise AssertionError(
+            f"unsupported state command from parser: {args.state_command!r}"
+        )
     except (ConfigError, GitHubActionStateSyncError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
-    return 0
 
 
 def _print_feedback_sync_preview(

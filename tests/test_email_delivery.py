@@ -96,6 +96,32 @@ class EmailDeliveryTests(unittest.TestCase):
                     body="Digest body",
                 )
 
+    def test_send_email_message_can_send_without_starttls_or_login(self) -> None:
+        config = EmailConfig(
+            smtp_host="smtp.example.com",
+            smtp_port=25,
+            username=None,
+            password_env=None,
+            from_address="bot@example.com",
+            to_addresses=["reader@example.com"],
+            use_tls=False,
+            use_starttls=False,
+            subject_prefix="[Digest]",
+            skip_if_empty=True,
+        )
+
+        with patch("paper_digest.email_delivery.smtplib.SMTP", FakeSMTP):
+            send_email_message(
+                config,
+                subject="[Digest] 2026-04-08 | LLM=0",
+                body="Digest body",
+            )
+
+        server = FakeSMTP.instances[0]
+        self.assertFalse(server.starttls_called)
+        self.assertIsNone(server.login_args)
+        self.assertEqual(server.message.get_content().strip(), "Digest body")
+
     @patch(
         "paper_digest.email_delivery.smtplib.SMTP_SSL",
         side_effect=smtplib.SMTPException("boom"),

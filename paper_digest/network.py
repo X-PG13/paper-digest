@@ -22,13 +22,11 @@ def fetch_bytes_with_retry(
 ) -> bytes:
     """Fetch raw bytes with bounded retry and backoff."""
 
-    last_error: BaseException | None = None
     for attempt in range(1, retry_attempts + 1):
         try:
             with urlopen(request, timeout=timeout_seconds) as response:
                 payload = bytes(response.read())
         except HTTPError as exc:
-            last_error = exc
             if exc.code in RETRYABLE_STATUS_CODES and attempt < retry_attempts:
                 sleep(
                     _retry_delay_seconds(
@@ -41,7 +39,6 @@ def fetch_bytes_with_retry(
                 continue
             raise error_factory(f"{operation_description}: {exc}") from exc
         except OSError as exc:
-            last_error = exc
             if attempt < retry_attempts:
                 sleep(
                     _retry_delay_seconds(
@@ -58,10 +55,7 @@ def fetch_bytes_with_retry(
             sleep(request_delay_seconds)
         return payload
 
-    message = operation_description
-    if last_error is not None:
-        message = f"{operation_description}: {last_error}"
-    raise error_factory(message)
+    raise error_factory(operation_description)
 
 
 def _retry_delay_seconds(

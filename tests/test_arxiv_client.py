@@ -125,7 +125,11 @@ class ParseFeedTests(unittest.TestCase):
         )
 
         with self.assertRaises(ArxivClientError):
-            fetch_latest_papers(feed, request_delay_seconds=0)
+            fetch_latest_papers(
+                feed,
+                request_delay_seconds=0,
+                retry_attempts=1,
+            )
 
     @patch("paper_digest.network.sleep")
     @patch("paper_digest.network.urlopen")

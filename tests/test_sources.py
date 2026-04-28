@@ -259,3 +259,23 @@ class SourceDispatchTests(unittest.TestCase):
             contact_email="bot@example.com",
             api_key="openalex-secret",
         )
+
+    def test_fetch_feed_papers_rejects_unsupported_sources(self) -> None:
+        feed = FeedConfig(
+            name="Unsupported",
+            source="custom",  # type: ignore[arg-type]
+            queries=["agent"],
+        )
+
+        with self.assertRaisesRegex(ValueError, "unsupported feed source: custom"):
+            fetch_feed_papers(
+                feed,
+                now=datetime(2026, 4, 8, 0, 30, tzinfo=ZoneInfo("UTC")),
+                lookback_hours=24,
+                request_delay_seconds=0.0,
+                request_timeout_seconds=30,
+                retry_attempts=2,
+                retry_backoff_seconds=3.0,
+                contact_email=None,
+                openalex_api_key=None,
+            )

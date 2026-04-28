@@ -87,9 +87,6 @@ def _normalize_markdown(title: str, body: str) -> str:
         if normalized.startswith("- "):
             lines.append(f"• {normalized[2:]}")
             continue
-        if line.startswith("  - ") or line.startswith("   - "):
-            lines.append(f"• {normalized[2:]}")
-            continue
         lines.append(normalized)
     return "\n".join(lines).strip()
 
