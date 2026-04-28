@@ -1,4 +1,12 @@
 [app]
+# Start here:
+# 1. For a local smoke test, keep [analysis] disabled and leave [[deliveries]]
+#    commented out.
+# 2. For GitHub Actions scheduled runs, keep [state].path and [feedback].path
+#    under .paper-digest-state/.
+# 3. For smaller copy/paste examples, see docs/config-recipes.md.
+# 4. For support policy and tested environments, see docs/compatibility-matrix.md.
+
 # Timezone used for display and output folder naming.
 timezone = "Asia/Shanghai"
 # Papers older than this window will be ignored.

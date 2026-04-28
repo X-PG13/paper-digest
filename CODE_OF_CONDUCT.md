@@ -20,6 +20,10 @@ Examples of unacceptable behavior:
 Project maintainers may remove, edit, or reject comments, commits, code, issues,
 and other contributions that violate this Code of Conduct.
 
+To report a conduct concern, contact the maintainer privately through an
+already-established private channel and include the relevant links, screenshots,
+or context needed to investigate.
+
 ## Scope
 
 This Code of Conduct applies in all project spaces, including issues, pull

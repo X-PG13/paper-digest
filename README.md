@@ -30,9 +30,55 @@ than a one-off script. The baseline includes:
 - Clear packaging metadata and typed Python modules.
 - Config validation with actionable error messages.
 - Unit tests for config loading, parsing, filtering, and service orchestration.
-- CI-ready commands for tests, linting, and type checking.
+- CI-ready commands for coverage-gated tests, linting, type checking, and build validation.
 - Contributor-facing docs such as `LICENSE`, `CONTRIBUTING.md`, and `SECURITY.md`.
-- Maintainer automation such as `pre-commit`, Dependabot, and tag-based release builds.
+- Maintainer automation such as `pre-commit`, grouped Dependabot updates,
+  dependency review, workflow lint, community triage automation, PR hygiene
+  checks, issue forms, tag-based release builds, and docs-reference consistency
+  checks across Markdown pages, GitHub metadata, maintainer-doc entry maps, and
+  release-lifecycle artifacts, maintainer issue templates, lifecycle
+  cross-link fields, issue close-out rules, summary-template default
+  semantics, structured workflow/issue-form lifecycle blocks, and a repo-local
+  lifecycle contract schema.
+
+## Docs Map
+
+- Full config reference and commented examples: [`config.example.toml`](./config.example.toml)
+- Small starting profiles for common setups: [`docs/config-recipes.md`](./docs/config-recipes.md)
+- Runtime and platform support policy: [`docs/compatibility-matrix.md`](./docs/compatibility-matrix.md)
+- Label taxonomy and triage labels: [`docs/label-taxonomy.md`](./docs/label-taxonomy.md)
+- Security disclosure and support routing: [`SECURITY.md`](./SECURITY.md) and [`SUPPORT.md`](./SUPPORT.md)
+- Governance, roadmap, and maintainer ownership: [`GOVERNANCE.md`](./GOVERNANCE.md), [`docs/roadmap-policy.md`](./docs/roadmap-policy.md), and [`docs/maintainer-rotation.md`](./docs/maintainer-rotation.md)
+- Proposal flow, discussion categories, and ADRs: [`docs/discussions-policy.md`](./docs/discussions-policy.md), [`docs/adr/README.md`](./docs/adr/README.md), and [`docs/adr/0000-template.md`](./docs/adr/0000-template.md)
+- Review and branch protection policy: [`docs/review-policy.md`](./docs/review-policy.md) and [`docs/branch-protection-policy.md`](./docs/branch-protection-policy.md)
+- Manual GitHub admin settings checklist: [`docs/repository-settings-checklist.md`](./docs/repository-settings-checklist.md)
+- Rulesets and maintainer saved replies: [`docs/ruleset-policy.md`](./docs/ruleset-policy.md) and [`docs/saved-replies.md`](./docs/saved-replies.md)
+- Maintainer onboarding, offboarding, and access review: [`docs/maintainer-access-policy.md`](./docs/maintainer-access-policy.md)
+- Maintainer operations hub: [`docs/maintainer-operations-hub.md`](./docs/maintainer-operations-hub.md)
+- Quarterly repository-operations review checklist and summary template: [`docs/quarterly-maintainer-review.md`](./docs/quarterly-maintainer-review.md)
+- Release cadence and lifecycle runbook: [`docs/release-cadence-policy.md`](./docs/release-cadence-policy.md) and [`docs/release-lifecycle-runbook.md`](./docs/release-lifecycle-runbook.md)
+- Release and maintainer-operations history index: [`docs/operations-history.md`](./docs/operations-history.md)
+- Post-release verification and next-cycle checklist: [`docs/post-release-checklist.md`](./docs/post-release-checklist.md)
+- Release checklist and release-notes guidance: [`RELEASING.md`](./RELEASING.md)
+- Maintainer issue-handling rules: [`docs/issue-triage.md`](./docs/issue-triage.md)
+- Maintainer workflow inventory and CI policy: [`docs/maintainer-guide.md`](./docs/maintainer-guide.md)
+- Dependency update strategy: [`docs/dependency-policy.md`](./docs/dependency-policy.md)
+- Architecture notes: [`docs/architecture.md`](./docs/architecture.md)
+
+## Compatibility
+
+Paper Digest intentionally keeps a narrow support surface.
+
+| Surface | Status | Notes |
+| --- | --- | --- |
+| CPython 3.12 | Supported | Required by local setup, CI, and release validation. |
+| CPython 3.13+ | Expected, not CI-gated yet | Validate manually before advertising broader support. |
+| PyPy or CPython < 3.12 | Unsupported | Not tested or documented. |
+| GitHub Actions on `ubuntu-latest` | Supported | This is the production runner for CI and scheduled jobs. |
+| Local macOS and Linux runs | Supported on a best-effort basis | The CLI is stdlib-only at runtime, but workflow examples assume a POSIX shell. |
+
+If you widen the supported matrix, update the compatibility doc, CI, and
+release notes together.
 
 ## Installation
 
@@ -46,19 +92,25 @@ python -m pip install -e '.[dev]'
 
 ## Quick Start
 
-1. Copy the example config:
+1. Choose a config starting point:
+
+- For a fully commented reference, copy [`config.example.toml`](./config.example.toml).
+- For a smaller profile such as "local smoke test" or "GitHub Actions
+  schedule", start from [`docs/config-recipes.md`](./docs/config-recipes.md).
+
+2. Copy the example config:
 
 ```bash
 cp config.example.toml config.toml
 ```
 
-2. Generate the digest:
+3. Generate the digest:
 
 ```bash
 python -m paper_digest --config config.toml
 ```
 
-3. Inspect the outputs:
+4. Inspect the outputs:
 
 - `output/latest.json`
 - `output/latest.md`
@@ -623,20 +675,74 @@ Common commands:
 
 ```bash
 pre-commit install
-make test
-make lint
-make typecheck
-make coverage
+python tools/sync_lifecycle_docs.py
+make check
+make docs-check
+make docs-check-json
+make docs-check-markdown
+make workflow-tools
+make workflow-check
 make build
 make release-check
 make run
 ```
+
+`python tools/sync_lifecycle_docs.py` refreshes managed lifecycle blocks in
+maintainer docs, issue forms, and release/ops workflows.
+
+`make docs-check-json` emits the same repository-local docs-check result as a
+machine-readable JSON report with structured findings.
+
+`make docs-check-markdown` emits the same result as a GitHub-step-summary-ready
+Markdown report.
+
+If you want those reports written to stable paths for CI or local inspection,
+run `python tools/check_docs.py --json-report-file reports/docs-check-report.json
+--markdown-report-file reports/docs-check-summary.md` or `make
+docs-check-pr-comment` to materialize the PR comment body.
+
+If you want GitHub Actions annotations or a Markdown summary rendered back from
+that JSON report, run `python tools/render_docs_report.py
+reports/docs-check-report.json --format github-annotations` or
+`python tools/render_docs_report.py reports/docs-check-report.json --format
+markdown` or `python tools/render_docs_report.py
+reports/docs-check-report.json --format pr-comment`.
+
+The current docs-check report schema is v4 and includes stable per-check
+`check_id` values plus per-finding `message`, `severity`, and best-effort
+`path` / `line` / `end_line` metadata so GitHub annotations, trusted PR
+comment rerenders, and other machine consumers can target the affected file
+and keep per-check contracts stable.
+
+Failing pull requests now also get a maintained docs-check comment via the
+trusted `workflow_run` workflow in
+`.github/workflows/docs-check-pr-comment.yml`, which re-renders the comment
+from the uploaded JSON artifact on the default branch and removes the comment
+again once docs-check passes.
+
+The link, registry, and lifecycle checks now emit native structured findings
+before report serialization, so most docs-check failures no longer rely on
+string parsing to recover file metadata.
+
+Section-driven docs checks now also carry heading, issue-form-field, or
+workflow-block line ranges when the repository parser can resolve a stable
+origin, so Checks UI annotations land closer to the actual policy drift.
+
+`make workflow-check` runs local GitHub workflow linting through
+`tools/check_workflows.py`. The wrapper looks for `actionlint` in
+`ACTIONLINT_BIN`, then `.tools/actionlint/actionlint`, then `PATH`.
+
+`make workflow-tools` installs the pinned `actionlint` release into
+`.tools/actionlint/actionlint` for macOS/Linux amd64/arm64 hosts and verifies
+the downloaded archive checksum before replacing the repo-local binary.
 
 The project currently uses only the Python standard library at runtime.
 
 Additional maintainer docs:
 
 - `docs/architecture.md`
+- `docs/compatibility-matrix.md`
+- `docs/config-recipes.md`
 - `docs/maintainer-guide.md`
 - `RELEASING.md`
 
@@ -724,6 +830,10 @@ transient `429`, `5xx`, and timeout-style failures. You can tune that behavior
 through `request_timeout_seconds`, `fetch_retry_attempts`, and
 `fetch_retry_backoff_seconds` in `[app]`.
 
+Operational expectations for workflows, supported runners, and release
+validation live in [`docs/maintainer-guide.md`](./docs/maintainer-guide.md)
+and [`docs/compatibility-matrix.md`](./docs/compatibility-matrix.md).
+
 The CLI also rebuilds `output/site/index.html` on every run. That static site:
 
 - shows daily hit counts and per-feed summaries
@@ -763,6 +873,10 @@ On macOS or Linux you can run the digest every morning with `cron`:
 
 ## Roadmap
 
+Roadmap intake and prioritization rules live in
+[`docs/roadmap-policy.md`](./docs/roadmap-policy.md). Governance and maintainer
+ownership rules live in [`GOVERNANCE.md`](./GOVERNANCE.md).
+
 - Add more literature sources such as Lens or CORE.
 - Support more output adapters such as Matrix.
 - Support additional LLM providers and richer feed-level briefings.
@@ -770,4 +884,6 @@ On macOS or Linux you can run the digest every morning with `cron`:
 ## Status
 
 The project is usable today for daily arXiv monitoring, but it is still early.
-Expect API and config changes while the repository matures.
+Expect API and config changes while the repository matures. The project is
+maintainer-led today; decision and ownership rules are documented in
+[`GOVERNANCE.md`](./GOVERNANCE.md).

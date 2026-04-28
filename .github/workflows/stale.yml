@@ -1,0 +1,49 @@
+name: Stale
+
+on:
+  schedule:
+    - cron: "35 1 * * 1"
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+permissions:
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: stale-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Mark stale issues and pull requests
+        uses: actions/stale@v10
+        with:
+          repo-token: ${{ github.token }}
+          stale-issue-label: stale
+          stale-pr-label: stale
+          days-before-issue-stale: 21
+          days-before-issue-close: 7
+          days-before-pr-stale: 30
+          days-before-pr-close: -1
+          exempt-issue-labels: security,blocked,release-note,good first issue,help wanted,ops-review,release-prep,release-follow-up
+          exempt-pr-labels: blocked,release-note
+          stale-issue-message: >
+            This issue has had no activity for 21 days, so it is being marked
+            `stale`. If it still matters, add updated context or the requested
+            reproduction details.
+          close-issue-message: >
+            Closing this issue after 7 additional days without new information.
+            Reopen or file a fresh issue with an updated reproduction if the
+            problem still applies on a supported path.
+          stale-pr-message: >
+            This pull request has had no activity for 30 days, so it is being
+            marked `stale`. If it is still active, leave a short status update
+            and remove any blockers.
+          operations-per-run: 100

@@ -1,0 +1,83 @@
+name: Bug report
+description: Report a reproducible defect
+title: "[Bug] "
+labels:
+  - bug
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not use this form for security problems or general setup questions.
+        Security reports belong in `SECURITY.md`, and usage questions belong in
+        `SUPPORT.md`.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Describe the bug clearly.
+      placeholder: A concise description of the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Include the exact command or workflow path and what happened.
+      placeholder: |
+        1. Configuration used:
+        2. Command executed:
+        3. What happened:
+    validations:
+      required: true
+  - type: textarea
+    id: minimal_config
+    attributes:
+      label: Minimal config snippet
+      description: Paste the smallest relevant config excerpt with secrets removed.
+      render: toml
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or traceback
+      description: Paste the exact error output if available.
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: Expected behavior
+      description: Describe what you expected instead.
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: macOS 15 / Ubuntu 24.04 / Windows 11
+    validations:
+      required: true
+  - type: input
+    id: python_version
+    attributes:
+      label: Python version
+      placeholder: "3.12.3"
+    validations:
+      required: true
+  - type: input
+    id: project_version
+    attributes:
+      label: Project version or commit
+      placeholder: v0.4.1 / main / commit SHA
+    validations:
+      required: true
+  - type: input
+    id: integration
+    attributes:
+      label: Source or delivery integration involved
+      placeholder: arXiv / OpenAlex / Slack / GitHub Actions
+    validations:
+      required: false

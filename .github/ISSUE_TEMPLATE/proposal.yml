@@ -1,0 +1,60 @@
+name: Proposal
+description: Propose a larger product, workflow, or governance change
+title: "[Proposal] "
+labels:
+  - enhancement
+  - proposal
+assignees: []
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What change are you proposing?
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or opportunity
+      description: What user, maintainer, or repository problem does this address?
+    validations:
+      required: true
+  - type: textarea
+    id: scope_fit
+    attributes:
+      label: Scope fit
+      description: Explain why this belongs in Paper Digest rather than in a local fork or custom automation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposed_approach
+    attributes:
+      label: Proposed approach
+      description: Describe the intended API, workflow, policy, or operational shape.
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Compatibility and maintenance impact
+      description: Cover config, CLI, workflow, support-boundary, governance, ADR, and release-note implications.
+      placeholder: |
+        - Does this change configuration, CLI behavior, workflows, support boundaries, or governance?
+        - Does it need an ADR, roadmap update, or explicit release-note treatment?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe any alternatives or reasons not to do this.
+    validations:
+      required: false
+  - type: textarea
+    id: rollout
+    attributes:
+      label: Rollout notes
+      description: Describe migration, rollback, or documentation expectations if the proposal is accepted.
+    validations:
+      required: false

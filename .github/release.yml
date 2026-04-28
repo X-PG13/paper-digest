@@ -1,0 +1,30 @@
+changelog:
+  exclude:
+    labels:
+      - support
+      - duplicate
+      - invalid
+      - wontfix
+      - stale
+      - needs-info
+      - needs-repro
+  categories:
+    - title: Breaking Changes
+      labels:
+        - breaking
+    - title: Features
+      labels:
+        - enhancement
+        - release-note
+    - title: Dependencies
+      labels:
+        - dependencies
+    - title: Fixes
+      labels:
+        - bug
+    - title: Documentation
+      labels:
+        - documentation
+    - title: Maintenance
+      labels:
+        - maintenance

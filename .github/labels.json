@@ -1,0 +1,112 @@
+[
+  {
+    "name": "bug",
+    "color": "d73a4a",
+    "description": "Confirmed or suspected defects on supported paths"
+  },
+  {
+    "name": "enhancement",
+    "color": "a2eeef",
+    "description": "New capabilities, workflow changes, or product improvements"
+  },
+  {
+    "name": "proposal",
+    "color": "d4c5f9",
+    "description": "Larger design, workflow, governance, or roadmap proposals"
+  },
+  {
+    "name": "support",
+    "color": "cfd3d7",
+    "description": "Usage or configuration questions"
+  },
+  {
+    "name": "documentation",
+    "color": "0075ca",
+    "description": "Missing, unclear, or outdated documentation"
+  },
+  {
+    "name": "maintenance",
+    "color": "7057ff",
+    "description": "CI, tooling, dependency, or repository-health work"
+  },
+  {
+    "name": "dependencies",
+    "color": "0366d6",
+    "description": "Dependency updates and ecosystem maintenance"
+  },
+  {
+    "name": "security",
+    "color": "b60205",
+    "description": "Security-sensitive work"
+  },
+  {
+    "name": "breaking",
+    "color": "b60205",
+    "description": "Behavior or compatibility changes that require extra release-note attention"
+  },
+  {
+    "name": "needs-info",
+    "color": "fbca04",
+    "description": "Missing information required for triage"
+  },
+  {
+    "name": "needs-repro",
+    "color": "fbca04",
+    "description": "Needs a minimal reproduction before work can continue"
+  },
+  {
+    "name": "blocked",
+    "color": "5319e7",
+    "description": "Cannot proceed until an external dependency or decision changes"
+  },
+  {
+    "name": "stale",
+    "color": "ededed",
+    "description": "Marked stale after prolonged inactivity"
+  },
+  {
+    "name": "ops-review",
+    "color": "1d76db",
+    "description": "Scheduled repository-operations review and access-audit work"
+  },
+  {
+    "name": "release-prep",
+    "color": "5319e7",
+    "description": "Maintainer release-preparation tracking work"
+  },
+  {
+    "name": "release-follow-up",
+    "color": "0052cc",
+    "description": "Maintainer post-release verification and follow-up work"
+  },
+  {
+    "name": "release-note",
+    "color": "0e8a16",
+    "description": "Should be called out in release notes"
+  },
+  {
+    "name": "good first issue",
+    "color": "7057ff",
+    "description": "Suitable for a first contribution"
+  },
+  {
+    "name": "help wanted",
+    "color": "008672",
+    "description": "Maintainers welcome outside implementation help"
+  },
+  {
+    "name": "duplicate",
+    "color": "cfd3d7",
+    "description": "Tracked elsewhere already"
+  },
+  {
+    "name": "invalid",
+    "color": "e4e669",
+    "description": "Not actionable as filed"
+  },
+  {
+    "name": "wontfix",
+    "color": "ffffff",
+    "description": "Intentionally not planned"
+  }
+]

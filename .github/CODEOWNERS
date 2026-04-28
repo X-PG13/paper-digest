@@ -1,1 +1,28 @@
+# Default owner
 * @X-PG13
+
+# Core package and tests
+/paper_digest/ @X-PG13
+/tests/ @X-PG13
+
+# Documentation and repository policy
+/docs/ @X-PG13
+/README.md @X-PG13
+/CHANGELOG.md @X-PG13
+/CONTRIBUTING.md @X-PG13
+/RELEASING.md @X-PG13
+/SECURITY.md @X-PG13
+/SUPPORT.md @X-PG13
+/GOVERNANCE.md @X-PG13
+/CODE_OF_CONDUCT.md @X-PG13
+/config.example.toml @X-PG13
+
+# GitHub repository operations
+/.github/workflows/ @X-PG13
+/.github/ISSUE_TEMPLATE/ @X-PG13
+/.github/release.yml @X-PG13
+/.github/labels.json @X-PG13
+
+# Build and packaging
+/pyproject.toml @X-PG13
+/Makefile @X-PG13

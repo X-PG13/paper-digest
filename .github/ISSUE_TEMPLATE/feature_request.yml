@@ -1,0 +1,47 @@
+name: Feature request
+description: Propose an improvement or new capability
+title: "[Feature] "
+labels:
+  - enhancement
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not use this form for security problems or usage questions. Use
+        `SECURITY.md` or `SUPPORT.md` instead.
+
+        For larger design, governance, or roadmap changes, prefer the
+        `Proposal` form so maintainers can track the broader discussion
+        separately.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user problem are you trying to solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposed_solution
+    attributes:
+      label: Proposed solution
+      description: Describe the API, workflow, or output you want.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe any alternatives or workarounds.
+    validations:
+      required: false
+  - type: textarea
+    id: scope_notes
+    attributes:
+      label: Scope notes
+      description: Call out any source, delivery, config, compatibility, or maintenance implications.
+      placeholder: |
+        - Is this a new source, delivery channel, config surface, or workflow change?
+        - Does it change compatibility, maintenance cost, or release policy?
+    validations:
+      required: false

@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security Policy
+    url: https://github.com/X-PG13/paper-digest/blob/main/SECURITY.md
+    about: Report suspected vulnerabilities privately instead of opening a public issue.
+  - name: Support Expectations
+    url: https://github.com/X-PG13/paper-digest/blob/main/SUPPORT.md
+    about: Read this before opening a usage or setup question.
+  - name: Proposal And Discussion Policy
+    url: https://github.com/X-PG13/paper-digest/blob/main/docs/discussions-policy.md
+    about: Use this when deciding between support, feature, proposal, or future discussion paths.
+  - name: Config Recipes
+    url: https://github.com/X-PG13/paper-digest/blob/main/docs/config-recipes.md
+    about: Start here for small, copyable configuration examples.
