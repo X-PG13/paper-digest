@@ -24,37 +24,37 @@ coverage:
 	$(PYTHON_BIN) -m coverage report
 
 policy-check:
-	$(PYTHON_BIN) tools/check_policies.py
+	$(PYTHON_BIN) -m tools.check_policies
 
 policy-check-json:
-	$(PYTHON_BIN) tools/check_policies.py --format json
+	$(PYTHON_BIN) -m tools.check_policies --format json
 
 policy-check-markdown:
-	$(PYTHON_BIN) tools/check_policies.py --json-report-file reports/policy-check-report.json
-	$(PYTHON_BIN) tools/render_policy_report.py reports/policy-check-report.json --format markdown
+	$(PYTHON_BIN) -m tools.check_policies --json-report-file reports/policy-check-report.json
+	$(PYTHON_BIN) -m tools.render_policy_report reports/policy-check-report.json --format markdown
 
 docs-check:
-	$(PYTHON_BIN) tools/sync_lifecycle_docs.py --check
-	$(PYTHON_BIN) tools/check_docs.py
+	$(PYTHON_BIN) -m tools.sync_lifecycle_docs --check
+	$(PYTHON_BIN) -m tools.check_docs
 
 docs-check-json:
-	$(PYTHON_BIN) tools/sync_lifecycle_docs.py --check
-	$(PYTHON_BIN) tools/check_docs.py --format json
+	$(PYTHON_BIN) -m tools.sync_lifecycle_docs --check
+	$(PYTHON_BIN) -m tools.check_docs --format json
 
 docs-check-markdown:
-	$(PYTHON_BIN) tools/sync_lifecycle_docs.py --check
-	$(PYTHON_BIN) tools/check_docs.py --format markdown
+	$(PYTHON_BIN) -m tools.sync_lifecycle_docs --check
+	$(PYTHON_BIN) -m tools.check_docs --format markdown
 
 docs-check-pr-comment:
-	$(PYTHON_BIN) tools/sync_lifecycle_docs.py --check
-	$(PYTHON_BIN) tools/check_docs.py --json-report-file reports/docs-check-report.json
-	$(PYTHON_BIN) tools/render_docs_report.py reports/docs-check-report.json --format pr-comment --output reports/docs-check-pr-comment.md
+	$(PYTHON_BIN) -m tools.sync_lifecycle_docs --check
+	$(PYTHON_BIN) -m tools.check_docs --json-report-file reports/docs-check-report.json
+	$(PYTHON_BIN) -m tools.render_docs_report reports/docs-check-report.json --format pr-comment --output reports/docs-check-pr-comment.md
 
 workflow-tools:
-	$(PYTHON_BIN) tools/install_actionlint.py
+	$(PYTHON_BIN) -m tools.install_actionlint
 
 workflow-check:
-	$(PYTHON_BIN) tools/check_workflows.py
+	$(PYTHON_BIN) -m tools.check_workflows
 
 build:
 	$(PYTHON_BIN) -m build --no-isolation

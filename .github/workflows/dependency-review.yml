@@ -16,6 +16,7 @@ concurrency:
 
 jobs:
   dependency-review:
+    if: github.event.repository.private == false || vars.ENABLE_DEPENDENCY_REVIEW == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
