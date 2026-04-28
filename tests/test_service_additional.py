@@ -15,6 +15,7 @@ from paper_digest.service import (
     _action_priority,
     _action_reason_codes,
     _build_action_items,
+    _build_focus_items,
     _CurrentFocusCandidate,
     _effective_due_date_from_entry,
     _entry_is_snoozed,
@@ -638,6 +639,11 @@ class ServiceHelperTests(unittest.TestCase):
                         updated_at=now,
                         due_date=date(2026, 4, 25),
                     ),
+                    "arxiv:missing": FeedbackEntry(
+                        status="reading",
+                        updated_at=now,
+                        next_action="read later",
+                    ),
                 }
             )
 
@@ -662,4 +668,67 @@ class ServiceHelperTests(unittest.TestCase):
                 now=now,
             )
 
+        self.assertEqual(action_items, [])
+
+    def test_focus_and_action_builders_skip_feedback_without_known_paper(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "output"
+            config = AppConfig(
+                timezone="UTC",
+                lookback_hours=24,
+                output_dir=output_dir,
+                request_delay_seconds=0.0,
+                feeds=[],
+                state=StateConfig(
+                    enabled=True,
+                    path=Path(temp_dir) / "state.json",
+                    retention_days=90,
+                ),
+            )
+            now = datetime(2026, 4, 15, 9, 30, tzinfo=UTC)
+            digest = DigestRun(
+                generated_at=now,
+                timezone="UTC",
+                lookback_hours=24,
+                feeds=[],
+            )
+            feedback_state = FeedbackState(
+                papers={
+                    "arxiv:missing-star": FeedbackEntry(
+                        status="star",
+                        updated_at=now,
+                    ),
+                    "arxiv:missing-action": FeedbackEntry(
+                        status="reading",
+                        updated_at=now,
+                        next_action="read later",
+                    ),
+                }
+            )
+
+            focus_items = _build_focus_items(
+                digest,
+                config=config,
+                feedback_state=feedback_state,
+                focus_candidates={},
+                current_papers={},
+                current_feed_names={},
+                now=now,
+            )
+            action_items = _build_action_items(
+                digest,
+                config=config,
+                feedback_state=feedback_state,
+                feedback_automation=FeedbackAutomation(
+                    resumed_from_snooze=frozenset(),
+                    recurring_due=frozenset(),
+                ),
+                current_papers={},
+                current_feed_names={},
+                now=now,
+            )
+
+        self.assertEqual(focus_items, [])
         self.assertEqual(action_items, [])

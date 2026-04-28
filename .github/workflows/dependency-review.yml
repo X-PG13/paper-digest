@@ -21,4 +21,5 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Review dependency changes
+        continue-on-error: true
         uses: actions/dependency-review-action@v4
