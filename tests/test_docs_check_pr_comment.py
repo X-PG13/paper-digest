@@ -223,6 +223,7 @@ class DocsCheckPrCommentTests(unittest.TestCase):
             exit_code = main_decide_comment(
                 report_file=report_path,
                 comment_file=comment_path,
+                env={},
                 stdout=stdout,
             )
             self.assertEqual(exit_code, 0)
