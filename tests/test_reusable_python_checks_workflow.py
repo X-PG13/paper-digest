@@ -34,7 +34,7 @@ class ReusablePythonChecksWorkflowTests(unittest.TestCase):
         )
         self.assertIn("        continue-on-error: true", block)
         self.assertIn(
-            "        run: python tools/check_docs.py --json-report-file "
+            "        run: python -m tools.check_docs --json-report-file "
             "reports/docs-check-report.json",
             block,
         )
@@ -48,7 +48,7 @@ class ReusablePythonChecksWorkflowTests(unittest.TestCase):
             render_block,
         )
         self.assertIn(
-            "        run: python tools/render_docs_report.py "
+            "        run: python -m tools.render_docs_report "
             "reports/docs-check-report.json --format markdown "
             "--output reports/docs-check-summary.md",
             render_block,
@@ -68,7 +68,7 @@ class ReusablePythonChecksWorkflowTests(unittest.TestCase):
 
         self.assertIn("hashFiles('reports/docs-check-report.json') != ''", block)
         self.assertIn(
-            "        run: python tools/render_docs_report.py "
+            "        run: python -m tools.render_docs_report "
             "reports/docs-check-report.json --format pr-comment "
             "--output reports/docs-check-pr-comment.md",
             block,
@@ -79,7 +79,7 @@ class ReusablePythonChecksWorkflowTests(unittest.TestCase):
 
         self.assertIn("hashFiles('reports/docs-check-report.json') != ''", block)
         self.assertIn(
-            "        run: python tools/render_docs_report.py "
+            "        run: python -m tools.render_docs_report "
             "reports/docs-check-report.json --format github-annotations",
             block,
         )
@@ -117,7 +117,7 @@ class ReusablePythonChecksWorkflowTests(unittest.TestCase):
         )
         self.assertIn("        continue-on-error: true", block)
         self.assertIn(
-            "        run: python tools/check_policies.py --json-report-file "
+            "        run: python -m tools.check_policies --json-report-file "
             "reports/policy-check-report.json",
             block,
         )
@@ -131,7 +131,7 @@ class ReusablePythonChecksWorkflowTests(unittest.TestCase):
             render_block,
         )
         self.assertIn(
-            "        run: python tools/render_policy_report.py "
+            "        run: python -m tools.render_policy_report "
             "reports/policy-check-report.json --format markdown "
             "--output reports/policy-check-summary.md",
             render_block,
@@ -151,7 +151,7 @@ class ReusablePythonChecksWorkflowTests(unittest.TestCase):
 
         self.assertIn("hashFiles('reports/policy-check-report.json') != ''", block)
         self.assertIn(
-            "        run: python tools/render_policy_report.py "
+            "        run: python -m tools.render_policy_report "
             "reports/policy-check-report.json --format github-annotations",
             block,
         )

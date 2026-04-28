@@ -41,7 +41,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           PR_BODY: ${{ github.event.pull_request.body || '' }}
         run: |
-          python tools/pr_hygiene.py \
+          python -m tools.pr_hygiene \
             --repo "${{ github.repository }}" \
             --pull-number "${{ github.event.pull_request.number }}" \
             --body-env PR_BODY
@@ -52,13 +52,13 @@ jobs:
           COMMENT_BODY: ${{ steps.reminder.outputs.comment-body }}
         run: |
           if [ "${{ steps.reminder.outputs.mode }}" = "delete" ]; then
-            python tools/sync_marker_comment.py \
+            python -m tools.sync_marker_comment \
               --repo "${{ github.repository }}" \
               --issue-number "${{ github.event.pull_request.number }}" \
               --marker "${{ steps.reminder.outputs.marker }}" \
               --delete
           else
-            python tools/sync_marker_comment.py \
+            python -m tools.sync_marker_comment \
               --repo "${{ github.repository }}" \
               --issue-number "${{ github.event.pull_request.number }}" \
               --marker "${{ steps.reminder.outputs.marker }}" \

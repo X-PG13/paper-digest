@@ -38,7 +38,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python tools/docs_check_pr_comment.py resolve-context \
+          python -m tools.docs_check_pr_comment resolve-context \
             --repo "${{ github.repository }}"
 
       - name: Fail if docs-check artifact is missing
@@ -57,12 +57,12 @@ jobs:
           github-token: ${{ github.token }}
 
       - name: Render trusted docs-check PR comment
-        run: python tools/render_docs_report.py reports/docs-check-report.json --format pr-comment --output reports/docs-check-pr-comment.md
+        run: python -m tools.render_docs_report reports/docs-check-report.json --format pr-comment --output reports/docs-check-pr-comment.md
 
       - name: Determine docs-check comment action
         id: comment
         run: |
-          python tools/docs_check_pr_comment.py decide-comment \
+          python -m tools.docs_check_pr_comment decide-comment \
             --report-file reports/docs-check-report.json \
             --comment-file reports/docs-check-pr-comment.md
 
@@ -72,13 +72,13 @@ jobs:
           COMMENT_BODY: ${{ steps.comment.outputs.comment-body }}
         run: |
           if [ "${{ steps.comment.outputs.mode }}" = "delete" ]; then
-            python tools/sync_marker_comment.py \
+            python -m tools.sync_marker_comment \
               --repo "${{ github.repository }}" \
               --issue-number "${{ steps.context.outputs.pr-number }}" \
               --marker "${{ steps.comment.outputs.marker }}" \
               --delete
           else
-            python tools/sync_marker_comment.py \
+            python -m tools.sync_marker_comment \
               --repo "${{ github.repository }}" \
               --issue-number "${{ steps.context.outputs.pr-number }}" \
               --marker "${{ steps.comment.outputs.marker }}" \

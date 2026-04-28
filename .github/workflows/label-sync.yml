@@ -37,6 +37,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python tools/sync_repository_labels.py \
+          python -m tools.sync_repository_labels \
             --repo "${{ github.repository }}" \
             --labels-file .github/labels.json

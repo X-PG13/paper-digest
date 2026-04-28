@@ -44,7 +44,7 @@ class DocsCheckPrCommentWorkflowTests(unittest.TestCase):
         self.assertIn("        id: context", block)
         self.assertIn("          GITHUB_TOKEN: ${{ github.token }}", block)
         self.assertIn(
-            "          python tools/docs_check_pr_comment.py resolve-context \\",
+            "          python -m tools.docs_check_pr_comment resolve-context \\",
             block,
         )
         self.assertIn('            --repo "${{ github.repository }}"', block)
@@ -77,7 +77,7 @@ class DocsCheckPrCommentWorkflowTests(unittest.TestCase):
         block = extract_step_block(self.lines, "Render trusted docs-check PR comment")
 
         self.assertIn(
-            "        run: python tools/render_docs_report.py "
+            "        run: python -m tools.render_docs_report "
             "reports/docs-check-report.json --format pr-comment "
             "--output reports/docs-check-pr-comment.md",
             block,
@@ -90,7 +90,7 @@ class DocsCheckPrCommentWorkflowTests(unittest.TestCase):
 
         self.assertIn("        id: comment", block)
         self.assertIn(
-            "          python tools/docs_check_pr_comment.py decide-comment \\",
+            "          python -m tools.docs_check_pr_comment decide-comment \\",
             block,
         )
         self.assertIn(
@@ -116,7 +116,7 @@ class DocsCheckPrCommentWorkflowTests(unittest.TestCase):
             '          if [ "${{ steps.comment.outputs.mode }}" = "delete" ]; then',
             block,
         )
-        self.assertIn("            python tools/sync_marker_comment.py \\", block)
+        self.assertIn("            python -m tools.sync_marker_comment \\", block)
         self.assertIn('              --repo "${{ github.repository }}" \\', block)
         self.assertIn(
             '              --issue-number "${{ steps.context.outputs.pr-number }}" \\',

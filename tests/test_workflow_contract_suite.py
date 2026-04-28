@@ -42,7 +42,7 @@ class PrHygieneWorkflowContractTests(unittest.TestCase):
             "          PR_BODY: ${{ github.event.pull_request.body || '' }}",
             block,
         )
-        self.assertIn("          python tools/pr_hygiene.py \\", block)
+        self.assertIn("          python -m tools.pr_hygiene \\", block)
         self.assertIn('            --repo "${{ github.repository }}" \\', block)
         self.assertIn(
             '            --pull-number "${{ github.event.pull_request.number }}" \\',
@@ -62,7 +62,7 @@ class PrHygieneWorkflowContractTests(unittest.TestCase):
             '          if [ "${{ steps.reminder.outputs.mode }}" = "delete" ]; then',
             block,
         )
-        self.assertIn("            python tools/sync_marker_comment.py \\", block)
+        self.assertIn("            python -m tools.sync_marker_comment \\", block)
         self.assertIn('              --repo "${{ github.repository }}" \\', block)
         self.assertIn(
             '              --issue-number "${{ github.event.pull_request.number }}" \\',
@@ -111,7 +111,7 @@ class CommunityTriageWorkflowContractTests(unittest.TestCase):
             "          ISSUE_LABELS_JSON: ${{ toJson(github.event.issue.labels) }}",
             step_block,
         )
-        self.assertIn("          python tools/community_triage.py \\", step_block)
+        self.assertIn("          python -m tools.community_triage \\", step_block)
         self.assertIn("            --body-env ISSUE_BODY \\", step_block)
         self.assertIn("            --labels-json-env ISSUE_LABELS_JSON", step_block)
 
@@ -125,7 +125,7 @@ class CommunityTriageWorkflowContractTests(unittest.TestCase):
             '"add" ]; then',
             block,
         )
-        self.assertIn("            python tools/sync_issue_labels.py \\", block)
+        self.assertIn("            python -m tools.sync_issue_labels \\", block)
         self.assertIn('              --repo "${{ github.repository }}" \\', block)
         self.assertIn(
             '              --issue-number "${{ github.event.issue.number }}" \\',
@@ -146,7 +146,7 @@ class CommunityTriageWorkflowContractTests(unittest.TestCase):
             '          if [ "${{ steps.intake.outputs.mode }}" = "delete" ]; then',
             block,
         )
-        self.assertIn("            python tools/sync_marker_comment.py \\", block)
+        self.assertIn("            python -m tools.sync_marker_comment \\", block)
         self.assertIn('              --repo "${{ github.repository }}" \\', block)
         self.assertIn(
             '              --issue-number "${{ github.event.issue.number }}" \\',
@@ -165,7 +165,7 @@ class CommunityTriageWorkflowContractTests(unittest.TestCase):
 
         self.assertIn("    if: github.event_name == 'pull_request_target'", job_block)
         self.assertIn("          GITHUB_TOKEN: ${{ github.token }}", step_block)
-        self.assertIn("          python tools/community_pr_labels.py \\", step_block)
+        self.assertIn("          python -m tools.community_pr_labels \\", step_block)
         self.assertIn('            --repo "${{ github.repository }}" \\', step_block)
         self.assertIn(
             '            --pull-number "${{ github.event.pull_request.number }}" \\',
@@ -200,7 +200,7 @@ class LabelSyncWorkflowContractTests(unittest.TestCase):
         block = extract_step_block(self.lines, "Sync repository labels")
 
         self.assertIn("          GITHUB_TOKEN: ${{ github.token }}", block)
-        self.assertIn("          python tools/sync_repository_labels.py \\", block)
+        self.assertIn("          python -m tools.sync_repository_labels \\", block)
         self.assertIn('            --repo "${{ github.repository }}" \\', block)
         self.assertIn("            --labels-file .github/labels.json", block)
         self.assertNotIn("actions/github-script", block)

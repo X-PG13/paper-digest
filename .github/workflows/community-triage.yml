@@ -49,7 +49,7 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body || '' }}
           ISSUE_LABELS_JSON: ${{ toJson(github.event.issue.labels) }}
         run: |
-          python tools/community_triage.py \
+          python -m tools.community_triage \
             --body-env ISSUE_BODY \
             --labels-json-env ISSUE_LABELS_JSON
 
@@ -59,12 +59,12 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           if [ "${{ steps.intake.outputs.needs-info-action }}" = "add" ]; then
-            python tools/sync_issue_labels.py \
+            python -m tools.sync_issue_labels \
               --repo "${{ github.repository }}" \
               --issue-number "${{ github.event.issue.number }}" \
               --ensure needs-info
           else
-            python tools/sync_issue_labels.py \
+            python -m tools.sync_issue_labels \
               --repo "${{ github.repository }}" \
               --issue-number "${{ github.event.issue.number }}" \
               --remove needs-info
@@ -76,13 +76,13 @@ jobs:
           COMMENT_BODY: ${{ steps.intake.outputs.comment-body }}
         run: |
           if [ "${{ steps.intake.outputs.mode }}" = "delete" ]; then
-            python tools/sync_marker_comment.py \
+            python -m tools.sync_marker_comment \
               --repo "${{ github.repository }}" \
               --issue-number "${{ github.event.issue.number }}" \
               --marker "${{ steps.intake.outputs.marker }}" \
               --delete
           else
-            python tools/sync_marker_comment.py \
+            python -m tools.sync_marker_comment \
               --repo "${{ github.repository }}" \
               --issue-number "${{ github.event.issue.number }}" \
               --marker "${{ steps.intake.outputs.marker }}" \
@@ -107,7 +107,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python tools/community_pr_labels.py \
+          python -m tools.community_pr_labels \
             --repo "${{ github.repository }}" \
             --pull-number "${{ github.event.pull_request.number }}" \
             --actor "${{ github.actor }}"
