@@ -1,0 +1,42 @@
+name: Label Sync
+
+on:
+  push:
+    branches: ["main", "master"]
+    paths:
+      - ".github/labels.json"
+      - ".github/workflows/label-sync.yml"
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: label-sync-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync-labels:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Sync repository labels
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python tools/sync_repository_labels.py \
+            --repo "${{ github.repository }}" \
+            --labels-file .github/labels.json

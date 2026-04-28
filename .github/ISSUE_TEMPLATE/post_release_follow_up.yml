@@ -1,0 +1,100 @@
+name: Post-release follow-up
+description: Maintainer-only checklist for post-release verification and next-cycle setup
+title: "[Post Release] v"
+labels:
+  - maintenance
+  - release-follow-up
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this issue to verify the published release and track any immediate
+        follow-up work for the next development cycle.
+        Use `docs/release-lifecycle-runbook.md` and
+        `docs/post-release-checklist.md` as the process source of truth.
+  - type: input
+    id: release_version
+    attributes:
+      label: Release version
+      placeholder: v0.5.0
+    validations:
+      required: true
+  - type: input
+    id: release_prep_issue
+    attributes:
+      label: Release-preparation issue
+      description: Link the release-preparation issue that tracked the tag cut.
+      placeholder: "#123"
+    validations:
+      required: true
+  - type: input
+    id: published_release_url
+    attributes:
+      label: Published release URL
+      description: Link the GitHub release page when creating this issue manually.
+      placeholder: https://github.com/OWNER/REPO/releases/tag/v0.5.0
+    validations:
+      required: false
+  - type: input
+    id: quarterly_review_issue
+    attributes:
+      label: Latest quarterly review issue
+      description: Link the quarterly review issue if repository-operations changes shipped in this release.
+      placeholder: "#456"
+    validations:
+      required: false
+  - type: textarea
+    id: immediate_validation
+    attributes:
+      label: Immediate validation
+      description: Confirm the published release and docs are consistent.
+      # BEGIN GENERATED: post-release-form-immediate-validation
+      value: |
+        - [ ] GitHub release artifacts verified.
+        - [ ] Generated release notes match `CHANGELOG.md`.
+        - [ ] Compatibility claims in `README.md` and `docs/compatibility-matrix.md` still match the published release.
+        - [ ] Operator-facing workflow or repository-operations notes were surfaced in release prep and release notes.
+      # END GENERATED: post-release-form-immediate-validation
+    validations:
+      required: true
+  - type: textarea
+    id: next_cycle
+    attributes:
+      label: Next-cycle setup
+      description: Track anything that should happen immediately after release.
+      # BEGIN GENERATED: post-release-form-next-cycle
+      value: |
+        - [ ] Next development-cycle version bump tracked or completed.
+        - [ ] `CHANGELOG.md` has an `Unreleased` section ready for new work.
+        - [ ] Deferred release-preparation follow-up work is linked here.
+        - [ ] `docs/operations-history.md` updated.
+      # END GENERATED: post-release-form-next-cycle
+    validations:
+      required: true
+  - type: textarea
+    id: retrospective
+    attributes:
+      label: Release retrospective
+      description: Capture what maintainers should improve before the next tag.
+      # BEGIN GENERATED: post-release-form-retrospective
+      placeholder: |
+        - What went smoothly?
+        - What was repetitive or unclear?
+        - What should be automated or documented next?
+      # END GENERATED: post-release-form-retrospective
+    validations:
+      required: false
+  - type: textarea
+    id: close_out
+    attributes:
+      label: Close-out summary
+      description: Use this section before closing the issue.
+      # BEGIN GENERATED: post-release-form-close-out
+      value: |
+        - [ ] Post-release summary added.
+        - [ ] Follow-up PRs or issues linked.
+        - [ ] No remaining immediate post-release work, or remaining work is explicitly tracked.
+      # END GENERATED: post-release-form-close-out
+    validations:
+      required: false

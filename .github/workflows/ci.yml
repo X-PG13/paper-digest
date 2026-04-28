@@ -4,40 +4,17 @@ on:
   push:
     branches: ["main", "master"]
   pull_request:
+  workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.12"]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install project
-        run: python -m pip install -e '.[dev]'
-
-      - name: Run unit tests
-        run: python -m unittest discover -s tests -v
-
-      - name: Run Ruff
-        run: python -m ruff check .
-
-      - name: Run mypy
-        run: python -m mypy paper_digest
-
-      - name: Build distributions
-        run: python -m build
-
-      - name: Validate distributions
-        run: python -m twine check dist/*
+  verify:
+    uses: ./.github/workflows/reusable-python-checks.yml
+    permissions:
+      contents: read

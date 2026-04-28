@@ -15,3 +15,18 @@ repos:
       - id: ruff-check
         args: [--fix]
       - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: lifecycle-blocks-check
+        name: lifecycle-blocks-check
+        entry: python tools/sync_lifecycle_docs.py --check
+        language: system
+        pass_filenames: false
+        files: ^(docs/(quarterly-maintainer-review|post-release-checklist)\.md|\.github/ISSUE_TEMPLATE/(release_preparation|post_release_follow_up)\.yml|\.github/workflows/(quarterly-maintainer-review|post-release-follow-up)\.yml|tools/(lifecycle_contracts|sync_lifecycle_docs)\.py)$
+      - id: docs-check
+        name: docs-check
+        entry: python tools/check_docs.py
+        language: system
+        pass_filenames: false
+        files: ^(README\.md|CHANGELOG\.md|CODE_OF_CONDUCT\.md|CONTRIBUTING\.md|GOVERNANCE\.md|RELEASING\.md|SECURITY\.md|SUPPORT\.md|docs/.*\.md|\.github/.*\.(md|yml|yaml))$

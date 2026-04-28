@@ -33,6 +33,7 @@ concurrency:
 jobs:
   digest:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -163,6 +164,7 @@ jobs:
     if: ${{ github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || github.event.inputs.config_toml_override == '') }}
     needs: digest
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       pages: write
       id-token: write

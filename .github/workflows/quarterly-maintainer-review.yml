@@ -1,0 +1,94 @@
+name: Quarterly Maintainer Review
+
+on:
+  schedule:
+    - cron: "17 3 1 1,4,7,10 *"
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: quarterly-maintainer-review-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  open-review-issue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Create quarterly maintainer review issue
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const now = new Date();
+            const quarter = Math.floor(now.getUTCMonth() / 3) + 1;
+            const year = now.getUTCFullYear();
+            const title = `Quarterly maintainer review ${year}-Q${quarter}`;
+
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner,
+              repo,
+              state: "all",
+              labels: "ops-review",
+              per_page: 100,
+            });
+
+            const existing = issues.find((issue) => issue.title === title);
+
+            if (existing) {
+              core.notice(`Quarterly review issue already exists: #${existing.number}`);
+              return;
+            }
+
+            const body = [
+              "<!-- quarterly-maintainer-review -->",
+              `This scheduled issue tracks the ${year} Q${quarter} repository-operations review.`,
+              "",
+              "Use the public checklist in `docs/quarterly-maintainer-review.md` as the source of truth.",
+              "",
+              "## Review Checklist",
+              "",
+              "- [ ] Review collaborator roles against `docs/maintainer-access-policy.md`.",
+              "- [ ] Confirm admin access is still limited to maintainers who need repository-admin settings access.",
+              "- [ ] Compare live branch protection, required checks, and rulesets with `docs/branch-protection-policy.md`, `docs/ruleset-policy.md`, and `docs/repository-settings-checklist.md`.",
+              "- [ ] Confirm `.github/CODEOWNERS`, `GOVERNANCE.md`, and `docs/maintainer-rotation.md` still match the real ownership model.",
+              "- [ ] Review saved replies, support routing, and security routing for drift.",
+              "- [ ] Confirm environments, secrets, and release credentials still have clear current owners.",
+              "- [ ] Close this issue with a short summary of changes or note that no changes were required.",
+              "",
+              "## Close-Out",
+              "",
+              // BEGIN GENERATED: quarterly-review-workflow-close-out
+              "- Link any follow-up issue or pull request here.",
+              "- If no changes were needed, say so explicitly before closing.",
+              // END GENERATED: quarterly-review-workflow-close-out
+              "",
+              "## Review Summary",
+              "",
+              // BEGIN GENERATED: quarterly-review-workflow-summary
+              "- Review date:",
+              "- Reviewed by:",
+              "- Access changes: none",
+              "- Repository-settings drift: none",
+              "- Docs updated: none",
+              "- Follow-up work: none",
+              "- Release impact: none",
+              "- Next review due:",
+              // END GENERATED: quarterly-review-workflow-summary
+            ].join("\n");
+
+            await github.rest.issues.create({
+              owner,
+              repo,
+              title,
+              body,
+              labels: ["maintenance", "ops-review"],
+            });

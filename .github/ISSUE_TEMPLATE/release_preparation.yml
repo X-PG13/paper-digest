@@ -1,0 +1,131 @@
+name: Release preparation
+description: Maintainer-only checklist for preparing a tagged release
+title: "[Release] v"
+labels:
+  - maintenance
+  - release-prep
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Maintainers should use this issue to track release-preparation work
+        before pushing a version tag. Keep it linked to the latest quarterly
+        maintainer review issue when repository operations changed during the
+        cycle.
+        Use `docs/release-lifecycle-runbook.md` and
+        `docs/release-cadence-policy.md` as the process source of truth.
+  - type: input
+    id: version
+    attributes:
+      label: Release version
+      placeholder: v0.5.0
+    validations:
+      required: true
+  - type: input
+    id: release_type
+    attributes:
+      label: Release type
+      placeholder: patch / minor / major
+    validations:
+      required: true
+  - type: input
+    id: target_tag
+    attributes:
+      label: Target tag
+      placeholder: v0.5.0
+    validations:
+      required: true
+  - type: input
+    id: quarterly_review
+    attributes:
+      label: Latest quarterly review issue
+      description: Link the latest quarterly maintainer review issue, or note why it is not required.
+      placeholder: "#123"
+    validations:
+      required: true
+  - type: textarea
+    id: scope_summary
+    attributes:
+      label: Scope summary
+      description: Summarize the most important user-facing and maintainer-facing changes in this release.
+      # BEGIN GENERATED: release-prep-form-scope-summary
+      placeholder: |
+        - Highlights:
+        - Config or workflow changes:
+        - Compatibility notes:
+        - Upgrade notes:
+        - Repository-operations notes:
+      # END GENERATED: release-prep-form-scope-summary
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility_and_repo_ops
+    attributes:
+      label: Compatibility and repository-operations checks
+      description: Keep this section updated as release preparation progresses.
+      # BEGIN GENERATED: release-prep-form-compatibility
+      value: |
+        - [ ] `docs/compatibility-matrix.md` reviewed.
+        - [ ] README compatibility summary still matches the supported surface.
+        - [ ] `docs/branch-protection-policy.md`, `docs/ruleset-policy.md`, and `docs/repository-settings-checklist.md` still match the intended GitHub configuration.
+        - [ ] The latest quarterly maintainer review issue is current, or any deferral is explained here.
+      # END GENERATED: release-prep-form-compatibility
+    validations:
+      required: true
+  - type: textarea
+    id: changelog_and_notes
+    attributes:
+      label: Changelog and release-notes intent
+      description: Track how this release should be represented in changelog and release notes.
+      # BEGIN GENERATED: release-prep-form-changelog
+      value: |
+        - [ ] `CHANGELOG.md` updated.
+        - [ ] Release-note-worthy changes identified.
+        - [ ] Compatibility, workflow, or operator-facing changes called out explicitly.
+        - [ ] Generated GitHub release-note categories still match the labels used in this cycle.
+      # END GENERATED: release-prep-form-changelog
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation checklist
+      description: Update this checklist before the tag is pushed.
+      # BEGIN GENERATED: release-prep-form-validation
+      value: |
+        - [ ] `make check`
+        - [ ] `make build`
+        - [ ] `make release-check`
+        - [ ] Version in `paper_digest/__about__.py` confirmed.
+      # END GENERATED: release-prep-form-validation
+    validations:
+      required: true
+  - type: textarea
+    id: follow_up
+    attributes:
+      label: Release and post-release follow-up
+      description: Record anything that needs to happen during or immediately after release.
+      # BEGIN GENERATED: release-prep-form-follow-up
+      value: |
+        - [ ] Release-preparation PR linked here.
+        - [ ] Post-release follow-up issue linked after publication.
+        - [ ] Tag pushed.
+        - [ ] GitHub release artifacts verified.
+        - [ ] Next development-cycle version bump or follow-up issue noted.
+      # END GENERATED: release-prep-form-follow-up
+    validations:
+      required: false
+  - type: textarea
+    id: close_out
+    attributes:
+      label: Close-out handoff
+      description: Use this before closing the release-preparation issue after publication.
+      # BEGIN GENERATED: release-prep-form-close-out
+      value: |
+        - [ ] Post-release follow-up issue linked here.
+        - [ ] Any remaining immediate follow-up work is linked there, or `none` is stated explicitly.
+        - [ ] Release-preparation summary or maintainer notes are complete.
+      # END GENERATED: release-prep-form-close-out
+    validations:
+      required: false

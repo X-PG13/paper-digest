@@ -1,0 +1,66 @@
+name: PR Hygiene
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+      - ready_for_review
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr-hygiene-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Evaluate PR docs, changelog, and context hygiene
+        id: reminder
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_BODY: ${{ github.event.pull_request.body || '' }}
+        run: |
+          python tools/pr_hygiene.py \
+            --repo "${{ github.repository }}" \
+            --pull-number "${{ github.event.pull_request.number }}" \
+            --body-env PR_BODY
+
+      - name: Sync PR hygiene comment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          COMMENT_BODY: ${{ steps.reminder.outputs.comment-body }}
+        run: |
+          if [ "${{ steps.reminder.outputs.mode }}" = "delete" ]; then
+            python tools/sync_marker_comment.py \
+              --repo "${{ github.repository }}" \
+              --issue-number "${{ github.event.pull_request.number }}" \
+              --marker "${{ steps.reminder.outputs.marker }}" \
+              --delete
+          else
+            python tools/sync_marker_comment.py \
+              --repo "${{ github.repository }}" \
+              --issue-number "${{ github.event.pull_request.number }}" \
+              --marker "${{ steps.reminder.outputs.marker }}" \
+              --body-env COMMENT_BODY
+          fi

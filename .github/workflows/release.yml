@@ -12,33 +12,31 @@ env:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
+    uses: ./.github/workflows/reusable-python-checks.yml
+    with:
+      upload_dist: true
+    permissions:
+      contents: read
+
+  publish:
+    needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Install build tooling
-        run: python -m pip install build twine
-
-      - name: Build distributions
-        run: python -m build
-
-      - name: Validate distributions
-        run: python -m twine check dist/*
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v7
+      - name: Download artifacts
+        uses: actions/download-artifact@v5
         with:
           name: package-dist
-          path: dist/*
+          path: dist
 
       - name: Create GitHub release
         if: startsWith(github.ref, 'refs/tags/')

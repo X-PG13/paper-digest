@@ -1,0 +1,23 @@
+name: Dependency Review
+
+on:
+  pull_request:
+    paths:
+      - "pyproject.toml"
+      - ".github/dependabot.yml"
+      - ".github/workflows/*.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-review-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@v4

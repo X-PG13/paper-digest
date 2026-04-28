@@ -12,5 +12,7 @@ coverage.xml
 htmlcov/
 build/
 dist/
+reports/
+.tools/
 config.toml
 .paper-digest-state/

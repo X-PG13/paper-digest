@@ -1,0 +1,113 @@
+name: Community Triage
+
+on:
+  issues:
+    types:
+      - opened
+      - edited
+      - reopened
+      - labeled
+      - unlabeled
+  pull_request_target:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+      - ready_for_review
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: community-triage-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  issue-intake:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Evaluate bug report completeness
+        id: intake
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body || '' }}
+          ISSUE_LABELS_JSON: ${{ toJson(github.event.issue.labels) }}
+        run: |
+          python tools/community_triage.py \
+            --body-env ISSUE_BODY \
+            --labels-json-env ISSUE_LABELS_JSON
+
+      - name: Sync needs-info label
+        if: steps.intake.outputs.needs-info-action != 'none'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ steps.intake.outputs.needs-info-action }}" = "add" ]; then
+            python tools/sync_issue_labels.py \
+              --repo "${{ github.repository }}" \
+              --issue-number "${{ github.event.issue.number }}" \
+              --ensure needs-info
+          else
+            python tools/sync_issue_labels.py \
+              --repo "${{ github.repository }}" \
+              --issue-number "${{ github.event.issue.number }}" \
+              --remove needs-info
+          fi
+
+      - name: Sync issue-intake comment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          COMMENT_BODY: ${{ steps.intake.outputs.comment-body }}
+        run: |
+          if [ "${{ steps.intake.outputs.mode }}" = "delete" ]; then
+            python tools/sync_marker_comment.py \
+              --repo "${{ github.repository }}" \
+              --issue-number "${{ github.event.issue.number }}" \
+              --marker "${{ steps.intake.outputs.marker }}" \
+              --delete
+          else
+            python tools/sync_marker_comment.py \
+              --repo "${{ github.repository }}" \
+              --issue-number "${{ github.event.issue.number }}" \
+              --marker "${{ steps.intake.outputs.marker }}" \
+              --body-env COMMENT_BODY
+          fi
+
+  pr-labels:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Apply path-based labels
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python tools/community_pr_labels.py \
+            --repo "${{ github.repository }}" \
+            --pull-number "${{ github.event.pull_request.number }}" \
+            --actor "${{ github.actor }}"

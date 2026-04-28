@@ -1,0 +1,106 @@
+name: Post-Release Follow-Up
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: post-release-follow-up-${{ github.event.release.tag_name || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  open-follow-up-issue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Create post-release follow-up issue
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const release = context.payload.release;
+
+            if (!release) {
+              core.notice("No release payload available for this run.");
+              return;
+            }
+
+            const tag = release.tag_name;
+            const releaseUrl = release.html_url;
+            const title = `Post-release follow-up ${tag}`;
+
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner,
+              repo,
+              state: "all",
+              labels: "release-follow-up",
+              per_page: 100,
+            });
+
+            const existing = issues.find((issue) => issue.title === title);
+
+            if (existing) {
+              core.notice(`Post-release follow-up issue already exists: #${existing.number}`);
+              return;
+            }
+
+            const body = [
+              "<!-- post-release-follow-up -->",
+              `This issue tracks immediate follow-up for ${tag}.`,
+              "",
+              `Release: ${releaseUrl}`,
+              "",
+              "Use `docs/post-release-checklist.md` as the source of truth.",
+              "Update this issue with the linked release-preparation issue and",
+              "quarterly review issue when repository-operations changes shipped.",
+              "",
+              "## Immediate Validation",
+              "",
+              "- [ ] GitHub release artifacts verified.",
+              "- [ ] Generated release notes match `CHANGELOG.md`.",
+              "- [ ] Compatibility claims in `README.md` and `docs/compatibility-matrix.md` still match the published release.",
+              "- [ ] Operator-facing workflow or repository-operations notes were surfaced in release prep and release notes.",
+              "",
+              "## Next-Cycle Setup",
+              "",
+              "- [ ] Next development-cycle version bump tracked or completed.",
+              "- [ ] `CHANGELOG.md` has an `Unreleased` section ready for new work.",
+              "- [ ] Deferred release-preparation follow-up work is linked here.",
+              "",
+              "## Release Retrospective",
+              "",
+              "- What went smoothly?",
+              "- What was repetitive or unclear?",
+              "- What should be automated or documented next?",
+              "",
+              "## Post-Release Summary",
+              "",
+              // BEGIN GENERATED: post-release-workflow-summary
+              `- Release: ${tag}`,
+              "- Verified by:",
+              "- Artifacts and release notes: confirmed",
+              "- Compatibility and docs drift: none",
+              "- Next-cycle setup: complete",
+              "- Retro follow-up: none",
+              "- Additional repository-operations follow-up: none",
+              // END GENERATED: post-release-workflow-summary
+            ].join("\n");
+
+            await github.rest.issues.create({
+              owner,
+              repo,
+              title,
+              body,
+              labels: ["maintenance", "release-follow-up"],
+            });

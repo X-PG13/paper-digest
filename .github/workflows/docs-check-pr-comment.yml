@@ -1,0 +1,86 @@
+name: Docs Check PR Comment
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: docs-check-pr-comment-${{ github.event.workflow_run.head_repository.id || github.run_id }}-${{ github.event.workflow_run.head_branch || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  sync-comment:
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion != 'cancelled' && github.event.workflow_run.conclusion != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Resolve PR and docs-check artifact
+        id: context
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python tools/docs_check_pr_comment.py resolve-context \
+            --repo "${{ github.repository }}"
+
+      - name: Fail if docs-check artifact is missing
+        if: steps.context.outputs.artifact-found != 'true'
+        run: |
+          echo "Expected docs-check-report artifact for CI workflow run ${{ steps.context.outputs.workflow-run-id }}." >&2
+          exit 1
+
+      - name: Download docs-check artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: docs-check-report
+          path: reports
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.context.outputs.workflow-run-id }}
+          github-token: ${{ github.token }}
+
+      - name: Render trusted docs-check PR comment
+        run: python tools/render_docs_report.py reports/docs-check-report.json --format pr-comment --output reports/docs-check-pr-comment.md
+
+      - name: Determine docs-check comment action
+        id: comment
+        run: |
+          python tools/docs_check_pr_comment.py decide-comment \
+            --report-file reports/docs-check-report.json \
+            --comment-file reports/docs-check-pr-comment.md
+
+      - name: Sync docs-check PR comment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          COMMENT_BODY: ${{ steps.comment.outputs.comment-body }}
+        run: |
+          if [ "${{ steps.comment.outputs.mode }}" = "delete" ]; then
+            python tools/sync_marker_comment.py \
+              --repo "${{ github.repository }}" \
+              --issue-number "${{ steps.context.outputs.pr-number }}" \
+              --marker "${{ steps.comment.outputs.marker }}" \
+              --delete
+          else
+            python tools/sync_marker_comment.py \
+              --repo "${{ github.repository }}" \
+              --issue-number "${{ steps.context.outputs.pr-number }}" \
+              --marker "${{ steps.comment.outputs.marker }}" \
+              --body-env COMMENT_BODY
+          fi

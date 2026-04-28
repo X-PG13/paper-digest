@@ -7,6 +7,320 @@ Versioning.
 
 ## [Unreleased]
 
+- Documentation now includes a dedicated compatibility matrix, smaller
+  configuration recipes, and a stronger maintainer guide for workflow and
+  release ownership.
+- Community docs now include a fuller security policy, explicit support
+  expectations, maintainer issue-triage rules, and routed GitHub issue
+  templates.
+- The repository now documents and syncs a label taxonomy, applies stale issue
+  automation, and categorizes generated GitHub release notes through a
+  dedicated template.
+- Governance, roadmap intake, and maintainer-ownership rules are now explicit
+  through dedicated public docs instead of being implied by repository state.
+- Proposal intake, future Discussions categories, ADR guidance, and dependency
+  maintenance policy are now documented explicitly, with grouped Dependabot
+  updates and dependency-review automation aligned to the repository label set.
+- CI and release verification now share a reusable workflow, and the
+  repository now documents review and branch-protection policy explicitly.
+- GitHub issue and pull-request intake now has conservative triage automation,
+  and workflow definitions now have a dedicated `actionlint` check.
+- Pull requests now have explicit docs/changelog hygiene declarations plus a
+  dedicated automation check that reminds contributors when those updates are
+  likely missing.
+- `CODEOWNERS` is now structured by repository surface, and issue intake now
+  uses GitHub issue forms while keeping bug-triage automation compatible with
+  the generated issue body format.
+- Support intake now also shares one contract across `SUPPORT.md`, the support
+  issue form metadata and fields, support contact links, and community-triage
+  reminder copy.
+- The canonical `support-redirect` saved reply and the support issue-form
+  intro now also reuse that same support-routing contract.
+- Canonical `needs-info`, `support-redirect`, and `security-redirect` saved
+  replies now also live behind a repo-local reply-policy contract.
+- The remaining canonical saved replies now also live behind that same
+  reply-policy contract, so `docs/saved-replies.md` is fully governed instead
+  of partially managed.
+- Redirect and closure reply semantics are now also tied back to
+  `docs/issue-triage.md` and `docs/label-taxonomy.md` through a shared
+  triage-policy contract.
+- `documentation`, `duplicate`, `invalid`, `blocked`, `release-note`, and
+  `wontfix` now also share an explicit label-behavior contract, so label
+  descriptions, stale expectations, pull-request routing, and generated
+  release-notes wiring do not drift apart.
+- `bug`, `support`, `proposal`, `dependencies`, and `security` now also share
+  an explicit routing-label contract, so issue forms, contact links,
+  discussions fallback paths, and dependency-routing automation do not drift
+  apart from the label taxonomy.
+- `enhancement`, `maintenance`, `breaking`, `good first issue`, and
+  `help wanted` now also share an explicit contributor/release label
+  contract, so feature intake, maintainer lifecycle labels, release
+  categories, stale exemptions, and contributor-discovery semantics do not
+  drift apart.
+- `needs-info`, `needs-repro`, `stale`, `ops-review`, `release-prep`, and
+  `release-follow-up` now also share an explicit status-label contract, so
+  intake follow-up labels, inactivity handling, and maintainer lifecycle
+  tracking labels do not drift apart.
+- Label names, descriptions, and taxonomy section boundaries now also share a
+  unified registry schema, so the four label-policy modules no longer repeat
+  the same metadata in parallel.
+- The four label-policy modules now also share a common base schema and
+  validation helper, so their spec shape, snippet collectors, release-note
+  category/exclusion collectors, and baseline validation loop no longer drift
+  in parallel.
+- The issue-intake/support policy pair and the saved-reply/triage policy pair
+  now also share common base helpers, so their doc-path, key/label, slug
+  lookup, contact-link spec, snippet collector, and baseline validation logic
+  no longer drift in parallel.
+- GitHub issue forms now also share a structured metadata and field registry
+  for bug, support, feature, proposal, release-preparation, and post-release
+  forms, so form names, title prefixes, field labels, and requiredness stay
+  checked without relying on broad YAML snippet matching; label-policy
+  validators and lifecycle generated blocks now reuse that registry for
+  issue-form labels, label-policy path groups, release-lifecycle path groups,
+  and identity checks, and bug/support policy modules now re-export the same
+  registry metadata instead of owning separate form identity constants.
+- Policy contract tests now share assertion helpers for normalized snippet
+  matching, label descriptions, grouped artifact checks, and stale-workflow
+  exemption plus issue-form metadata/field/label, issue-template contact-link,
+  and release-notes config parsing, so policy tests no longer repeat
+  file-loading, whitespace-normalization, and GitHub metadata parsing
+  boilerplate.
+- Local verification now includes `make policy-check` backed by
+  `tools/check_policies.py`, so issue-form, intake, support, saved-reply,
+  triage, PR hygiene, label, docs-contract, and release-lifecycle policy
+  validators run through one contract-named gate before docs and coverage.
+- `tools/check_policies.py` now also emits a schema-versioned JSON report via
+  `make policy-check-json`, `--format json`, and `--json-report-file`, so
+  policy-check output can be uploaded or rendered by future CI annotations and
+  summaries without re-running contract logic.
+- `tools/render_policy_report.py` now renders policy-check JSON reports into
+  GitHub Actions annotations and Markdown, `make policy-check-markdown` exposes
+  the local summary path, and the reusable Python verification workflow uploads
+  the policy-check JSON/Markdown artifact while appending the same summary and
+  annotations to CI. The docs checker now also skips generated `reports/`
+  outputs so local report rendering does not change docs-check file counts.
+- The reusable Python verification workflow now has shared report contract
+  tests covering both docs-check and policy-check upload inputs, JSON
+  generation, Markdown summary publication, GitHub Actions annotations, PR
+  comment preview rendering, and uploaded report artifact contents.
+- The trusted docs-check PR comment follow-up workflow now also has a
+  repo-local workflow contract covering its `workflow_run` trigger, minimal
+  permissions, docs-check artifact download, default-branch PR comment
+  rendering, comment-action decision, and shared marker-comment sync helper
+  calls.
+- PR hygiene, community triage, and label sync now have workflow contract-suite
+  coverage for state-changing GitHub automation, and `label-sync.yml` now calls
+  `tools/sync_repository_labels.py` instead of embedding label mutation logic in
+  workflow YAML.
+- Maintainer docs now include a repository-settings checklist for manual GitHub
+  admin configuration, and `PR Hygiene` now also reminds contributors to link
+  substantial pull requests back to an issue or proposal.
+- Maintainer operations docs now also define intended ruleset / merge-queue
+  posture and a canonical source-of-truth for GitHub saved replies.
+- Maintainer operations docs now also define maintainer onboarding,
+  offboarding, least-privilege access, and quarterly access-review policy.
+- The repository now opens a recurring quarterly maintainer review issue and
+  documents the checklist used for repository-settings and access audits.
+- Quarterly maintainer reviews now use a standard closing-summary template, and
+  release prep explicitly links repository-operations changes back to the
+  latest review record.
+- Maintainers now have a dedicated release-preparation issue form, plus a
+  `release-prep` label and stale-policy exemption for tagged-release tracking.
+- Releases now also open a dedicated post-release follow-up issue and document
+  a standard checklist for published-release verification and next-cycle setup.
+- Release timing expectations and the linkage between quarterly review, release
+  prep, tag publication, and post-release follow-up are now documented through
+  a dedicated cadence policy and lifecycle runbook.
+- Maintainer operations now also have a long-lived history index that records
+  release-cycle artifacts and notable process changes in one place.
+- Maintainer docs now also have a single operations hub page that routes common
+  review, audit, release, and post-release tasks to their source-of-truth docs.
+- Local verification now includes a docs consistency check for Markdown links
+  and heading anchors, and `pre-commit` can run the same guardrail before
+  commits.
+- The docs consistency guard now also validates repository-doc references in
+  GitHub issue forms and workflows, not only Markdown pages.
+- The docs consistency guard now also checks that the README docs map, the
+  maintainer hub source-of-truth table, and maintainer-guide coverage stay in
+  sync.
+- The docs consistency guard now also checks that `RELEASING.md`, the release
+  lifecycle runbook, and release issue forms keep the same core release
+  contract.
+- The docs consistency guard now also checks that quarterly-review and
+  post-release summary / close-out templates stay aligned with their published
+  maintainer docs, and that release-prep scope-summary categories still match
+  `RELEASING.md`.
+- The docs consistency guard now also checks that quarterly review, release
+  prep, and post-release artifacts keep the same cross-link field contract, and
+  the release docs now make the post-release quarterly-review linkage rule
+  explicit.
+- The docs consistency guard now also checks that quarterly review, release
+  prep, and post-release artifacts keep the same close-out contract, and the
+  release docs now make the release-preparation handoff rule explicit.
+- The docs consistency guard now also checks that quarterly-review and
+  post-release summary templates keep the same default-value semantics as the
+  workflow-generated issue bodies, and quarterly follow-up wording now allows
+  issue or pull-request links consistently.
+- The docs consistency guard now parses workflow body sections, issue-form
+  fields, checklist blocks, and summary fields structurally, so lifecycle
+  contract checks fail on the exact missing field or checklist item instead of
+  relying on whole-file text snippets.
+- The release-lifecycle contract values used by `make docs-check` now live in
+  `tools/lifecycle_contracts.py`, so quarterly-review, release-prep, and
+  post-release schema changes have a single repo-local source of truth.
+- The remaining release-lifecycle text/snippet contract previously embedded in
+  `tools/check_docs.py` now also lives in `tools/lifecycle_contracts.py`, so
+  release doc/form wording checks use the same repo-local schema layer.
+- Lifecycle text contracts now also use typed schema objects instead of raw
+  tuple/dict shapes, so `tools/check_docs.py` reads issue-linkage, close-out,
+  release-lifecycle, and maintainer-issue wording checks through one
+  structured contract format.
+- The last maintainer-issue wording contracts previously defined inside
+  `tools/check_docs.py` now also live in `tools/lifecycle_contracts.py`, so
+  `check_docs.py` no longer carries local lifecycle/maintainer text truth.
+- The remaining lifecycle file/section locators used by `make docs-check`
+  now also live in `tools/lifecycle_contracts.py`, so `tools/check_docs.py`
+  reads release/ops artifact paths and heading mappings from the same
+  repo-local schema instead of re-declaring them inline.
+- The non-lifecycle maintainer-doc registry rules used by `make docs-check`
+  now also live in `tools/docs_contracts.py`, so `tools/check_docs.py` reads
+  README docs-map, maintainer-hub, and maintainer-guide section mappings from
+  a dedicated repo-local schema instead of keeping those locators inline.
+- The remaining repo-specific docs-check boundary values now also live in
+  `tools/docs_contracts.py`, so `tools/check_docs.py` reads repository
+  reference roots, root-level reference files, skip directories, and GitHub
+  metadata globs from schema instead of defining those boundaries inline.
+- The generic Markdown / GitHub metadata scanning and parsing helpers used by
+  `make docs-check` now also live in `tools/docs_parser.py`, so
+  `tools/check_docs.py` focuses on contract orchestration instead of carrying
+  file iteration, link extraction, issue-form parsing, and workflow-body
+  parsing implementations inline.
+- The generic repository-link resolution, anchor validation, and Markdown /
+  GitHub metadata reference-check helpers used by `make docs-check` now also
+  live in `tools/docs_links.py`, so `tools/check_docs.py` focuses on contract
+  orchestration instead of also carrying path-resolution and target-validation
+  logic inline.
+- The generic `TextSource` reading, Markdown section lookup, and workflow-
+  section caching helpers used by `make docs-check` now also live in
+  `tools/docs_sources.py`, so `tools/check_docs.py` focuses on contract
+  orchestration instead of also carrying source-read and workflow-cache
+  plumbing inline.
+- The generic docs-contract field/item assertion wording plus text-
+  normalization and snippet-matching helpers used by `make docs-check` now
+  also live in `tools/docs_assertions.py`, so `tools/check_docs.py` focuses on
+  contract orchestration instead of also carrying repo-agnostic assertion and
+  normalization logic inline.
+- The maintainer-doc registry check now lives in
+  `tools/docs_registry_checks.py`, and the release/ops lifecycle contract
+  executors now live in `tools/lifecycle_checks.py`, so `tools/check_docs.py`
+  acts as a thin docs-check entry point instead of also carrying registry and
+  lifecycle execution logic inline.
+- The docs-check execution order, shared file-list context, pipeline
+  validation, and success output now live in `tools/docs_pipeline.py`, so
+  `tools/check_docs.py` no longer hand-writes the check sequence inside
+  `main()`.
+- The remaining docs-check entrypoint truth now also lives in
+  `tools/docs_pipeline.py`, so repository root selection, exit codes,
+  stderr/stdout reporting behavior, and direct entrypoint tests no longer need
+  local truth inside `tools/check_docs.py`.
+- The docs-check phase report labels, preflight failure summary, runtime
+  failure summary, and per-error detail formatting now also live in
+  `tools/docs_pipeline.py`, so `tools/check_docs.py` no longer owns
+  human-facing phase-report wording.
+- `tools/check_docs.py` now also supports a machine-readable JSON report, and
+  the JSON schema version, phase statuses, and per-check error payloads live
+  in `tools/docs_pipeline.py` alongside the existing text-report contract.
+- The reusable Python verification workflow now uploads a `docs-check-report`
+  artifact, and `tools/check_docs.py` can write the same JSON report directly
+  to disk with `--json-report-file`.
+- `tools/check_docs.py` now also renders a Markdown summary via
+  `make docs-check-markdown` / `--markdown-report-file`, and the reusable
+  Python verification workflow now publishes that same summary to the GitHub
+  step summary alongside the uploaded artifact.
+- `tools/render_docs_report.py` now re-renders docs-check JSON reports into
+  GitHub Actions annotations and Markdown, and the reusable Python verification
+  workflow uses it to surface docs-check failures directly in the Checks UI.
+- The docs-check JSON report first moved to structured findings so the same
+  annotation path could attach best-effort file/line metadata instead of only
+  flat check-level messages.
+- The docs-check JSON report is now schema v3 and carries `end_line` alongside
+  `line`, so Markdown summaries and GitHub annotations can target line ranges
+  when the parser resolves a stable heading, issue-form, or workflow block.
+- The docs-check JSON report is now schema v4 and carries stable `check_id`
+  values per pipeline stage, so annotations, Markdown detail headings, and
+  future machine consumers can key off identifiers that do not depend on
+  human-facing labels.
+- The reusable Python verification workflow now also uploads a
+  `docs-check-pr-comment.md` artifact rendered from the same schema, and the
+  repo-local renderer can emit a stable PR comment body that groups findings by
+  `check_id`.
+- Pull requests now also get a trusted docs-check comment sync workflow that
+  downloads the CI artifact, re-renders the comment on the default branch, and
+  updates or deletes the PR comment without executing pull-request code in a
+  write-permission context.
+- Local workflow linting now also has a pinned `make workflow-tools` bootstrap
+  path that installs `actionlint` into `.tools/actionlint/actionlint` with a
+  verified archive checksum, so `make workflow-check` no longer depends only on
+  ad hoc PATH state.
+- The dedicated `Workflow Lint` CI job now also bootstraps and runs the same
+  pinned repo-local `actionlint` path as local workflow linting, and it triggers
+  when the helper scripts or `Makefile` change instead of only on workflow YAML
+  edits.
+- PR hygiene, community triage, and docs-check PR comment automation now share
+  one repo-local marker-comment helper, so managed comment create/update/delete
+  behavior no longer drifts across three separate workflows.
+- PR hygiene and community issue-intake policy evaluation now also live in
+  repo-local Python helpers, so those workflows keep only orchestration and
+  GitHub-side label/comment actions in YAML.
+- Community triage now also routes `needs-info` sync and pull-request
+  path-based labels through repo-local Python helpers, so GitHub label mutation
+  and label-routing policy no longer live in `github-script` workflow blocks.
+- The trusted docs-check PR comment follow-up now resolves `workflow_run`
+  context and comment upsert/delete decisions through one repo-local Python
+  helper instead of keeping that API and policy logic inline in workflow YAML.
+- Repo-local workflow helpers now also share one GitHub API transport layer, so
+  auth headers, JSON payload handling, pagination, and ignored-status behavior
+  no longer drift across comment, label, artifact, and PR-file scripts.
+- Those workflow helpers now also share typed GitHub resource facades for issue
+  comments, issue labels, workflow artifacts, and pull-request files, so
+  resource-path wiring is no longer duplicated across scripts.
+- Those helpers now also share a narrower GitHub service layer for managed
+  comment sync, label sync, workflow artifact lookup, and pull-request file
+  listing, so the script entrypoints no longer each keep those higher-level
+  operations inline.
+- PR hygiene and pull-request label routing now also share one workflow path
+  policy module for docs, runtime/ops, maintenance, governance, changelog, and
+  test path classification, so file-category semantics no longer drift across
+  helper scripts.
+- PR hygiene now also shares one PR-template policy contract for checkbox
+  labels, linked-issue field naming, and reminder copy, so the automation and
+  `.github/pull_request_template.md` no longer drift on wording.
+- Community triage now also shares one bug issue-intake policy contract for
+  section labels, required field names, placeholder semantics, and reminder
+  copy, so `.github/ISSUE_TEMPLATE/bug_report.yml` and the intake automation no
+  longer drift on wording.
+- The link, registry, and lifecycle checks now emit native structured findings
+  through a shared `tools/docs_findings.py` layer, so most docs-check
+  annotations carry source-aware file metadata without relying on legacy string
+  parsing first.
+- The docs parser and source helpers now resolve markdown-section, issue-form,
+  and workflow-template line origins, so lifecycle and registry annotations can
+  land on the relevant heading or field instead of only the containing file.
+- The repository now has a documented `make workflow-check` path powered by
+  `tools/check_workflows.py`, which looks for `actionlint` in
+  `ACTIONLINT_BIN`, `.tools/actionlint/actionlint`, then `PATH`.
+- Quarterly-review and post-release lifecycle blocks in maintainer docs,
+  issue forms, and release/ops workflows are now generated by
+  `tools/sync_lifecycle_docs.py` from `tools/lifecycle_contracts.py`, and
+  docs/pre-commit checks fail if those managed blocks are stale.
+- Release-preparation and post-release issue forms now also generate their
+  compatibility, changelog, validation, next-cycle, and retrospective blocks
+  from `tools/lifecycle_contracts.py` instead of keeping those checklist
+  payloads hand-maintained in YAML.
+- CI and release workflows now share the same documented verification path,
+  add explicit permissions and timeouts, and document their operational role
+  more clearly.
 - Ranking is now configurable via a dedicated `[ranking]` section plus optional
   per-feed `sort_by` overrides, and digests expose the active sorting mode in
   Markdown and JSON output.

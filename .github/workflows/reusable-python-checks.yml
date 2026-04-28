@@ -1,0 +1,123 @@
+name: Reusable Python Checks
+
+on:
+  workflow_call:
+    inputs:
+      upload_dist:
+        description: Upload built distributions as a workflow artifact.
+        required: false
+        type: boolean
+        default: false
+      upload_docs_check_report:
+        description: Upload the docs-check JSON report as a workflow artifact.
+        required: false
+        type: boolean
+        default: true
+      upload_policy_check_report:
+        description: Upload the policy-check JSON report as a workflow artifact.
+        required: false
+        type: boolean
+        default: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install project
+        run: python -m pip install -e '.[dev]'
+
+      - name: Run verification suite
+        run: make check
+
+      - name: Generate policy-check report
+        if: always() && inputs.upload_policy_check_report
+        continue-on-error: true
+        run: python tools/check_policies.py --json-report-file reports/policy-check-report.json
+
+      - name: Render policy-check summary
+        if: always() && inputs.upload_policy_check_report && hashFiles('reports/policy-check-report.json') != ''
+        run: python tools/render_policy_report.py reports/policy-check-report.json --format markdown --output reports/policy-check-summary.md
+
+      - name: Publish policy-check summary
+        if: always() && inputs.upload_policy_check_report && hashFiles('reports/policy-check-summary.md') != ''
+        run: cat reports/policy-check-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish policy-check annotations
+        if: always() && inputs.upload_policy_check_report && hashFiles('reports/policy-check-report.json') != ''
+        run: python tools/render_policy_report.py reports/policy-check-report.json --format github-annotations
+
+      - name: Upload policy-check reports
+        if: always() && inputs.upload_policy_check_report
+        uses: actions/upload-artifact@v7
+        with:
+          name: policy-check-report
+          path: |
+            reports/policy-check-report.json
+            reports/policy-check-summary.md
+          if-no-files-found: error
+
+      - name: Generate docs-check report
+        if: always() && inputs.upload_docs_check_report
+        continue-on-error: true
+        run: python tools/check_docs.py --json-report-file reports/docs-check-report.json
+
+      - name: Render docs-check summary
+        if: always() && inputs.upload_docs_check_report && hashFiles('reports/docs-check-report.json') != ''
+        run: python tools/render_docs_report.py reports/docs-check-report.json --format markdown --output reports/docs-check-summary.md
+
+      - name: Render docs-check PR comment
+        if: always() && inputs.upload_docs_check_report && hashFiles('reports/docs-check-report.json') != ''
+        run: python tools/render_docs_report.py reports/docs-check-report.json --format pr-comment --output reports/docs-check-pr-comment.md
+
+      - name: Publish docs-check summary
+        if: always() && inputs.upload_docs_check_report && hashFiles('reports/docs-check-summary.md') != ''
+        run: cat reports/docs-check-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish docs-check annotations
+        if: always() && inputs.upload_docs_check_report && hashFiles('reports/docs-check-report.json') != ''
+        run: python tools/render_docs_report.py reports/docs-check-report.json --format github-annotations
+
+      - name: Upload docs-check reports
+        if: always() && inputs.upload_docs_check_report
+        uses: actions/upload-artifact@v7
+        with:
+          name: docs-check-report
+          path: |
+            reports/docs-check-report.json
+            reports/docs-check-summary.md
+            reports/docs-check-pr-comment.md
+          if-no-files-found: error
+
+      - name: Build distributions
+        run: make build
+
+      - name: Validate distributions
+        run: make release-check
+
+      - name: Upload artifacts
+        if: inputs.upload_dist
+        uses: actions/upload-artifact@v7
+        with:
+          name: package-dist
+          path: dist/*
+          if-no-files-found: error
