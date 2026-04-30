@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from urllib.parse import urlsplit
 
 from .config import (
     AppConfig,
@@ -602,16 +603,31 @@ def _build_receipt(
     destination: str,
     message: NotificationMessage,
 ) -> str:
+    destination_label = _redact_delivery_destination(destination)
     if message.kind in {"focus", "feedback"}:
-        return f"{channel_name} sent to {destination} for Focus ({message.summary})"
+        return (
+            f"{channel_name} sent to {destination_label} "
+            f"for Focus ({message.summary})"
+        )
     if message.kind == "action":
-        return f"{channel_name} sent to {destination} for Action ({message.summary})"
+        return (
+            f"{channel_name} sent to {destination_label} "
+            f"for Action ({message.summary})"
+        )
     if message.feed_name is not None:
         return (
-            f"{channel_name} sent to {destination} "
+            f"{channel_name} sent to {destination_label} "
             f"for {message.feed_name} ({message.summary})"
         )
-    return f"{channel_name} sent to {destination} ({message.summary})"
+    return f"{channel_name} sent to {destination_label} ({message.summary})"
+
+
+def _redact_delivery_destination(destination: str) -> str:
+    parsed = urlsplit(destination)
+    if parsed.scheme in {"http", "https"}:
+        host = parsed.netloc or "webhook"
+        return f"{host} (redacted)"
+    return destination
 
 
 def _skip_if_empty(

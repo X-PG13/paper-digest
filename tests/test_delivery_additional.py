@@ -289,7 +289,7 @@ class DeliveryAdditionalTests(unittest.TestCase):
                     kind="focus",
                 ),
             ),
-            "Feishu webhook sent to https://open.feishu.cn/example for Focus (Focus=1)",
+            "Feishu webhook sent to open.feishu.cn (redacted) for Focus (Focus=1)",
         )
         self.assertEqual(
             _build_receipt(
@@ -303,7 +303,7 @@ class DeliveryAdditionalTests(unittest.TestCase):
                 ),
             ),
             (
-                "Feishu webhook sent to https://open.feishu.cn/example "
+                "Feishu webhook sent to open.feishu.cn (redacted) "
                 "for Action (Actions=1)"
             ),
         )
@@ -318,7 +318,7 @@ class DeliveryAdditionalTests(unittest.TestCase):
                     feed_name="LLM",
                 ),
             ),
-            "Feishu webhook sent to https://open.feishu.cn/example for LLM (LLM=1)",
+            "Feishu webhook sent to open.feishu.cn (redacted) for LLM (LLM=1)",
         )
         self.assertEqual(
             _build_receipt(
@@ -330,7 +330,7 @@ class DeliveryAdditionalTests(unittest.TestCase):
                     summary="LLM=1",
                 ),
             ),
-            "Feishu webhook sent to https://open.feishu.cn/example (LLM=1)",
+            "Feishu webhook sent to open.feishu.cn (redacted) (LLM=1)",
         )
 
     def test_build_notification_messages_cover_feedback_only_skip_paths(self) -> None:

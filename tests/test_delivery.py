@@ -557,6 +557,12 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(mock_send_discord_message.call_count, 1)
         self.assertEqual(mock_send_telegram_message.call_count, 1)
         self.assertEqual(len(receipts), 6)
+        joined_receipts = "\n".join(receipts)
+        self.assertNotIn("https://open.feishu.cn/example", joined_receipts)
+        self.assertNotIn("https://hooks.slack.com/services", joined_receipts)
+        self.assertNotIn("https://discord.com/api/webhooks", joined_receipts)
+        self.assertIn("open.feishu.cn (redacted)", joined_receipts)
+        self.assertIn("hooks.slack.com (redacted)", joined_receipts)
 
     @patch("paper_digest.delivery.send_feishu_message")
     def test_send_configured_deliveries_uses_feedback_only_mode(
@@ -609,7 +615,7 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(
             receipts,
             [
-                "Feishu webhook sent to https://open.feishu.cn/example "
+                "Feishu webhook sent to open.feishu.cn (redacted) "
                 "for Focus (Focus=1, follow_up=1)"
             ],
         )
@@ -662,11 +668,11 @@ class DeliveryTests(unittest.TestCase):
             receipts,
             [
                 (
-                    "Feishu webhook sent to https://open.feishu.cn/example "
+                    "Feishu webhook sent to open.feishu.cn (redacted) "
                     "(LLM=1, Vision=0)"
                 ),
                 (
-                    "Feishu webhook sent to https://open.feishu.cn/example "
+                    "Feishu webhook sent to open.feishu.cn (redacted) "
                     "for Focus (Focus=1, follow_up=1)"
                 ),
             ],
