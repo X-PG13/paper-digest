@@ -158,7 +158,7 @@ Field reference:
 - `timezone`: Timezone used for display and output folder naming.
 - `lookback_hours`: Papers older than this time window are ignored.
 - `output_dir`: Directory where dated and latest digests are written.
-- `request_delay_seconds`: Delay between arXiv API requests.
+- `request_delay_seconds`: Delay between source HTTP requests.
 - `request_timeout_seconds`: Per-request timeout for arXiv, Crossref, PubMed,
   Semantic Scholar, and OpenAlex fetches.
 - `fetch_retry_attempts`: Maximum number of fetch attempts for transient failures.
@@ -170,6 +170,8 @@ Field reference:
 - `notify`: Feedback-driven notification focus rules.
 - `source`: `arxiv`, `crossref`, `pubmed`, `semantic_scholar`, or `openalex`.
 - `categories`: arXiv categories such as `cs.AI`, `cs.CL`, or `cs.CV`.
+  When the arXiv API is temporarily rate-limited, arXiv feeds fall back to
+  category RSS endpoints before failing the digest run.
 - `queries`: Required for `crossref`, `pubmed`, `semantic_scholar`, and
   `openalex` feeds.
 - `types`: Optional Crossref work types such as `journal-article`, PubMed
@@ -760,13 +762,15 @@ Additional maintainer docs:
 The repository includes a scheduled workflow at
 [`daily-digest.yml`](./.github/workflows/daily-digest.yml).
 
-The default schedule is `0 1 * * *`, which means:
+The default schedule is `7 1 * * *`, which means:
 
-- `01:00 UTC` every day
-- about `09:00` every day in `Asia/Shanghai`
+- `01:07 UTC` every day
+- about `09:07` every day in `Asia/Shanghai`
 
-GitHub Actions cron is not a real-time scheduler, so delivery can be delayed by
-a few minutes when the hosted runner queue is busy.
+GitHub Actions cron is not a real-time scheduler, so delivery can still be
+delayed by a few minutes when the hosted runner queue is busy. The workflow
+intentionally avoids minute `0` because top-of-hour schedules are more likely
+to be delayed or skipped by GitHub.
 
 To use it, create these GitHub repository secrets:
 

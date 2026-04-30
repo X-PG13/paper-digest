@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import UTC
 from pathlib import Path
 from unittest.mock import patch
 from urllib.error import HTTPError
@@ -10,11 +11,51 @@ from paper_digest.arxiv_client import (
     ArxivClientError,
     build_search_query,
     fetch_latest_papers,
+    fetch_latest_papers_from_rss,
     parse_feed,
+    parse_rss_feed,
 )
 from paper_digest.config import FeedConfig
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "arxiv_sample.xml"
+RSS_PAYLOAD = b"""<?xml version='1.0' encoding='UTF-8'?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0">
+  <channel>
+    <item>
+      <title>Shared Lexical Task Representations Explain LLM Variability</title>
+      <link>https://arxiv.org/abs/2604.22027</link>
+      <description>arXiv:2604.22027v1 Announce Type: new
+Abstract: We study prompt sensitivity in large language models.</description>
+      <guid isPermaLink="false">oai:arXiv.org:2604.22027v1</guid>
+      <category>cs.CL</category>
+      <pubDate>Tue, 28 Apr 2026 00:00:00 -0400</pubDate>
+      <dc:creator>Alice Example, Bob Example</dc:creator>
+    </item>
+  </channel>
+</rss>
+"""
+RSS_FALLBACK_PAYLOAD = b"""<?xml version='1.0' encoding='UTF-8'?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0">
+  <channel>
+    <item>
+      <title>Language Model Distillation</title>
+      <link>https://arxiv.org/abs/2604.30001v1</link>
+      <description>Plain RSS summary without an abstract marker.</description>
+      <guid isPermaLink="false">oai:arXiv.org:2604.30001v1</guid>
+      <pubDate>Tue, 28 Apr 2026 00:00:00</pubDate>
+      <dc:creator>Alice Example</dc:creator>
+    </item>
+    <item>
+      <title>Language Model Distillation</title>
+      <link>https://arxiv.org/abs/2604.30001v1</link>
+      <description>Plain RSS summary without an abstract marker.</description>
+      <guid isPermaLink="false">oai:arXiv.org:2604.30001v1</guid>
+      <pubDate>Tue, 28 Apr 2026 00:00:00</pubDate>
+      <dc:creator>Bob Example</dc:creator>
+    </item>
+  </channel>
+</rss>
+"""
 
 
 class DummyHTTPResponse:
@@ -84,6 +125,128 @@ class ParseFeedTests(unittest.TestCase):
 
         self.assertEqual(papers[0].abstract_url, "http://arxiv.org/abs/2604.00004v1")
         self.assertIsNone(papers[0].pdf_url)
+
+    def test_parse_rss_feed_extracts_papers(self) -> None:
+        papers = parse_rss_feed(RSS_PAYLOAD, category="cs.CL")
+
+        self.assertEqual(len(papers), 1)
+        self.assertEqual(
+            papers[0].title,
+            "Shared Lexical Task Representations Explain LLM Variability",
+        )
+        self.assertEqual(
+            papers[0].summary,
+            "We study prompt sensitivity in large language models.",
+        )
+        self.assertEqual(papers[0].authors, ["Alice Example", "Bob Example"])
+        self.assertEqual(papers[0].categories, ["cs.CL"])
+        self.assertEqual(papers[0].arxiv_id, "2604.22027")
+        self.assertEqual(papers[0].pdf_url, "https://arxiv.org/pdf/2604.22027")
+
+    def test_parse_rss_feed_rejects_invalid_payloads(self) -> None:
+        with self.assertRaisesRegex(ArxivClientError, "malformed RSS"):
+            parse_rss_feed(b"not xml", category="cs.CL")
+
+        payload = RSS_PAYLOAD.replace(
+            b"Tue, 28 Apr 2026 00:00:00 -0400",
+            b"not-a-date",
+        )
+        with self.assertRaisesRegex(ArxivClientError, "invalid RSS datetime"):
+            parse_rss_feed(payload, category="cs.CL")
+
+    @patch("paper_digest.network.sleep")
+    @patch("paper_digest.network.urlopen")
+    def test_fetch_latest_papers_from_rss_skips_blank_categories_and_dedupes(
+        self,
+        mock_urlopen,
+        mock_sleep,
+    ) -> None:
+        mock_urlopen.return_value = DummyHTTPResponse(RSS_FALLBACK_PAYLOAD)
+        feed = FeedConfig(
+            name="LM",
+            categories=[" ", "cs.CL"],
+            keywords=[],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+        )
+
+        papers = fetch_latest_papers_from_rss(
+            feed,
+            request_delay_seconds=0,
+            retry_attempts=1,
+        )
+
+        self.assertEqual(len(papers), 1)
+        self.assertEqual(mock_urlopen.call_count, 1)
+        self.assertEqual(papers[0].categories, ["cs.CL"])
+        self.assertEqual(
+            papers[0].summary,
+            "Plain RSS summary without an abstract marker.",
+        )
+        self.assertEqual(papers[0].authors, ["Alice Example", "Bob Example"])
+        self.assertEqual(papers[0].published_at.tzinfo, UTC)
+        mock_sleep.assert_not_called()
+
+    @patch("paper_digest.network.urlopen")
+    def test_fetch_latest_papers_from_rss_reports_direct_fetch_errors(
+        self,
+        mock_urlopen,
+    ) -> None:
+        mock_urlopen.side_effect = HTTPError(
+            url="https://rss.arxiv.org/rss/cs.CL",
+            code=503,
+            msg="Service Unavailable",
+            hdrs={},
+            fp=None,
+        )
+        feed = FeedConfig(
+            name="LM",
+            categories=["cs.CL"],
+            keywords=[],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+        )
+
+        with self.assertRaisesRegex(ArxivClientError, "HTTP Error 503"):
+            fetch_latest_papers_from_rss(
+                feed,
+                request_delay_seconds=0,
+                retry_attempts=1,
+            )
+
+    @patch("paper_digest.network.urlopen")
+    def test_fetch_latest_papers_from_rss_reports_fallback_errors(
+        self,
+        mock_urlopen,
+    ) -> None:
+        mock_urlopen.side_effect = HTTPError(
+            url="https://rss.arxiv.org/rss/cs.CL",
+            code=503,
+            msg="Service Unavailable",
+            hdrs={},
+            fp=None,
+        )
+        feed = FeedConfig(
+            name="LM",
+            categories=["cs.CL"],
+            keywords=[],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+        )
+
+        with self.assertRaisesRegex(
+            ArxivClientError,
+            "RSS fallback also failed",
+        ):
+            fetch_latest_papers_from_rss(
+                feed,
+                request_delay_seconds=0,
+                retry_attempts=1,
+                api_error=ArxivClientError("api failed"),
+            )
 
     @patch("paper_digest.network.sleep")
     @patch("paper_digest.network.urlopen")
@@ -197,3 +360,48 @@ class ParseFeedTests(unittest.TestCase):
         self.assertEqual(mock_urlopen.call_count, 2)
         self.assertEqual(mock_sleep.call_args_list[0].args, (6.0,))
         self.assertEqual(mock_sleep.call_args_list[1].args, (2,))
+
+    @patch("paper_digest.network.sleep")
+    @patch("paper_digest.network.urlopen")
+    def test_fetch_latest_papers_falls_back_to_rss_after_api_429(
+        self,
+        mock_urlopen,
+        mock_sleep,
+    ) -> None:
+        mock_urlopen.side_effect = [
+            HTTPError(
+                url="https://export.arxiv.org/api/query",
+                code=429,
+                msg="Too Many Requests",
+                hdrs={},
+                fp=None,
+            ),
+            DummyHTTPResponse(RSS_PAYLOAD),
+        ]
+        feed = FeedConfig(
+            name="LM",
+            categories=["cs.CL"],
+            keywords=["LLM"],
+            exclude_keywords=[],
+            max_results=10,
+            max_items=5,
+        )
+
+        papers = fetch_latest_papers(
+            feed,
+            request_delay_seconds=0,
+            retry_attempts=1,
+        )
+
+        self.assertEqual(len(papers), 1)
+        self.assertEqual(papers[0].source, "arxiv")
+        self.assertEqual(papers[0].arxiv_id, "2604.22027")
+        self.assertIn(
+            "export.arxiv.org/api/query",
+            mock_urlopen.call_args_list[0].args[0].full_url,
+        )
+        self.assertEqual(
+            mock_urlopen.call_args_list[1].args[0].full_url,
+            "https://rss.arxiv.org/rss/cs.CL",
+        )
+        mock_sleep.assert_not_called()

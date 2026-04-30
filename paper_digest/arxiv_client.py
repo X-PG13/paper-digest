@@ -7,15 +7,18 @@ import xml.etree.ElementTree as ET
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime
-from urllib.parse import urlencode
+from email.utils import parsedate_to_datetime
+from urllib.parse import quote, urlencode
 from urllib.request import Request
 
 from .config import FeedbackStatus, FeedConfig
 from .network import fetch_bytes_with_retry
 
 ARXIV_API_URL = "https://export.arxiv.org/api/query"
+ARXIV_RSS_URL = "https://rss.arxiv.org/rss"
 ATOM_NS = {"atom": "http://www.w3.org/2005/Atom"}
 ARXIV_NS = {"arxiv": "http://arxiv.org/schemas/atom"}
+RSS_NS = {"dc": "http://purl.org/dc/elements/1.1/"}
 DOI_PREFIX_RE = re.compile(r"^(?:https?://(?:dx\.)?doi\.org/|doi:)", re.IGNORECASE)
 DOI_VALUE_RE = re.compile(r"(10\.\d{4,9}/\S+)", re.IGNORECASE)
 ARXIV_ID_RE = re.compile(
@@ -211,6 +214,8 @@ def fetch_latest_papers(
     retry_attempts: int = 4,
     retry_backoff_seconds: float = 10.0,
 ) -> list[Paper]:
+    """Fetch recent arXiv papers, falling back to RSS when the API is limited."""
+
     params = {
         "search_query": build_search_query(feed.categories),
         "start": 0,
@@ -227,17 +232,85 @@ def fetch_latest_papers(
         },
     )
 
-    payload = fetch_bytes_with_retry(
-        request,
-        timeout_seconds=request_timeout_seconds,
-        request_delay_seconds=request_delay_seconds,
-        retry_attempts=retry_attempts,
-        retry_backoff_seconds=retry_backoff_seconds,
-        error_factory=ArxivClientError,
-        operation_description=f"failed to fetch papers for feed {feed.name!r}",
-    )
+    try:
+        payload = fetch_bytes_with_retry(
+            request,
+            timeout_seconds=request_timeout_seconds,
+            request_delay_seconds=request_delay_seconds,
+            retry_attempts=retry_attempts,
+            retry_backoff_seconds=retry_backoff_seconds,
+            error_factory=ArxivClientError,
+            operation_description=f"failed to fetch papers for feed {feed.name!r}",
+        )
+    except ArxivClientError as exc:
+        return fetch_latest_papers_from_rss(
+            feed,
+            request_delay_seconds=request_delay_seconds,
+            request_timeout_seconds=request_timeout_seconds,
+            retry_attempts=retry_attempts,
+            retry_backoff_seconds=retry_backoff_seconds,
+            api_error=exc,
+        )
     papers = parse_feed(payload)
     return papers
+
+
+def fetch_latest_papers_from_rss(
+    feed: FeedConfig,
+    *,
+    request_delay_seconds: float,
+    request_timeout_seconds: int = 60,
+    retry_attempts: int = 4,
+    retry_backoff_seconds: float = 10.0,
+    api_error: ArxivClientError | None = None,
+) -> list[Paper]:
+    """Fetch recent papers from category RSS feeds as an arXiv API fallback."""
+
+    papers_by_id: dict[str, Paper] = {}
+    for category in feed.categories:
+        category_name = category.strip()
+        if not category_name:
+            continue
+        category_url = f"{ARXIV_RSS_URL}/{quote(category_name, safe='.')}"
+        request = Request(
+            category_url,
+            headers={
+                "User-Agent": "paper-digest/0.1 (research-digest generator)",
+                "Accept": "application/rss+xml, application/xml",
+            },
+        )
+        try:
+            payload = fetch_bytes_with_retry(
+                request,
+                timeout_seconds=request_timeout_seconds,
+                request_delay_seconds=request_delay_seconds,
+                retry_attempts=retry_attempts,
+                retry_backoff_seconds=retry_backoff_seconds,
+                error_factory=ArxivClientError,
+                operation_description=(
+                    f"failed to fetch arXiv RSS category {category_name!r}"
+                ),
+            )
+        except ArxivClientError as exc:
+            if api_error is not None:
+                raise ArxivClientError(
+                    f"{api_error}; RSS fallback also failed: {exc}"
+                ) from exc
+            raise
+        for paper in parse_rss_feed(payload, category=category_name):
+            canonical_id = paper.canonical_id()
+            existing = papers_by_id.get(canonical_id)
+            if existing is None:
+                papers_by_id[canonical_id] = paper
+                continue
+            existing.merge_duplicate(paper)
+
+    papers = sorted(
+        papers_by_id.values(),
+        key=lambda item: item.published_at,
+        reverse=True,
+    )
+    return papers[: _rss_result_limit(feed)]
 
 
 def parse_feed(payload: bytes) -> list[Paper]:
@@ -246,6 +319,17 @@ def parse_feed(payload: bytes) -> list[Paper]:
     except ET.ParseError as exc:
         raise ArxivClientError("received malformed XML from arXiv") from exc
     return [parse_entry(entry) for entry in root.findall("atom:entry", ATOM_NS)]
+
+
+def parse_rss_feed(payload: bytes, *, category: str) -> list[Paper]:
+    try:
+        root = ET.fromstring(payload)
+    except ET.ParseError as exc:
+        raise ArxivClientError("received malformed RSS from arXiv") from exc
+    return [
+        _parse_rss_item(item, fallback_category=category)
+        for item in root.findall("./channel/item")
+    ]
 
 
 def parse_entry(entry: ET.Element) -> Paper:
@@ -304,11 +388,77 @@ def parse_entry(entry: ET.Element) -> Paper:
     )
 
 
+def _parse_rss_item(item: ET.Element, *, fallback_category: str) -> Paper:
+    title = _clean_text(item.findtext("title", default="") or "")
+    description = _clean_text(item.findtext("description", default="") or "")
+    abstract_url = (item.findtext("link", default="") or "").strip()
+    guid = (item.findtext("guid", default="") or "").strip()
+    arxiv_id = _extract_arxiv_identifier(abstract_url) or _extract_arxiv_identifier(
+        guid
+    )
+    paper_id = abstract_url or guid or title
+    authors = _split_rss_authors(
+        item.findtext("dc:creator", default="", namespaces=RSS_NS) or ""
+    )
+    categories = [
+        _clean_text(category.text or "")
+        for category in item.findall("category")
+        if _clean_text(category.text or "")
+    ]
+    if not categories and fallback_category.strip():
+        categories = [fallback_category.strip()]
+    published_at = _parse_rss_datetime(
+        item.findtext("pubDate", default="") or "",
+    )
+    pdf_url = f"https://arxiv.org/pdf/{arxiv_id}" if arxiv_id else None
+
+    return Paper(
+        title=title,
+        summary=_rss_abstract(description),
+        authors=authors,
+        categories=categories,
+        paper_id=paper_id,
+        abstract_url=abstract_url or paper_id,
+        pdf_url=pdf_url,
+        published_at=published_at,
+        updated_at=published_at,
+        source="arxiv",
+        date_label="Published",
+        arxiv_id=arxiv_id,
+        source_urls={"arxiv": abstract_url or paper_id},
+    )
+
+
 def _parse_atom_datetime(value: str) -> datetime:
     try:
         return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
     except ValueError as exc:
         raise ArxivClientError(f"invalid datetime from arXiv: {value!r}") from exc
+
+
+def _parse_rss_datetime(value: str) -> datetime:
+    try:
+        parsed = parsedate_to_datetime(value)
+    except (TypeError, ValueError) as exc:
+        raise ArxivClientError(f"invalid RSS datetime from arXiv: {value!r}") from exc
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _rss_abstract(value: str) -> str:
+    marker = "Abstract:"
+    if marker not in value:
+        return value
+    return value.split(marker, maxsplit=1)[1].strip()
+
+
+def _split_rss_authors(value: str) -> list[str]:
+    return _merge_unique_strings(value.split(","))
+
+
+def _rss_result_limit(feed: FeedConfig) -> int:
+    return max(feed.max_results, feed.max_items)
 
 
 def _clean_text(value: str) -> str:

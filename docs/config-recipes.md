@@ -81,7 +81,7 @@ Operational steps:
 2. Store the full TOML content in the `PAPER_DIGEST_CONFIG_TOML` repository
    secret.
 3. Trigger `Daily Digest` manually once on `main`.
-4. Let the default workflow schedule deliver at about `09:00 Asia/Shanghai`.
+4. Let the default workflow schedule deliver at about `09:07 Asia/Shanghai`.
 
 Keep `target = "digest"`, `focus_target = "digest"`, and
 `action_target = "digest"` when you want one combined Feishu message instead

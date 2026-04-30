@@ -2,8 +2,9 @@ name: Daily Digest
 
 on:
   schedule:
-    # GitHub cron uses UTC; 01:00 UTC is 09:00 in Asia/Shanghai.
-    - cron: "0 1 * * *"
+    # GitHub cron uses UTC; 01:07 UTC is about 09:07 in Asia/Shanghai.
+    # Avoid minute 0 because GitHub may delay or drop top-of-hour schedules.
+    - cron: "7 1 * * *"
   workflow_dispatch:
     inputs:
       config_toml_override:

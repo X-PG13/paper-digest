@@ -206,5 +206,29 @@ class LabelSyncWorkflowContractTests(unittest.TestCase):
         self.assertNotIn("actions/github-script", block)
 
 
+class DailyDigestWorkflowContractTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.lines = load_workflow_lines(".github/workflows/daily-digest.yml")
+
+    def test_daily_digest_schedule_avoids_top_of_hour(self) -> None:
+        block = extract_indented_block(self.lines, "on:")
+
+        self.assertIn("  schedule:", block)
+        self.assertIn(
+            "    # Avoid minute 0 because GitHub may delay or drop "
+            "top-of-hour schedules.",
+            block,
+        )
+        self.assertIn('    - cron: "7 1 * * *"', block)
+        self.assertNotIn('    - cron: "0 1 * * *"', block)
+
+    def test_daily_digest_keeps_manual_dispatch_for_smoke_tests(self) -> None:
+        block = extract_indented_block(self.lines, "on:")
+
+        self.assertIn("  workflow_dispatch:", block)
+        self.assertIn("      config_toml_override:", block)
+        self.assertIn("      feedback_json_override:", block)
+
+
 if __name__ == "__main__":
     unittest.main()
