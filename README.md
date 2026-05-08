@@ -45,7 +45,8 @@ than a one-off script. The baseline includes:
 
 - Full config reference and commented examples: [`config.example.toml`](./config.example.toml)
 - Small starting profiles for common setups: [`docs/config-recipes.md`](./docs/config-recipes.md)
-- Ready-to-edit Feishu LM/arXiv morning digest config: [`examples/feishu-lm-arxiv.toml`](./examples/feishu-lm-arxiv.toml)
+- Ready-to-edit Feishu LM plus agent runtime security arXiv morning digest
+  config: [`examples/feishu-lm-arxiv.toml`](./examples/feishu-lm-arxiv.toml)
 - Runtime and platform support policy: [`docs/compatibility-matrix.md`](./docs/compatibility-matrix.md)
 - Label taxonomy and triage labels: [`docs/label-taxonomy.md`](./docs/label-taxonomy.md)
 - Security disclosure and support routing: [`SECURITY.md`](./SECURITY.md) and [`SUPPORT.md`](./SUPPORT.md)
@@ -98,7 +99,8 @@ python -m pip install -e '.[dev]'
 - For a fully commented reference, copy [`config.example.toml`](./config.example.toml).
 - For a smaller profile such as "local smoke test" or "GitHub Actions
   schedule", start from [`docs/config-recipes.md`](./docs/config-recipes.md).
-- For a Feishu morning digest focused on LM papers from arXiv, copy
+- For a Feishu morning digest focused on LM plus agent runtime security papers
+  from arXiv, copy
   [`examples/feishu-lm-arxiv.toml`](./examples/feishu-lm-arxiv.toml).
 
 2. Copy a config into the local ignored `config.toml` file:
@@ -786,7 +788,8 @@ For manual validation runs, `workflow_dispatch` also accepts an optional
 `config_toml_override` input. When you provide it, that run uses the temporary
 config instead of `PAPER_DIGEST_CONFIG_TOML`.
 
-For the common "LM papers from arXiv to Feishu every morning" setup, start from
+For the common "LM plus agent runtime security papers from arXiv to Feishu
+every morning" setup, start from
 [`examples/feishu-lm-arxiv.toml`](./examples/feishu-lm-arxiv.toml), replace the
 placeholder Feishu webhook, store the full file content in
 `PAPER_DIGEST_CONFIG_TOML`, and trigger `Daily Digest` manually once on `main`.

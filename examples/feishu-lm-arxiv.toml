@@ -59,6 +59,45 @@ exclude_keywords = ["survey", "tutorial", "position paper"]
 max_results = 100
 max_items = 15
 
+[[feeds]]
+name = "Agent Runtime Security"
+source = "arxiv"
+categories = ["cs.AI", "cs.CL", "cs.CR", "cs.SE"]
+keywords = [
+  "agent runtime",
+  "runtime security",
+  "agent security",
+  "secure agent",
+  "AI agent security",
+  "LLM agent security",
+  "autonomous agent security",
+  "agent sandbox",
+  "sandboxing",
+  "agent isolation",
+  "tool-use security",
+  "tool calling security",
+  "function calling security",
+  "prompt injection",
+  "indirect prompt injection",
+  "jailbreak",
+  "privilege escalation",
+  "data exfiltration",
+  "untrusted tool",
+  "malicious tool",
+  "agent attack",
+  "agent defense",
+  "policy enforcement",
+  "guardrail",
+  "computer-use agent",
+  "browser agent security",
+  "code agent security",
+  "MCP security",
+  "model context protocol security",
+]
+exclude_keywords = ["survey", "tutorial", "position paper"]
+max_results = 150
+max_items = 10
+
 [[deliveries]]
 type = "feishu_webhook"
 webhook_url = "https://open.feishu.cn/open-apis/bot/v2/hook/replace-me"

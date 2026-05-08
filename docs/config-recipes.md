@@ -73,7 +73,7 @@ max_items = 15
 
 Use [`examples/feishu-lm-arxiv.toml`](../examples/feishu-lm-arxiv.toml) when
 you want the scheduled GitHub workflow to send one Chinese Feishu message each
-morning for new LM papers from arXiv.
+morning for new LM papers plus agent runtime security papers from arXiv.
 
 Operational steps:
 
@@ -82,6 +82,13 @@ Operational steps:
    secret.
 3. Trigger `Daily Digest` manually once on `main`.
 4. Let the default workflow schedule deliver at about `09:07 Asia/Shanghai`.
+
+The example keeps two feed sections:
+
+- `LM`: language-model papers from `cs.CL`, `cs.AI`, and `cs.LG`.
+- `Agent Runtime Security`: agent runtime, tool-use, sandboxing, prompt
+  injection, privilege-escalation, and policy-enforcement papers from `cs.AI`,
+  `cs.CL`, `cs.CR`, and `cs.SE`.
 
 Keep `target = "digest"`, `focus_target = "digest"`, and
 `action_target = "digest"` when you want one combined Feishu message instead
