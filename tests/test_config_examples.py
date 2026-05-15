@@ -13,12 +13,16 @@ class ConfigExamplesTests(unittest.TestCase):
         self.assertEqual(config.timezone, "Asia/Shanghai")
         self.assertEqual(
             [feed.name for feed in config.feeds],
-            ["LM", "Agent Runtime Security"],
+            ["LM", "Agent Runtime Security", "Terminal and SWE Agents"],
         )
         self.assertEqual(config.feeds[0].source, "arxiv")
         self.assertEqual(config.feeds[1].source, "arxiv")
         self.assertIn("cs.CR", config.feeds[1].categories)
         self.assertIn("prompt injection", config.feeds[1].keywords)
+        self.assertEqual(config.feeds[2].source, "arxiv")
+        self.assertIn("cs.SE", config.feeds[2].categories)
+        self.assertIn("SWE-bench", config.feeds[2].keywords)
+        self.assertIn("terminal agent", config.feeds[2].keywords)
         self.assertEqual(config.digest.template, "zh_daily_brief")
         self.assertIsNone(config.analysis)
         self.assertEqual(len(config.deliveries), 1)

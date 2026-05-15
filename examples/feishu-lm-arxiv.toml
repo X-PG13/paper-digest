@@ -98,6 +98,39 @@ exclude_keywords = ["survey", "tutorial", "position paper"]
 max_results = 150
 max_items = 10
 
+[[feeds]]
+name = "Terminal and SWE Agents"
+source = "arxiv"
+categories = ["cs.SE", "cs.AI", "cs.CL", "cs.LG"]
+keywords = [
+  "Terminal-Bench",
+  "terminal bench",
+  "terminal benchmark",
+  "terminal agent",
+  "command line agent",
+  "shell agent",
+  "SWE-bench",
+  "SWE bench",
+  "software engineering agent",
+  "software engineering benchmark",
+  "coding agent",
+  "code agent",
+  "program repair",
+  "automated program repair",
+  "bug fixing",
+  "issue resolution",
+  "repository-level",
+  "repository level",
+  "code editing",
+  "code generation benchmark",
+  "code repair",
+  "test generation",
+  "patch generation",
+]
+exclude_keywords = ["survey", "tutorial", "position paper"]
+max_results = 150
+max_items = 10
+
 [[deliveries]]
 type = "feishu_webhook"
 webhook_url = "https://open.feishu.cn/open-apis/bot/v2/hook/replace-me"
