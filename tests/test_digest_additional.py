@@ -502,7 +502,8 @@ class DigestAdditionalTests(unittest.TestCase):
                             relevance_score=95,
                         )
                     ],
-                )
+                ),
+                FeedDigest(name="Agent Runtime Security", papers=[]),
             ],
             focus_items=[
                 FocusItem(
@@ -580,9 +581,17 @@ class DigestAdditionalTests(unittest.TestCase):
         self.assertIn("## 本周该处理什么", feedback_markdown)
         self.assertIn("## Focus 区块", focus_markdown)
         self.assertIn("## 主题聚焦", markdown)
+        self.assertIn("## 栏目状态", markdown)
+        self.assertIn("- LLM：1 篇", markdown)
+        self.assertIn(
+            "- Agent Runtime Security：0 篇（无新增或已去重）",
+            markdown,
+        )
         self.assertIn("代表论文：《论文 A》", markdown)
         self.assertIn("主题速读：", markdown)
         self.assertIn("### Empty Topic", markdown)
+        self.assertIn("## Agent Runtime Security 观察", markdown)
+        self.assertIn("今日没有新的命中文献。", markdown)
         self.assertIn("作者：甲，乙，丙，丁，戊，己 等", markdown)
         self.assertIn("备注：先看方法部分", markdown)
         self.assertIn("相关性分数：95", markdown)

@@ -401,6 +401,12 @@ def _render_zh_daily_brief(digest: DigestRun) -> str:
         lines.extend(f"- {highlight}" for highlight in digest.highlights)
         lines.append("")
 
+    if digest.feeds:
+        lines.append("## 栏目状态")
+        lines.append("")
+        lines.extend(_format_zh_feed_status_lines(digest.feeds))
+        lines.append("")
+
     focus_lines = _render_focus_lines(digest, language="zh")
     if focus_lines:
         lines.extend(focus_lines)
@@ -493,6 +499,17 @@ def _render_zh_daily_brief(digest: DigestRun) -> str:
             lines.append("")
 
     return "\n".join(lines).strip() + "\n"
+
+
+def _format_zh_feed_status_lines(feeds: list[FeedDigest]) -> list[str]:
+    lines: list[str] = []
+    for feed in feeds:
+        paper_count = len(feed.papers)
+        if paper_count:
+            lines.append(f"- {feed.name}：{paper_count} 篇")
+        else:
+            lines.append(f"- {feed.name}：0 篇（无新增或已去重）")
+    return lines
 
 
 def _render_default_focus_only_markdown(digest: DigestRun) -> str:

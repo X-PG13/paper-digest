@@ -546,6 +546,8 @@ class DigestTests(unittest.TestCase):
 
         self.assertIn("# 每日论文简报", markdown)
         self.assertIn("## 今日重点", markdown)
+        self.assertIn("## 栏目状态", markdown)
+        self.assertIn("- LLM：1 篇", markdown)
         self.assertIn("## 主题聚焦", markdown)
         self.assertIn("### 多模态推理", markdown)
         self.assertIn("## LLM 观察", markdown)
@@ -558,6 +560,20 @@ class DigestTests(unittest.TestCase):
         self.assertIn("主要贡献：统一了评测设置；给出了更稳定的对比结果", markdown)
         self.assertIn("适合谁看：关注多模态评测和应用落地的研究者。", markdown)
         self.assertIn("潜在局限：仅基于摘要，实验细节仍需阅读全文确认。", markdown)
+
+    def test_render_zh_daily_brief_omits_feed_status_without_feeds(self) -> None:
+        digest = DigestRun(
+            generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
+            timezone="UTC",
+            lookback_hours=24,
+            feeds=[],
+            template="zh_daily_brief",
+        )
+
+        markdown = render_markdown(digest)
+
+        self.assertIn("命中概览：no feeds", markdown)
+        self.assertNotIn("## 栏目状态", markdown)
 
     def test_render_zh_daily_brief_shows_merged_source_variants(self) -> None:
         paper = build_paper(
