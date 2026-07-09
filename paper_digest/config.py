@@ -269,6 +269,7 @@ class AnalysisConfig:
     max_output_tokens: int
     language: str
     reasoning_effort: AnalysisReasoningEffort
+    fail_on_error: bool = True
 
 
 def _default_feedback_config() -> FeedbackConfig:
@@ -604,6 +605,10 @@ def _load_analysis(value: Any) -> AnalysisConfig | None:
         reasoning_effort=_analysis_reasoning_effort(
             analysis.get("reasoning_effort", "minimal"),
             "analysis.reasoning_effort",
+        ),
+        fail_on_error=_bool(
+            analysis.get("fail_on_error", True),
+            "analysis.fail_on_error",
         ),
     )
 

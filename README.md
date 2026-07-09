@@ -231,6 +231,7 @@ max_papers = 8
 max_output_tokens = 600
 language = "English"
 reasoning_effort = "minimal"
+fail_on_error = true
 ```
 
 Digest notes:
@@ -249,6 +250,10 @@ Digest notes:
   project generates rule-based Chinese briefing scaffolding around the raw
   paper title and abstract summary, including high-frequency topic extraction,
   rule-based tags such as `方法` / `数据` / `应用`, and topic-oriented highlights.
+- For automatic Chinese paper notes in Feishu, enable `[analysis]`, set
+  `language = "Chinese"`, and provide the `OPENAI_API_KEY` secret. Titles remain
+  the original paper titles, while conclusions, contributions, audience notes,
+  and limitations are written in Chinese.
 - The JSON output now records the active sorting summary, per-feed `sort_by`,
   `relevance_score`, and `match_reasons` so downstream archive pages and
   integrations can explain why each paper surfaced.
@@ -457,6 +462,8 @@ Analysis notes:
   papers that actually make it into the digest.
 - `max_papers` caps analysis cost for a single run. Papers beyond that limit
   still appear in the digest with their raw abstract summaries.
+- `fail_on_error = false` lets notification workflows fall back to raw abstracts
+  when analysis is temporarily unavailable instead of failing the whole digest.
 - When analysis is enabled, the Markdown and notification outputs add:
   top-of-digest highlights, a one-sentence conclusion per paper, contribution
   bullets, best-fit audience, and likely limitations.

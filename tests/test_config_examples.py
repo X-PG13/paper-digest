@@ -24,7 +24,11 @@ class ConfigExamplesTests(unittest.TestCase):
         self.assertIn("SWE-bench", config.feeds[2].keywords)
         self.assertIn("terminal agent", config.feeds[2].keywords)
         self.assertEqual(config.digest.template, "zh_daily_brief")
-        self.assertIsNone(config.analysis)
+        self.assertIsNotNone(config.analysis)
+        assert config.analysis is not None
+        self.assertEqual(config.analysis.language, "Chinese")
+        self.assertEqual(config.analysis.max_papers, 24)
+        self.assertFalse(config.analysis.fail_on_error)
         self.assertEqual(len(config.deliveries), 1)
 
         delivery = config.deliveries[0]

@@ -74,15 +74,18 @@ max_items = 15
 Use [`examples/feishu-lm-arxiv.toml`](../examples/feishu-lm-arxiv.toml) when
 you want the scheduled GitHub workflow to send one Chinese Feishu message each
 morning for new LM papers, agent runtime security papers, and Terminal-Bench /
-SWE-bench style software-engineering agent papers from arXiv.
+SWE-bench style software-engineering agent papers from arXiv. The example
+enables OpenAI-backed Chinese analysis so the paper notes are written in
+Chinese instead of requiring manual translation in Feishu.
 
 Operational steps:
 
 1. Replace the placeholder Feishu webhook URL.
 2. Store the full TOML content in the `PAPER_DIGEST_CONFIG_TOML` repository
    secret.
-3. Trigger `Daily Digest` manually once on `main`.
-4. Let the default workflow schedule deliver at about `09:07 Asia/Shanghai`.
+3. Store an `OPENAI_API_KEY` repository secret for automatic Chinese analysis.
+4. Trigger `Daily Digest` manually once on `main`.
+5. Let the default workflow schedule deliver at about `09:07 Asia/Shanghai`.
 
 The example keeps three feed sections:
 
@@ -97,6 +100,10 @@ The example keeps three feed sections:
 Keep `target = "digest"`, `focus_target = "digest"`, and
 `action_target = "digest"` when you want one combined Feishu message instead
 of separate per-feed, Focus, or Action messages.
+
+The example sets `analysis.fail_on_error = false`, so a temporary analysis
+outage falls back to raw abstracts instead of dropping the whole morning
+notification.
 
 ## 4. Chinese Daily Brief Without LLM Calls
 
@@ -120,6 +127,7 @@ max_papers = 8
 max_output_tokens = 600
 language = "Chinese"
 reasoning_effort = "minimal"
+fail_on_error = true
 ```
 
 ## 5. Action-Oriented Reminder Channel

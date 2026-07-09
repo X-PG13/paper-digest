@@ -122,11 +122,13 @@ def enrich_digest_with_analysis(
 
     papers_to_analyze = _select_papers_for_analysis(digest, config.max_papers)
     if papers_to_analyze:
-        try:
-            for paper in papers_to_analyze:
+        for paper in papers_to_analyze:
+            try:
                 paper.analysis = _analyze_paper(config, paper, template=template)
-        except OpenAIAnalysisError as exc:
-            raise AnalysisError(str(exc)) from exc
+            except OpenAIAnalysisError as exc:
+                if config.fail_on_error:
+                    raise AnalysisError(str(exc)) from exc
+                break
 
     apply_digest_briefing(
         digest,

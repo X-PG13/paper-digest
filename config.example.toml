@@ -114,6 +114,9 @@ max_output_tokens = 600
 language = "English"
 # Use "none" to skip reasoning settings entirely.
 reasoning_effort = "minimal"
+# Keep strict failure semantics by default. Set to false for notification
+# workflows that should fall back to raw abstracts when analysis is unavailable.
+fail_on_error = true
 
 # To get a Chinese daily brief without any model calls, use:
 # [digest]

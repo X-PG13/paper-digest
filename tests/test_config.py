@@ -289,6 +289,7 @@ class LoadConfigTests(unittest.TestCase):
                     max_output_tokens = 500
                     language = "Chinese"
                     reasoning_effort = "low"
+                    fail_on_error = false
                     """
                 ).strip(),
                 encoding="utf-8",
@@ -304,6 +305,7 @@ class LoadConfigTests(unittest.TestCase):
         self.assertEqual(config.analysis.max_papers, 8)
         self.assertEqual(config.analysis.language, "Chinese")
         self.assertEqual(config.analysis.reasoning_effort, "low")
+        self.assertFalse(config.analysis.fail_on_error)
 
     def test_load_config_accepts_extended_action_reasons(self) -> None:
         with TemporaryDirectory() as temp_dir:

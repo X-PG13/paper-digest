@@ -107,6 +107,36 @@ class AnalysisAdditionalTests(unittest.TestCase):
                 feed_key_points=1,
             )
 
+    @patch(
+        "paper_digest.analysis.analyze_paper_with_openai",
+        side_effect=OpenAIAnalysisError("analysis failed"),
+    )
+    def test_enrich_digest_with_analysis_can_fall_back_to_raw_summaries(
+        self,
+        mock_analyze_paper_with_openai,
+    ) -> None:
+        digest = DigestRun(
+            generated_at=datetime(2026, 4, 8, 10, 0, tzinfo=UTC),
+            timezone="UTC",
+            lookback_hours=24,
+            feeds=[FeedDigest(name="LLM", papers=[build_paper("Agent benchmark")])],
+        )
+
+        enrich_digest_with_analysis(
+            replace(build_config(), fail_on_error=False),
+            digest,
+            template="default",
+            top_highlights=1,
+            feed_key_points=1,
+        )
+
+        mock_analyze_paper_with_openai.assert_called_once()
+        self.assertIsNone(digest.feeds[0].papers[0].analysis)
+        self.assertEqual(
+            digest.highlights,
+            ["LLM: Agent benchmark - Agent benchmark summary"],
+        )
+
     def test_highlight_and_key_point_builders_skip_blank_summary_lines(self) -> None:
         paper = build_paper("Blank summary", summary="   ")
         digest = DigestRun(
