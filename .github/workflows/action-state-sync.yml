@@ -29,10 +29,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Restore digest state cache
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: .paper-digest-state
           key: paper-digest-state-${{ github.run_id }}
@@ -135,7 +135,7 @@ jobs:
 
       - name: Save digest state cache
         if: ${{ github.event.inputs.direction == 'import' && hashFiles('.paper-digest-state/**') != '' }}
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: .paper-digest-state
           key: paper-digest-state-${{ github.run_id }}

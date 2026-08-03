@@ -39,10 +39,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -52,7 +52,7 @@ jobs:
       - name: Restore digest state cache
         if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.config_toml_override == '' }}
         id: state-restore
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: .paper-digest-state
           key: paper-digest-state-${{ github.run_id }}
@@ -62,7 +62,7 @@ jobs:
       - name: Restore archive history cache
         if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.config_toml_override == '' }}
         id: archive-restore
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: |
             output
@@ -148,14 +148,14 @@ jobs:
 
       - name: Save digest state cache
         if: ${{ always() && hashFiles('.paper-digest-state/**') != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.config_toml_override == '') }}
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: .paper-digest-state
           key: paper-digest-state-${{ github.run_id }}
 
       - name: Save archive history cache
         if: ${{ success() && hashFiles('output/**') != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.config_toml_override == '') }}
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: |
             output
