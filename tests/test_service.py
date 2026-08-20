@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -18,6 +18,7 @@ from paper_digest.config import (
     RankingConfig,
     RankingWeights,
     StateConfig,
+    TranslationConfig,
 )
 from paper_digest.digest import DigestRun, FeedDigest, write_outputs
 from paper_digest.feedback import FeedbackEntry, FeedbackState
@@ -669,6 +670,66 @@ class GenerateDigestTests(unittest.TestCase):
             ["《Agent systems》〔评测 / 方法〕：A benchmark for agent evaluation."],
         )
         self.assertEqual(digest.topic_sections[0].name, "Agent")
+
+    @patch("paper_digest.service.apply_digest_briefing")
+    @patch("paper_digest.service.enrich_digest_with_translation")
+    @patch("paper_digest.service.fetch_feed_papers")
+    def test_generate_digest_translates_before_building_briefing(
+        self,
+        mock_fetch_feed_papers,
+        mock_translate,
+        mock_briefing,
+    ) -> None:
+        now = datetime(2026, 8, 12, 9, 7, tzinfo=ZoneInfo("UTC"))
+        paper = Paper(
+            title="Terminal benchmark",
+            summary="A benchmark for terminal agents.",
+            authors=["Alice"],
+            categories=["cs.SE"],
+            paper_id="https://arxiv.org/abs/2608.00001",
+            abstract_url="https://arxiv.org/abs/2608.00001",
+            pdf_url=None,
+            published_at=now - timedelta(hours=1),
+            updated_at=now - timedelta(hours=1),
+        )
+        mock_fetch_feed_papers.return_value = [paper]
+        order: list[str] = []
+        mock_translate.side_effect = lambda *_args, **_kwargs: order.append(
+            "translation"
+        )
+        mock_briefing.side_effect = lambda *_args, **_kwargs: order.append("briefing")
+
+        with TemporaryDirectory() as temp_dir:
+            config = AppConfig(
+                timezone="UTC",
+                lookback_hours=24,
+                output_dir=Path(temp_dir) / "output",
+                request_delay_seconds=0,
+                feeds=[
+                    FeedConfig(
+                        name="Terminal-Bench",
+                        categories=["cs.SE"],
+                        keywords=["terminal"],
+                    )
+                ],
+                state=StateConfig(
+                    enabled=False,
+                    path=Path(temp_dir) / "state.json",
+                    retention_days=90,
+                ),
+                digest=DigestConfig(template="zh_daily_brief"),
+                translation=TranslationConfig(
+                    provider="argos",
+                    model_path=Path(temp_dir) / "model",
+                    max_papers=10,
+                    max_summary_chars=1200,
+                ),
+            )
+
+            generate_digest(config, now=now, state=DigestState(seen_papers={}))
+
+        self.assertEqual(order, ["translation", "briefing"])
+        mock_translate.assert_called_once()
 
     @patch("paper_digest.service.fetch_feed_papers")
     def test_generate_digest_applies_configured_sorting_summary(

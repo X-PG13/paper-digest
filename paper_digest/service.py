@@ -12,7 +12,7 @@ from typing import cast
 from zoneinfo import ZoneInfo
 
 from .analysis import apply_digest_briefing, enrich_digest_with_analysis
-from .arxiv_client import Paper
+from .arxiv_client import Paper, PaperTranslation
 from .config import AppConfig, FeedbackStatus
 from .digest import (
     ActionItem,
@@ -33,6 +33,11 @@ from .feedback import (
 )
 from .sources import fetch_feed_papers
 from .state import DigestState, dedupe_papers, load_state, save_state
+from .translation import (
+    enrich_digest_with_translation,
+    translated_summary,
+    translated_title,
+)
 
 
 @dataclass(slots=True)
@@ -175,6 +180,8 @@ def generate_digest(
         template=config.digest.template,
     )
     finalize_digest_scoring(digest, ranking=config.ranking)
+    if config.translation is not None:
+        enrich_digest_with_translation(config.translation, digest)
     if config.analysis is not None:
         enrich_digest_with_analysis(
             config.analysis,
@@ -345,9 +352,17 @@ def _build_focus_items(
         )
         focus_item = FocusItem(
             canonical_id=paper.canonical_id(),
-            title=paper.title,
+            title=(
+                translated_title(paper)
+                if digest.template == "zh_daily_brief"
+                else paper.title
+            ),
             abstract_url=paper.abstract_url,
-            summary=paper.summary,
+            summary=(
+                translated_summary(paper)
+                if digest.template == "zh_daily_brief"
+                else paper.summary
+            ),
             source_label=paper.source_label(),
             feedback_status=entry.status,
             feedback_note=entry.note,
@@ -460,9 +475,17 @@ def _build_action_items(
         )
         action_item = ActionItem(
             canonical_id=paper.canonical_id(),
-            title=paper.title,
+            title=(
+                translated_title(paper)
+                if digest.template == "zh_daily_brief"
+                else paper.title
+            ),
             abstract_url=paper.abstract_url,
-            summary=paper.summary,
+            summary=(
+                translated_summary(paper)
+                if digest.template == "zh_daily_brief"
+                else paper.summary
+            ),
             source_label=paper.source_label(),
             feedback_status=entry.status,
             feedback_note=entry.note,
@@ -625,6 +648,7 @@ def _paper_from_payload(payload: dict[str, object]) -> Paper | None:
         updated_at=updated_at,
         source=str(payload.get("source", "arxiv")).strip() or "arxiv",
         date_label=str(payload.get("date_label", "Published")).strip() or "Published",
+        translation=_paper_translation(payload.get("translation")),
         tags=_string_list(payload.get("tags")),
         topics=_string_list(payload.get("topics")),
         doi=_optional_string(payload.get("doi")),
@@ -642,6 +666,16 @@ def _paper_from_payload(payload: dict[str, object]) -> Paper | None:
             payload.get("feedback_review_interval_days")
         ),
     )
+
+
+def _paper_translation(value: object) -> PaperTranslation | None:
+    if not isinstance(value, dict):
+        return None
+    title = _optional_string(value.get("title"))
+    summary = _optional_string(value.get("summary"))
+    if title is None or summary is None:
+        return None
+    return PaperTranslation(title=title, summary=summary)
 
 
 def _merge_snapshot_with_candidate(

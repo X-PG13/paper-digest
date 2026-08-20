@@ -24,92 +24,123 @@ feed_key_points = 5
 [ranking]
 sort_by = "hybrid"
 
-[analysis]
+[translation]
 enabled = true
+provider = "argos"
+model_path = ".paper-digest-models/argos-en-zh-1.9"
+max_papers = 32
+max_summary_chars = 600
+fail_on_error = false
+
+[analysis]
+enabled = false
 provider = "openai"
 model = "gpt-5-mini"
 api_key_env = "OPENAI_API_KEY"
 base_url = "https://api.openai.com/v1/responses"
 timeout_seconds = 60
-max_papers = 24
+max_papers = 32
 max_output_tokens = 700
 language = "Chinese"
 reasoning_effort = "minimal"
 fail_on_error = false
 
 [[feeds]]
-name = "LM"
+name = "LLM"
 source = "arxiv"
 categories = ["cs.CL", "cs.AI", "cs.LG"]
 keywords = [
   "language model",
   "large language model",
   "LLM",
-  "reasoning",
-  "agent",
+  "language-model",
+  "reasoning model",
   "alignment",
   "instruction tuning",
   "in-context learning",
   "retrieval augmented generation",
   "RAG",
   "multimodal language model",
-  "benchmark",
-  "evaluation",
+  "foundation model",
+  "post-training",
+  "pretraining",
 ]
-exclude_keywords = ["survey", "tutorial", "position paper"]
-max_results = 100
-max_items = 15
-
-[[feeds]]
-name = "Agent Runtime Security"
-source = "arxiv"
-categories = ["cs.AI", "cs.CL", "cs.CR", "cs.SE"]
-keywords = [
-  "agent runtime",
-  "runtime security",
-  "agent security",
-  "secure agent",
-  "AI agent security",
-  "LLM agent security",
-  "autonomous agent security",
-  "agent sandbox",
-  "sandboxing",
-  "agent isolation",
-  "tool-use security",
-  "tool calling security",
-  "function calling security",
+exclude_keywords = [
+  "survey",
+  "tutorial",
+  "position paper",
+  "security",
   "prompt injection",
-  "indirect prompt injection",
   "jailbreak",
-  "privilege escalation",
-  "data exfiltration",
-  "untrusted tool",
-  "malicious tool",
-  "agent attack",
-  "agent defense",
-  "policy enforcement",
-  "guardrail",
-  "computer-use agent",
-  "browser agent security",
-  "code agent security",
-  "MCP security",
-  "model context protocol security",
+  "vulnerability",
+  "adversarial attack",
+  "malware",
+  "software engineering",
+  "SWE-bench",
+  "coding agent",
+  "program repair",
+  "agent benchmark",
+  "agent evaluation",
+  "coding benchmark",
+  "coding agent evaluation",
+  "Terminal-Bench",
+  "terminal agent",
 ]
-exclude_keywords = ["survey", "tutorial", "position paper"]
-max_results = 150
+max_results = 100
 max_items = 10
 
 [[feeds]]
-name = "Terminal and SWE Agents"
+name = "Agent/Coding Benchmarks"
 source = "arxiv"
-categories = ["cs.SE", "cs.AI", "cs.CL", "cs.LG"]
+categories = ["cs.AI", "cs.CL", "cs.SE", "cs.LG"]
 keywords = [
+  "agent benchmark",
+  "agentic benchmark",
+  "benchmark for AI agents",
+  "benchmark for LLM agents",
+  "benchmarking AI agents",
+  "benchmarking LLM agents",
+  "agent evaluation benchmark",
+  "evaluation of AI agents",
+  "evaluation of LLM agents",
+  "coding benchmark",
+  "coding agent benchmark",
+  "code agent benchmark",
+  "benchmark for coding agents",
+  "coding agent evaluation",
+  "evaluation of coding agents",
+  "repository-level benchmark",
+  "code generation benchmark",
+  "computer-use benchmark",
+  "tool-use benchmark",
+  "web agent benchmark",
+]
+exclude_keywords = [
+  "survey",
+  "tutorial",
+  "position paper",
+  "security",
+  "prompt injection",
+  "jailbreak",
+  "vulnerability",
+  "adversarial attack",
+  "malware",
+  "SWE-bench",
+  "SWE bench",
   "Terminal-Bench",
   "terminal bench",
-  "terminal benchmark",
   "terminal agent",
   "command line agent",
   "shell agent",
+]
+max_results = 150
+max_items = 8
+
+[[feeds]]
+name = "SWE"
+source = "arxiv"
+categories = ["cs.SE", "cs.AI", "cs.CL", "cs.LG"]
+keywords = [
   "SWE-bench",
   "SWE bench",
   "software engineering agent",
@@ -128,9 +159,53 @@ keywords = [
   "test generation",
   "patch generation",
 ]
-exclude_keywords = ["survey", "tutorial", "position paper"]
+exclude_keywords = [
+  "survey",
+  "tutorial",
+  "position paper",
+  "security",
+  "prompt injection",
+  "jailbreak",
+  "vulnerability",
+  "adversarial attack",
+  "malware",
+  "Terminal-Bench",
+  "terminal bench",
+  "terminal agent",
+  "command line agent",
+  "shell agent",
+]
 max_results = 150
-max_items = 10
+max_items = 8
+
+[[feeds]]
+name = "Terminal-Bench"
+source = "arxiv"
+categories = ["cs.SE", "cs.AI", "cs.CL", "cs.LG"]
+keywords = [
+  "Terminal-Bench",
+  "terminal bench",
+  "terminal benchmark",
+  "terminal agent",
+  "command line agent",
+  "shell agent",
+  "terminal environment",
+  "CLI agent",
+  "command-line benchmark",
+]
+exclude_keywords = [
+  "survey",
+  "tutorial",
+  "position paper",
+  "security",
+  "prompt injection",
+  "jailbreak",
+  "vulnerability",
+  "adversarial attack",
+  "malware",
+]
+max_results = 150
+max_items = 6
 
 [[deliveries]]
 type = "feishu_webhook"

@@ -29,6 +29,7 @@ from paper_digest.service import (
     _optional_positive_int,
     _optional_string,
     _paper_from_payload,
+    _paper_translation,
     _parse_optional_datetime,
     _record_focus_candidates,
     _select_action_notification_items,
@@ -335,6 +336,10 @@ class ServiceHelperTests(unittest.TestCase):
                 "feedback_status": "maybe",
                 "feedback_due_date": "bad-date",
                 "feedback_review_interval_days": 0,
+                "translation": {
+                    "title": "智能体系统",
+                    "summary": "一篇关于智能体系统的论文。",
+                },
             }
         )
 
@@ -353,6 +358,10 @@ class ServiceHelperTests(unittest.TestCase):
         self.assertIsNone(paper.feedback_status)
         self.assertIsNone(paper.feedback_due_date)
         self.assertIsNone(paper.feedback_review_interval_days)
+        assert paper.translation is not None
+        self.assertEqual(paper.translation.title, "智能体系统")
+        self.assertEqual(paper.translation.summary, "一篇关于智能体系统的论文。")
+        self.assertIsNone(_paper_translation({"title": "缺少摘要"}))
 
     def test_merge_snapshot_with_candidate_handles_current_only_and_existing_snapshot(
         self,

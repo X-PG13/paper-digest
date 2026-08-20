@@ -28,6 +28,7 @@ needs explicit maintainer validation before it should be advertised.
 | --- | --- | --- |
 | arXiv, Crossref, PubMed, Semantic Scholar, OpenAlex fetchers | Supported | Covered by unit tests and local verification. |
 | OpenAI analysis | Optional supported integration | Requires explicit API-key configuration and is disabled by default. |
+| Offline English-to-Chinese translation | Optional supported integration | Requires the `translation` extra and pinned model; the scheduled workflow installs and caches both. |
 | SMTP, Feishu, WeCom, Slack, Discord, Telegram delivery | Supported | Covered by unit tests; real credentials remain deployment-specific. |
 | GitHub Pages archive deployment | Supported | Driven by the scheduled and backfill workflows on `main`. |
 

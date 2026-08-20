@@ -19,6 +19,7 @@ from .config import (
     SortMode,
 )
 from .feedback import feedback_label, feedback_label_zh
+from .translation import translated_summary, translated_title
 
 
 @dataclass(slots=True)
@@ -460,7 +461,10 @@ def _render_zh_daily_brief(digest: DigestRun) -> str:
             if len(paper.authors) > 6:
                 authors += " 等"
 
-            lines.append(f"{index}. [{paper.title}]({paper.abstract_url})")
+            display_title = translated_title(paper)
+            lines.append(f"{index}. [{display_title}]({paper.abstract_url})")
+            if paper.translation is not None:
+                lines.append(f"   - 英文原题：{paper.title}")
             lines.append(f"   - {paper.date_label}：{published}")
             lines.append(f"   - 作者：{authors}")
             lines.append(f"   - 来源：{paper.source_label()}")
@@ -482,6 +486,8 @@ def _render_zh_daily_brief(digest: DigestRun) -> str:
                 lines.append(f"   - 主题词：{' / '.join(paper.topics)}")
             if paper.pdf_url:
                 lines.append(f"   - PDF：{paper.pdf_url}")
+            if paper.translation is not None:
+                lines.append(f"   - 中文摘要：{translated_summary(paper)}")
             if paper.analysis is not None:
                 lines.append(f"   - 一句话结论：{paper.analysis.conclusion}")
                 if paper.analysis.contributions:
@@ -494,7 +500,7 @@ def _render_zh_daily_brief(digest: DigestRun) -> str:
                     lines.append(
                         "   - 潜在局限：" + "；".join(paper.analysis.limitations)
                     )
-            else:
+            elif paper.translation is None:
                 lines.append(f"   - 摘要：{paper.summary}")
             lines.append("")
 

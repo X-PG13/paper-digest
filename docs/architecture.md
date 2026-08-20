@@ -59,6 +59,16 @@ scale as new paper sources and output channels are added.
 - Calls the OpenAI Responses API for structured per-paper analysis.
 - Converts raw responses into the shared `PaperAnalysis` model.
 
+### `paper_digest.translation`
+
+- Loads the optional pinned Argos/OPUS English-to-Chinese CTranslate2 model.
+- Translates selected paper titles and bounded abstract excerpts after filtering
+  and deduplication, before Chinese briefing sections are generated.
+- Keeps translated text alongside original metadata in `PaperTranslation` so
+  JSON history, Focus items, action reminders, and renderers reuse one result.
+- Falls back to original English text when configured with
+  `translation.fail_on_error = false`.
+
 ### `paper_digest.digest`
 
 - Applies filtering rules such as lookback windows and keyword matching.
@@ -201,6 +211,8 @@ The next clean extension points are:
    transport code into the CLI.
 4. Add more analysis providers behind the existing analysis interface rather
    than coupling the service layer to a single LLM vendor.
+5. Add translation providers behind the translation interface without moving
+   model download or inference details into workflow YAML.
 
 ## Design Constraints
 

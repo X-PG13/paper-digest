@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from paper_digest.arxiv_client import Paper, PaperAnalysis
+from paper_digest.arxiv_client import Paper, PaperAnalysis, PaperTranslation
 from paper_digest.config import (
     AnalysisConfig,
     AppConfig,
@@ -596,6 +596,35 @@ class DigestTests(unittest.TestCase):
         markdown = render_markdown(digest)
 
         self.assertIn("来源：arxiv / semantic_scholar / openalex", markdown)
+
+    def test_render_zh_daily_brief_uses_offline_translation(self) -> None:
+        paper = build_paper(
+            title="A Terminal Agent Benchmark",
+            summary="Original English abstract.",
+            hours_ago=1,
+            authors=["Alice"],
+        )
+        paper.translation = PaperTranslation(
+            title="一个终端智能体基准",
+            summary="该工作评估智能体完成终端任务的能力。",
+        )
+        digest = DigestRun(
+            generated_at=datetime(2026, 4, 8, 20, 0, tzinfo=UTC),
+            timezone="UTC",
+            lookback_hours=24,
+            feeds=[FeedDigest(name="Terminal-Bench", papers=[paper])],
+            template="zh_daily_brief",
+        )
+
+        markdown = render_markdown(digest)
+
+        self.assertIn("[一个终端智能体基准]", markdown)
+        self.assertIn("英文原题：A Terminal Agent Benchmark", markdown)
+        self.assertIn(
+            "中文摘要：该工作评估智能体完成终端任务的能力。",
+            markdown,
+        )
+        self.assertNotIn("摘要：Original English abstract.", markdown)
 
     def test_render_zh_daily_brief_includes_feedback_status(self) -> None:
         paper = build_paper(

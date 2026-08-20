@@ -9,6 +9,7 @@ from .arxiv_client import Paper, PaperAnalysis
 from .config import AnalysisConfig, DigestTemplate
 from .digest import DigestRun, TopicDigest
 from .openai_analysis import OpenAIAnalysisError, analyze_paper_with_openai
+from .translation import translated_summary, translated_title
 
 _TOPIC_TOKEN_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9+-]{2,}|[\u4e00-\u9fff]{2,}")
 _TOPIC_STOPWORDS = {
@@ -189,13 +190,17 @@ def build_digest_highlights(
     highlights: list[str] = []
     for feed in digest.feeds:
         for paper in feed.papers:
-            summary_line = _highlight_text(paper)
+            summary_line = _highlight_text(paper, template)
             if not summary_line:
                 continue
             highlights.append(
                 _format_digest_highlight(
                     feed.name,
-                    paper.title,
+                    (
+                        translated_title(paper)
+                        if template == "zh_daily_brief"
+                        else paper.title
+                    ),
                     summary_line,
                     template,
                 )
@@ -215,12 +220,16 @@ def build_feed_key_points(
 
     key_points: list[str] = []
     for paper in papers:
-        summary_line = _highlight_text(paper)
+        summary_line = _highlight_text(paper, template)
         if not summary_line:
             continue
         key_points.append(
             _format_feed_key_point(
-                paper.title,
+                (
+                    translated_title(paper)
+                    if template == "zh_daily_brief"
+                    else paper.title
+                ),
                 summary_line,
                 template,
                 tags=paper.tags,
@@ -268,8 +277,13 @@ def build_topic_sections(
                 bucket.paper_count += 1
                 if feed.name not in bucket.feed_names:
                     bucket.feed_names.append(feed.name)
-                if paper.title not in bucket.paper_titles:
-                    bucket.paper_titles.append(paper.title)
+                display_title = (
+                    translated_title(paper)
+                    if template == "zh_daily_brief"
+                    else paper.title
+                )
+                if display_title not in bucket.paper_titles:
+                    bucket.paper_titles.append(display_title)
                 point = _format_topic_key_point(
                     paper,
                     template=template,
@@ -444,9 +458,14 @@ def _analyze_paper(
     raise AnalysisError(f"unsupported analysis provider: {config.provider}")
 
 
-def _highlight_text(paper: Paper) -> str:
+def _highlight_text(
+    paper: Paper,
+    template: DigestTemplate = "default",
+) -> str:
     if paper.analysis is not None:
         return _truncate_text(paper.analysis.conclusion, 160)
+    if template == "zh_daily_brief":
+        return _truncate_text(translated_summary(paper), 160)
     return _truncate_text(paper.summary, 160)
 
 
@@ -490,10 +509,10 @@ def _format_topic_key_point(
     *,
     template: DigestTemplate,
 ) -> str:
-    summary_line = _highlight_text(paper)
+    summary_line = _highlight_text(paper, template)
     tag_label = f"〔{' / '.join(paper.tags)}〕" if paper.tags else ""
     if template == "zh_daily_brief":
-        return f"《{paper.title}》{tag_label}：{summary_line}"
+        return f"《{translated_title(paper)}》{tag_label}：{summary_line}"
     return f"{paper.title}: {summary_line}"
 
 

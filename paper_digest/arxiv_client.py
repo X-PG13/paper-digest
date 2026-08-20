@@ -43,6 +43,12 @@ class PaperAnalysis:
 
 
 @dataclass(slots=True)
+class PaperTranslation:
+    title: str
+    summary: str
+
+
+@dataclass(slots=True)
 class Paper:
     title: str
     summary: str
@@ -55,6 +61,7 @@ class Paper:
     updated_at: datetime
     source: str = "arxiv"
     date_label: str = "Published"
+    translation: PaperTranslation | None = None
     analysis: PaperAnalysis | None = None
     tags: list[str] = field(default_factory=list)
     topics: list[str] = field(default_factory=list)
@@ -160,6 +167,7 @@ class Paper:
         self.updated_at = max(self.updated_at, other.updated_at)
         self.source = preferred.source
         self.date_label = preferred.date_label
+        self.translation = preferred.translation or secondary.translation
         self.analysis = preferred.analysis or secondary.analysis
         self.doi = preferred.doi or secondary.doi
         self.arxiv_id = preferred.arxiv_id or secondary.arxiv_id

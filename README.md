@@ -12,6 +12,8 @@ The current scope is intentionally narrow:
 
 - Fetch the newest papers from arXiv, Crossref, PubMed, Semantic Scholar, and OpenAlex.
 - Apply include and exclude keyword filters on title and abstract.
+- Optionally translate selected paper titles and abstract excerpts into Chinese
+  with a pinned offline model, without an API key.
 - Optionally enrich selected papers with structured LLM analysis.
 - Generate machine-readable `JSON` and human-readable `Markdown`.
 - Build a static archive site with search, feed subscriptions, topic tracking,
@@ -45,7 +47,7 @@ than a one-off script. The baseline includes:
 
 - Full config reference and commented examples: [`config.example.toml`](./config.example.toml)
 - Small starting profiles for common setups: [`docs/config-recipes.md`](./docs/config-recipes.md)
-- Ready-to-edit Feishu LM, agent runtime security, and Terminal/SWE agent arXiv
+- Ready-to-edit Feishu LLM, agent/coding benchmark, SWE, and Terminal-Bench arXiv
   morning digest config: [`examples/feishu-lm-arxiv.toml`](./examples/feishu-lm-arxiv.toml)
 - Runtime and platform support policy: [`docs/compatibility-matrix.md`](./docs/compatibility-matrix.md)
 - Label taxonomy and triage labels: [`docs/label-taxonomy.md`](./docs/label-taxonomy.md)
@@ -77,7 +79,7 @@ Paper Digest intentionally keeps a narrow support surface.
 | CPython 3.13+ | Expected, not CI-gated yet | Validate manually before advertising broader support. |
 | PyPy or CPython < 3.12 | Unsupported | Not tested or documented. |
 | GitHub Actions on `ubuntu-latest` | Supported | This is the production runner for CI and scheduled jobs. |
-| Local macOS and Linux runs | Supported on a best-effort basis | The CLI is stdlib-only at runtime, but workflow examples assume a POSIX shell. |
+| Local macOS and Linux runs | Supported on a best-effort basis | The core CLI is stdlib-only; offline translation uses the optional `translation` extra. |
 
 If you widen the supported matrix, update the compatibility doc, CI, and
 release notes together.
@@ -99,8 +101,8 @@ python -m pip install -e '.[dev]'
 - For a fully commented reference, copy [`config.example.toml`](./config.example.toml).
 - For a smaller profile such as "local smoke test" or "GitHub Actions
   schedule", start from [`docs/config-recipes.md`](./docs/config-recipes.md).
-- For a Feishu morning digest focused on LM, agent runtime security, and
-  Terminal/SWE agent papers from arXiv, copy
+- For a Feishu morning digest focused on LLM, agent/coding benchmark, SWE, and
+  Terminal-Bench papers from arXiv, copy
   [`examples/feishu-lm-arxiv.toml`](./examples/feishu-lm-arxiv.toml).
 
 2. Copy a config into the local ignored `config.toml` file:
@@ -116,6 +118,17 @@ cp config.example.toml config.toml
 ```bash
 python -m paper_digest --config config.toml
 ```
+
+If `[translation] enabled = true`, install the optional runtime and prepare the
+pinned English-to-Chinese model before the first local run:
+
+```bash
+python -m pip install -e '.[dev,translation]'
+make translation-model
+```
+
+The scheduled GitHub Actions workflow performs this setup automatically and
+caches the verified model between runs.
 
 4. Inspect the outputs:
 
@@ -234,6 +247,18 @@ reasoning_effort = "minimal"
 fail_on_error = true
 ```
 
+Optional offline English-to-Chinese translation:
+
+```toml
+[translation]
+enabled = true
+provider = "argos"
+model_path = ".paper-digest-models/argos-en-zh-1.9"
+max_papers = 24
+max_summary_chars = 600
+fail_on_error = false
+```
+
 Digest notes:
 
 - `feed_key_points` controls how many feed-level "today's key points" lines
@@ -246,14 +271,17 @@ Digest notes:
   the top, even when several papers are similarly recent.
 - `template = "zh_daily_brief"` switches the output into a Chinese briefing
   layout with a topic-organized "今日重点" section plus per-feed "本组速览".
-- `zh_daily_brief` works even when analysis is disabled. In that mode, the
-  project generates rule-based Chinese briefing scaffolding around the raw
-  paper title and abstract summary, including high-frequency topic extraction,
-  rule-based tags such as `方法` / `数据` / `应用`, and topic-oriented highlights.
-- For automatic Chinese paper notes in Feishu, enable `[analysis]`, set
-  `language = "Chinese"`, and provide the `OPENAI_API_KEY` secret. Titles remain
-  the original paper titles, while conclusions, contributions, audience notes,
-  and limitations are written in Chinese.
+- `zh_daily_brief` works even when analysis is disabled. With `[translation]`
+  enabled, the paper title and a bounded abstract excerpt are translated into
+  Chinese locally; the original English title and arXiv link remain visible.
+- Offline translation runs after filtering and deduplication, uses a pinned
+  model with a verified checksum, and does not require an API key.
+- `translation.fail_on_error = false` keeps delivery available if the model or
+  runtime cannot be prepared; the affected run falls back to English text and
+  emits a warning instead of dropping the entire digest.
+- OpenAI analysis remains optional. Enable `[analysis]`, set
+  `language = "Chinese"`, and provide `OPENAI_API_KEY` only when you also want
+  Chinese conclusions, contributions, audience notes, and limitations.
 - The JSON output now records the active sorting summary, per-feed `sort_by`,
   `relevance_score`, and `match_reasons` so downstream archive pages and
   integrations can explain why each paper surfaced.
@@ -472,6 +500,17 @@ Analysis notes:
 - For backward compatibility, legacy `template`, `top_highlights`, and
   `feed_key_points` values under `[analysis]` are still accepted when `[digest]`
   is omitted.
+
+Translation notes:
+
+- Translation is independent of LLM analysis. The Feishu example enables
+  offline translation and leaves OpenAI analysis disabled.
+- `max_papers` caps per-run translation work. Papers beyond that limit retain
+  their English title and abstract.
+- `max_summary_chars` bounds the source abstract excerpt before translation so
+  notifications remain readable and within delivery-provider size limits.
+- The model installer verifies a pinned SHA-256 before extracting only the
+  expected model files into `.paper-digest-models/`.
 
 Preferred notification setup:
 
@@ -795,11 +834,13 @@ For manual validation runs, `workflow_dispatch` also accepts an optional
 `config_toml_override` input. When you provide it, that run uses the temporary
 config instead of `PAPER_DIGEST_CONFIG_TOML`.
 
-For the common "LM, agent runtime security, and Terminal/SWE agent papers from
-arXiv to Feishu every morning" setup, start from
+For the common "LLM, agent/coding benchmark, SWE, and Terminal-Bench papers
+from arXiv to Feishu every morning" setup, start from
 [`examples/feishu-lm-arxiv.toml`](./examples/feishu-lm-arxiv.toml), replace the
 placeholder Feishu webhook, store the full file content in
 `PAPER_DIGEST_CONFIG_TOML`, and trigger `Daily Digest` manually once on `main`.
+The example excludes Security-focused papers from all four feeds and uses the
+workflow-managed offline translation model, so no `OPENAI_API_KEY` is required.
 
 The same workflow also accepts an optional `feedback_json_override` input.
 When you provide it, that run materializes the given JSON into

@@ -73,37 +73,43 @@ max_items = 15
 
 Use [`examples/feishu-lm-arxiv.toml`](../examples/feishu-lm-arxiv.toml) when
 you want the scheduled GitHub workflow to send one Chinese Feishu message each
-morning for new LM papers, agent runtime security papers, and Terminal-Bench /
-SWE-bench style software-engineering agent papers from arXiv. The example
-enables OpenAI-backed Chinese analysis so the paper notes are written in
-Chinese instead of requiring manual translation in Feishu.
+morning for new LLM, agent/coding benchmark, SWE, and Terminal-Bench papers
+from arXiv. The example uses a pinned offline English-to-Chinese model for
+titles and abstract excerpts, so automatic translation does not require an
+OpenAI API key.
 
 Operational steps:
 
 1. Replace the placeholder Feishu webhook URL.
 2. Store the full TOML content in the `PAPER_DIGEST_CONFIG_TOML` repository
    secret.
-3. Store an `OPENAI_API_KEY` repository secret for automatic Chinese analysis.
-4. Trigger `Daily Digest` manually once on `main`.
-5. Let the default workflow schedule deliver at about `09:07 Asia/Shanghai`.
+3. Trigger `Daily Digest` manually once on `main`.
+4. Let the default workflow schedule deliver at about `09:07 Asia/Shanghai`.
 
-The example keeps three feed sections:
+The example keeps four feed sections:
 
-- `LM`: language-model papers from `cs.CL`, `cs.AI`, and `cs.LG`.
-- `Agent Runtime Security`: agent runtime, tool-use, sandboxing, prompt
-  injection, privilege-escalation, and policy-enforcement papers from `cs.AI`,
-  `cs.CL`, `cs.CR`, and `cs.SE`.
-- `Terminal and SWE Agents`: Terminal-Bench, SWE-bench, coding-agent,
-  repository-level code editing, program-repair, bug-fixing, test-generation,
-  and patch-generation papers from `cs.SE`, `cs.AI`, `cs.CL`, and `cs.LG`.
+- `LLM`: language-model training, reasoning, alignment, RAG, and multimodal
+  language-model papers from `cs.CL`, `cs.AI`, and `cs.LG`.
+- `Agent/Coding Benchmarks`: benchmark and evaluation papers specifically about
+  AI agents, LLM agents, coding agents, tool use, computer use, and web agents.
+- `SWE`: SWE-bench, coding-agent, repository-level code editing,
+  program-repair, bug-fixing, test-generation, and patch-generation papers.
+- `Terminal-Bench`: Terminal-Bench, terminal-agent, shell-agent, CLI-agent, and
+  command-line benchmark papers.
+
+All four feeds exclude Security, prompt-injection, jailbreak, vulnerability,
+adversarial-attack, and malware terms. The benchmark feed excludes SWE-bench
+and Terminal-specific terms so those papers stay in their dedicated sections;
+the LLM feed excludes SWE, Terminal, and agent/coding benchmark terms.
 
 Keep `target = "digest"`, `focus_target = "digest"`, and
 `action_target = "digest"` when you want one combined Feishu message instead
 of separate per-feed, Focus, or Action messages.
 
-The example sets `analysis.fail_on_error = false`, so a temporary analysis
-outage falls back to raw abstracts instead of dropping the whole morning
-notification.
+The example sets `translation.fail_on_error = false`, so a missing model or
+temporary translation failure falls back to English instead of dropping the
+whole morning notification. The workflow installs the optional translation
+runtime, verifies the pinned model checksum, and caches the model directory.
 
 ## 4. Chinese Daily Brief Without LLM Calls
 
@@ -115,6 +121,14 @@ tokens yet.
 template = "zh_daily_brief"
 top_highlights = 3
 feed_key_points = 3
+
+[translation]
+enabled = true
+provider = "argos"
+model_path = ".paper-digest-models/argos-en-zh-1.9"
+max_papers = 24
+max_summary_chars = 600
+fail_on_error = false
 
 [analysis]
 enabled = false

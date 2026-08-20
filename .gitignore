@@ -16,3 +16,4 @@ reports/
 .tools/
 config.toml
 .paper-digest-state/
+.paper-digest-models/

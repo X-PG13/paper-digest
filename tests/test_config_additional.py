@@ -345,6 +345,15 @@ class ConfigAdditionalTests(unittest.TestCase):
             "openai",
         )
 
+        with self.assertRaisesRegex(ConfigError, "provider must be 'argos'"):
+            config_module._translation_provider(1, "provider")
+        with self.assertRaisesRegex(ConfigError, "provider must be 'argos'"):
+            config_module._translation_provider("bad", "provider")
+        self.assertEqual(
+            config_module._translation_provider("argos", "provider"),
+            "argos",
+        )
+
         with self.assertRaisesRegex(ConfigError, "effort must be one of"):
             config_module._analysis_reasoning_effort(1, "effort")
         with self.assertRaisesRegex(ConfigError, "effort must be one of"):

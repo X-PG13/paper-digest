@@ -7,6 +7,15 @@ Versioning.
 
 ## [Unreleased]
 
+- Optional offline English-to-Chinese translation now covers paper titles and
+  bounded abstract excerpts, with a checksum-verified pinned model installer,
+  GitHub Actions caching, and a non-blocking delivery fallback.
+- The Feishu morning-digest example now publishes separate LLM, agent/coding
+  benchmark, SWE, and Terminal-Bench feeds and excludes Security-focused papers
+  from all four.
+- OpenAI structured analysis remains optional; Chinese Feishu translation no
+  longer requires an `OPENAI_API_KEY`.
+
 - Documentation now includes a dedicated compatibility matrix, smaller
   configuration recipes, and a stronger maintainer guide for workflow and
   release ownership.

@@ -229,6 +229,27 @@ class DailyDigestWorkflowContractTests(unittest.TestCase):
         self.assertIn("      config_toml_override:", block)
         self.assertIn("      feedback_json_override:", block)
 
+    def test_daily_digest_prepares_cached_offline_translation_model(self) -> None:
+        install_block = extract_step_block(self.lines, "Install project")
+        cache_block = extract_step_block(self.lines, "Cache translation model")
+        prepare_block = extract_step_block(self.lines, "Prepare translation model")
+
+        self.assertIn(
+            '        run: python -m pip install ".[translation]"',
+            install_block,
+        )
+        self.assertIn("        uses: actions/cache@v5", cache_block)
+        self.assertIn("          path: .paper-digest-models", cache_block)
+        self.assertIn(
+            "          key: paper-digest-translation-argos-en-zh-1.9-433e7c4f034d",
+            cache_block,
+        )
+        self.assertIn(
+            "        run: python -m tools.install_translation_model "
+            "--config config.toml",
+            prepare_block,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

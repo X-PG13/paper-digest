@@ -2,10 +2,13 @@ PYTHON ?= python3
 VENV_PYTHON := .venv/bin/python
 PYTHON_BIN := $(if $(wildcard $(VENV_PYTHON)),$(VENV_PYTHON),$(PYTHON))
 
-.PHONY: run test lint format typecheck coverage policy-check policy-check-json policy-check-markdown docs-check docs-check-json docs-check-markdown docs-check-pr-comment workflow-tools workflow-check build release-check release-dry-run check
+.PHONY: run translation-model test lint format typecheck coverage policy-check policy-check-json policy-check-markdown docs-check docs-check-json docs-check-markdown docs-check-pr-comment workflow-tools workflow-check build release-check release-dry-run check
 
 run:
 	$(PYTHON_BIN) -m paper_digest --config config.toml
+
+translation-model:
+	$(PYTHON_BIN) -m tools.install_translation_model --config config.toml
 
 test:
 	$(PYTHON_BIN) -m unittest discover -s tests -v

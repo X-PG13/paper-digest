@@ -26,6 +26,7 @@ DeliveryType = Literal[
     "telegram_bot",
 ]
 AnalysisProvider = Literal["openai"]
+TranslationProvider = Literal["argos"]
 AnalysisReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
 DigestTemplate = Literal["default", "zh_daily_brief"]
 SortMode = Literal["relevance", "published_at", "hybrid"]
@@ -272,6 +273,15 @@ class AnalysisConfig:
     fail_on_error: bool = True
 
 
+@dataclass(slots=True, frozen=True)
+class TranslationConfig:
+    provider: TranslationProvider
+    model_path: Path
+    max_papers: int
+    max_summary_chars: int
+    fail_on_error: bool = False
+
+
 def _default_feedback_config() -> FeedbackConfig:
     return FeedbackConfig(
         enabled=True,
@@ -295,6 +305,7 @@ class AppConfig:
     openalex_api_key_env: str | None = None
     digest: DigestConfig = field(default_factory=DigestConfig)
     ranking: RankingConfig = field(default_factory=RankingConfig)
+    translation: TranslationConfig | None = None
     analysis: AnalysisConfig | None = None
     deliveries: list[DeliveryConfig] = field(default_factory=list)
     email: EmailConfig | None = None
@@ -355,6 +366,7 @@ def load_config(path: str | Path) -> AppConfig:
     notify = _load_notify(raw.get("notify"))
     digest = _load_digest(raw.get("digest"), raw.get("analysis"))
     ranking = _load_ranking(raw.get("ranking"))
+    translation = _load_translation(raw.get("translation"), config_path)
     analysis = _load_analysis(raw.get("analysis"))
     deliveries = _load_deliveries(raw.get("deliveries"))
     email = _load_email(raw.get("email"))
@@ -377,6 +389,7 @@ def load_config(path: str | Path) -> AppConfig:
         ),
         digest=digest,
         ranking=ranking,
+        translation=translation,
         analysis=analysis,
         deliveries=deliveries,
         email=email,
@@ -609,6 +622,44 @@ def _load_analysis(value: Any) -> AnalysisConfig | None:
         fail_on_error=_bool(
             analysis.get("fail_on_error", True),
             "analysis.fail_on_error",
+        ),
+    )
+
+
+def _load_translation(
+    value: Any,
+    config_path: Path,
+) -> TranslationConfig | None:
+    if value is None:
+        return None
+
+    translation = _as_table(value, "translation")
+    if not _bool(translation.get("enabled", True), "translation.enabled"):
+        return None
+
+    return TranslationConfig(
+        provider=_translation_provider(
+            translation.get("provider", "argos"),
+            "translation.provider",
+        ),
+        model_path=_resolve_output_dir(
+            config_path,
+            translation.get(
+                "model_path",
+                ".paper-digest-models/argos-en-zh-1.9",
+            ),
+        ),
+        max_papers=_positive_int(
+            translation.get("max_papers", 24),
+            "translation.max_papers",
+        ),
+        max_summary_chars=_positive_int(
+            translation.get("max_summary_chars", 600),
+            "translation.max_summary_chars",
+        ),
+        fail_on_error=_bool(
+            translation.get("fail_on_error", False),
+            "translation.fail_on_error",
         ),
     )
 
@@ -1460,6 +1511,16 @@ def _analysis_provider(value: Any, field_name: str) -> AnalysisProvider:
     if normalized != "openai":
         raise ConfigError(f"{field_name} must be 'openai'")
     return "openai"
+
+
+def _translation_provider(value: Any, field_name: str) -> TranslationProvider:
+    if not isinstance(value, str):
+        raise ConfigError(f"{field_name} must be 'argos'")
+
+    normalized = value.strip().lower()
+    if normalized != "argos":
+        raise ConfigError(f"{field_name} must be 'argos'")
+    return "argos"
 
 
 def _analysis_reasoning_effort(

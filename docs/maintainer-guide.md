@@ -56,6 +56,19 @@ make workflow-tools
 make workflow-check
 ```
 
+To reproduce the scheduled digest's offline translation setup locally:
+
+```bash
+python -m pip install -e '.[dev,translation]'
+make translation-model
+```
+
+`tools/install_translation_model.py` downloads only the pinned English-to-
+Chinese model, verifies its SHA-256, extracts an explicit file allowlist, and
+reuses `.paper-digest-models/` on later runs. The `Daily Digest` workflow uses
+the same helper and caches that directory. Keep the installer checksum, cache
+key, example config, and workflow contract test aligned when updating models.
+
 If you need the JSON report and Markdown summary written to stable file paths
 for upload or local post-processing, run:
 

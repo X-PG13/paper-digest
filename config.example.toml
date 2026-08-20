@@ -118,6 +118,20 @@ reasoning_effort = "minimal"
 # workflows that should fall back to raw abstracts when analysis is unavailable.
 fail_on_error = true
 
+[translation]
+# Optional offline English-to-Chinese title and abstract-excerpt translation.
+# Install the runtime with `pip install '.[translation]'`, then run
+# `make translation-model` before the first local digest.
+enabled = false
+provider = "argos"
+model_path = ".paper-digest-models/argos-en-zh-1.9"
+# Translate at most this many selected papers per run.
+max_papers = 24
+# Bound each English abstract excerpt before translation.
+max_summary_chars = 600
+# Keep notification delivery available when model preparation or inference fails.
+fail_on_error = false
+
 # To get a Chinese daily brief without any model calls, use:
 # [digest]
 # template = "zh_daily_brief"

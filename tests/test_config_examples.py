@@ -13,22 +13,30 @@ class ConfigExamplesTests(unittest.TestCase):
         self.assertEqual(config.timezone, "Asia/Shanghai")
         self.assertEqual(
             [feed.name for feed in config.feeds],
-            ["LM", "Agent Runtime Security", "Terminal and SWE Agents"],
+            ["LLM", "Agent/Coding Benchmarks", "SWE", "Terminal-Bench"],
         )
         self.assertEqual(config.feeds[0].source, "arxiv")
         self.assertEqual(config.feeds[1].source, "arxiv")
-        self.assertIn("cs.CR", config.feeds[1].categories)
-        self.assertIn("prompt injection", config.feeds[1].keywords)
+        self.assertIn("cs.SE", config.feeds[1].categories)
+        self.assertIn("coding agent benchmark", config.feeds[1].keywords)
+        self.assertIn("SWE-bench", config.feeds[1].exclude_keywords)
         self.assertEqual(config.feeds[2].source, "arxiv")
         self.assertIn("cs.SE", config.feeds[2].categories)
         self.assertIn("SWE-bench", config.feeds[2].keywords)
-        self.assertIn("terminal agent", config.feeds[2].keywords)
+        self.assertEqual(config.feeds[3].source, "arxiv")
+        self.assertIn("cs.SE", config.feeds[3].categories)
+        self.assertIn("terminal agent", config.feeds[3].keywords)
+        for feed in config.feeds:
+            self.assertIn("security", feed.exclude_keywords)
+            self.assertIn("prompt injection", feed.exclude_keywords)
         self.assertEqual(config.digest.template, "zh_daily_brief")
-        self.assertIsNotNone(config.analysis)
-        assert config.analysis is not None
-        self.assertEqual(config.analysis.language, "Chinese")
-        self.assertEqual(config.analysis.max_papers, 24)
-        self.assertFalse(config.analysis.fail_on_error)
+        self.assertIsNone(config.analysis)
+        self.assertIsNotNone(config.translation)
+        assert config.translation is not None
+        self.assertEqual(config.translation.provider, "argos")
+        self.assertEqual(config.translation.max_papers, 32)
+        self.assertEqual(config.translation.max_summary_chars, 600)
+        self.assertFalse(config.translation.fail_on_error)
         self.assertEqual(len(config.deliveries), 1)
 
         delivery = config.deliveries[0]

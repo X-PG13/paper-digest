@@ -307,6 +307,43 @@ class LoadConfigTests(unittest.TestCase):
         self.assertEqual(config.analysis.reasoning_effort, "low")
         self.assertFalse(config.analysis.fail_on_error)
 
+    def test_load_config_reads_translation_settings(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            config_path.write_text(
+                textwrap.dedent(
+                    """
+                    [app]
+                    timezone = "UTC"
+
+                    [[feeds]]
+                    name = "LLM"
+                    categories = ["cs.AI"]
+
+                    [translation]
+                    enabled = true
+                    provider = "argos"
+                    model_path = "models/en-zh"
+                    max_papers = 12
+                    max_summary_chars = 900
+                    fail_on_error = true
+                    """
+                ).strip(),
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        assert config.translation is not None
+        self.assertEqual(config.translation.provider, "argos")
+        self.assertEqual(
+            config.translation.model_path,
+            (Path(temp_dir) / "models/en-zh").resolve(),
+        )
+        self.assertEqual(config.translation.max_papers, 12)
+        self.assertEqual(config.translation.max_summary_chars, 900)
+        self.assertTrue(config.translation.fail_on_error)
+
     def test_load_config_accepts_extended_action_reasons(self) -> None:
         with TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "config.toml"
