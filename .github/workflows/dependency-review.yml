@@ -22,4 +22,4 @@ jobs:
     steps:
       - name: Review dependency changes
         continue-on-error: true
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
