@@ -40,10 +40,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -51,7 +51,7 @@ jobs:
         run: python -m pip install .
 
       - name: Restore archive history cache
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: |
             output
@@ -148,7 +148,7 @@ jobs:
 
       - name: Save archive history cache
         if: success() && inputs.dry_run != 'true' && hashFiles('output/**') != ''
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: |
             output
