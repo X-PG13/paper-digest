@@ -238,7 +238,7 @@ class DailyDigestWorkflowContractTests(unittest.TestCase):
             '        run: python -m pip install ".[translation]"',
             install_block,
         )
-        self.assertIn("        uses: actions/cache@v5", cache_block)
+        self.assertIn("        uses: actions/cache@v6", cache_block)
         self.assertIn("          path: .paper-digest-models", cache_block)
         self.assertIn(
             "          key: paper-digest-translation-argos-en-zh-1.9-433e7c4f034d",
