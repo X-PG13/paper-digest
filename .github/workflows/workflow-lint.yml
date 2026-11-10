@@ -1,19 +1,13 @@
 name: Workflow Lint
 
 on:
+  # `actionlint` is a required status check. Path filters skip this workflow
+  # without reporting that check, which blocks pull requests that do not
+  # change workflow files. Keep both triggers unfiltered and let the job run
+  # `make workflow-tools` and `make workflow-check`.
   push:
     branches: ["main", "master"]
-    paths:
-      - ".github/workflows/*.yml"
-      - "Makefile"
-      - "tools/check_workflows.py"
-      - "tools/install_actionlint.py"
   pull_request:
-    paths:
-      - ".github/workflows/*.yml"
-      - "Makefile"
-      - "tools/check_workflows.py"
-      - "tools/install_actionlint.py"
   workflow_dispatch:
 
 env:

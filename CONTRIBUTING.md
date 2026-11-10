@@ -108,6 +108,9 @@ thread from the default branch renderer.
 The dedicated `Workflow Lint` CI job now also uses the same pinned
 `make workflow-tools` + `make workflow-check` path as local workflow linting,
 so `actionlint` version drift is not hidden behind different local/CI setup.
+That job runs on every pull request and on pushes to `main` and `master`.
+`actionlint` is a required status check, and a path filter would skip the
+workflow without reporting the check.
 
 If you change quarterly-review or post-release lifecycle templates, sync the
 managed lifecycle blocks first:
