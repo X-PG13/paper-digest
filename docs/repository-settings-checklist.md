@@ -36,7 +36,10 @@ Configure `main` so it matches `docs/branch-protection-policy.md`:
 8. Disable branch deletion.
 
 These contexts correspond to the `CI`, `Dependency Review`, and `Workflow Lint`
-workflows. Keep `PR Hygiene` advisory by default; it can remind contributors
+workflows. Keep `Workflow Lint` free of `paths` and `paths-ignore` filters.
+The required `actionlint` context is created only when that workflow runs, so
+a filter leaves ordinary pull requests blocked even when the other required
+checks pass. Keep `PR Hygiene` advisory by default; it can remind contributors
 about missing PR context, but branch protection should not require it unless
 `docs/review-policy.md` changes from advisory to blocking.
 

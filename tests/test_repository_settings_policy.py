@@ -130,6 +130,48 @@ class RepositorySettingsPolicyTests(unittest.TestCase):
             errors,
         )
 
+    def test_validator_rejects_path_filters_on_required_actionlint_trigger(
+        self,
+    ) -> None:
+        filtered_events = {
+            "paths": textwrap.dedent(
+                """\
+                name: Workflow Lint
+                on:
+                  pull_request:
+                    paths:
+                      - ".github/workflows/*.yml"
+                """
+            ),
+            "paths-ignore": textwrap.dedent(
+                """\
+                name: Workflow Lint
+                on:
+                  pull_request:
+                    paths-ignore:
+                      - "docs/**"
+                """
+            ),
+        }
+        expected = (
+            ".github/workflows/workflow-lint.yml: `pull_request` must not set "
+            "`paths` or `paths-ignore` because required check `actionlint` is "
+            "omitted when the workflow is skipped"
+        )
+        for label, workflow_text in filtered_events.items():
+            with self.subTest(filter=label):
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    root = Path(tmpdir)
+                    self._write_minimal_policy_tree(root)
+                    (root / ".github/workflows/workflow-lint.yml").write_text(
+                        workflow_text,
+                        encoding="utf-8",
+                    )
+
+                    errors = validate_repository_settings_policy(root)
+
+                self.assertIn(expected, errors)
+
     def _write_minimal_policy_tree(self, root: Path) -> None:
         workflows = root / ".github" / "workflows"
         docs = root / "docs"

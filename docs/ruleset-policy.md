@@ -59,6 +59,11 @@ required GitHub check contexts are:
 - `dependency-review` for the `Dependency Review` workflow
 - `actionlint` for the `Workflow Lint` workflow
 
+`Workflow Lint` has to run on every pull request. Path filters omit the
+`actionlint` check instead of reporting a result, which blocks merges. The
+job still installs the pinned `actionlint` binary and runs
+`make workflow-check`.
+
 Keep `PR Hygiene` advisory unless `docs/review-policy.md` and
 `docs/branch-protection-policy.md` are changed in the same pull request to make
 PR hygiene blocking.
