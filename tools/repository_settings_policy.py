@@ -13,6 +13,7 @@ class RequiredStatusCheckSpec:
     workflow_name: str
     trigger: str
     check_context: str
+    forbid_path_filters: bool = False
 
 
 REQUIRED_STATUS_CHECKS = (
@@ -36,6 +37,7 @@ REQUIRED_STATUS_CHECKS = (
         workflow_name="Workflow Lint",
         trigger="pull_request:",
         check_context="actionlint",
+        forbid_path_filters=True,
     ),
 )
 
@@ -100,6 +102,37 @@ def _contains_workflow_trigger(text: str, trigger: str) -> bool:
     return any(line.strip() == trigger for line in text.splitlines())
 
 
+def _trigger_event_name(trigger: str) -> str:
+    if trigger.endswith(":"):
+        return trigger[:-1]
+    return trigger
+
+
+def _find_event_block(text: str, event_name: str) -> list[str] | None:
+    lines = text.splitlines()
+    header = f"{event_name}:"
+    for index, line in enumerate(lines):
+        if line.strip() != header:
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        block = [line]
+        for follower in lines[index + 1 :]:
+            follower_indent = len(follower) - len(follower.lstrip(" "))
+            if follower.strip() and follower_indent <= indent:
+                break
+            block.append(follower)
+        return block
+    return None
+
+
+def _block_uses_path_filter(block: list[str]) -> bool:
+    for line in block[1:]:
+        stripped = line.strip()
+        if stripped.startswith("paths:") or stripped.startswith("paths-ignore:"):
+            return True
+    return False
+
+
 def required_status_check_names() -> tuple[str, ...]:
     return tuple(check.name for check in REQUIRED_STATUS_CHECKS)
 
@@ -152,6 +185,16 @@ def validate_repository_settings_policy(root: Path | None = None) -> tuple[str, 
             errors.append(
                 f"{check.workflow_path}: missing trigger `{check.trigger}`"
             )
+        elif check.forbid_path_filters:
+            event_name = _trigger_event_name(check.trigger)
+            event_block = _find_event_block(workflow_text, event_name)
+            if event_block is not None and _block_uses_path_filter(event_block):
+                errors.append(
+                    f"{check.workflow_path}: `{event_name}` must not set "
+                    "`paths` or `paths-ignore` because required check "
+                    f"`{check.check_context}` is omitted when the workflow "
+                    "is skipped"
+                )
 
     for doc_path in REQUIRED_STATUS_CHECK_DOCS:
         doc_text = _read_text(repo_root, doc_path)

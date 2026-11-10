@@ -273,9 +273,11 @@ Versioning.
   verified archive checksum, so `make workflow-check` no longer depends only on
   ad hoc PATH state.
 - The dedicated `Workflow Lint` CI job now also bootstraps and runs the same
-  pinned repo-local `actionlint` path as local workflow linting, and it triggers
-  when the helper scripts or `Makefile` change instead of only on workflow YAML
-  edits.
+  pinned repo-local `actionlint` path as local workflow linting. It runs on
+  every pull request and on pushes to `main` and `master`, so the required
+  `actionlint` check is reported even when a pull request does not change
+  workflow files. The job still installs the pinned binary with
+  `make workflow-tools` and lints with `make workflow-check`.
 - PR hygiene, community triage, and docs-check PR comment automation now share
   one repo-local marker-comment helper, so managed comment create/update/delete
   behavior no longer drifts across three separate workflows.

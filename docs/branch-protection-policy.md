@@ -29,6 +29,12 @@ The required GitHub check contexts are:
 | `Dependency Review` | `dependency-review` |
 | `Workflow Lint` | `actionlint` |
 
+`Workflow Lint` must run on every pull request. Do not add `paths` or
+`paths-ignore` to that workflow. GitHub does not create the `actionlint`
+status check when the workflow is skipped, and branch protection then blocks
+pull requests that do not change the filtered files. The job still installs
+the pinned `actionlint` binary and runs `make workflow-check`.
+
 `PR Hygiene` remains an advisory `pull_request_target` workflow. It should
 comment on missing docs, changelog, or issue-link context, but it should not be
 configured as a required branch-protection check unless the review policy also

@@ -275,9 +275,12 @@ start with `docs/maintainer-operations-hub.md`.
 - `dependency-review.yml`: pull-request guardrail for dependency manifest and
   workflow dependency changes.
 - `workflow-lint.yml`: lints GitHub Actions workflow definitions with
-  `actionlint`; it now bootstraps the same pinned repo-local binary through
-  `make workflow-tools` and then runs `make workflow-check`, so CI and local
-  workflow linting use the same installer, binary path, and discovery rules.
+  `actionlint` on every pull request and on pushes to `main` and `master`.
+  It bootstraps the same pinned repo-local binary through `make workflow-tools`
+  and then runs `make workflow-check`, so CI and local workflow linting use
+  the same installer, binary path, and discovery rules. The workflow does not
+  use path filters: `actionlint` is a required status check, and GitHub does
+  not report a check for a skipped workflow.
 - `make docs-check`: repository-local check for Markdown links, heading
   anchors, repository-doc references inside GitHub issue forms and workflows,
   consistency between the README docs map, the maintainer hub, and this guide,
