@@ -63,7 +63,7 @@ class DocsCheckPrCommentWorkflowTests(unittest.TestCase):
     def test_workflow_downloads_docs_check_report_artifact_from_ci_run(self) -> None:
         block = extract_step_block(self.lines, "Download docs-check artifact")
 
-        self.assertIn("        uses: actions/download-artifact@v5", block)
+        self.assertIn("        uses: actions/download-artifact@v8", block)
         self.assertIn("          name: docs-check-report", block)
         self.assertIn("          path: reports", block)
         self.assertIn("          repository: ${{ github.repository }}", block)

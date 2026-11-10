@@ -63,7 +63,7 @@ class ReleaseDryRunContractTests(unittest.TestCase):
             job_block,
         )
         self.assertIn("      contents: read", job_block)
-        self.assertIn("        uses: actions/download-artifact@v5", download_block)
+        self.assertIn("        uses: actions/download-artifact@v8", download_block)
         self.assertIn("          name: package-dist", download_block)
         self.assertIn("          path: dist", download_block)
         self.assertIn("find dist -maxdepth 1 -name '*.whl'", verify_block)

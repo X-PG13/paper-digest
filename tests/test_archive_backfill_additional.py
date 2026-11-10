@@ -385,6 +385,36 @@ class ArchiveBackfillAdditionalTests(unittest.TestCase):
             ("LLM", "Vision"),
         )
 
+    def test_collect_snapshots_keeps_existing_snapshot_when_rank_is_not_higher(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            feeds = [
+                {
+                    "name": "LLM",
+                    "papers": [{"title": "Same", "abstract_url": "https://x/1"}],
+                }
+            ]
+            self._write_digest(
+                root / "run-a",
+                "2026-04-07",
+                generated_at="2026-04-07T08:00:00+08:00",
+                feeds=feeds,
+            )
+            self._write_digest(
+                root / "run-b",
+                "2026-04-07",
+                generated_at="2026-04-07T08:00:00+08:00",
+                feeds=feeds,
+            )
+
+            snapshots = _collect_snapshots(root)
+
+        self.assertEqual(len(snapshots), 1)
+        self.assertEqual(snapshots["2026-04-07"].total_papers, 1)
+        self.assertEqual(snapshots["2026-04-07"].feed_names, ("LLM",))
+
     def test_module_main_guard_raises_system_exit(self) -> None:
         with (
             patch("sys.argv", ["archive-backfill", "--help"]),
